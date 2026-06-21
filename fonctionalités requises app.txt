@@ -1,0 +1,72 @@
+🔐 Authentification & connexion au couple
+Connexion / inscription par email + mot de passe, mot de passe oublié avec lien de réinitialisation
+Écran d'accueil : saisie du prénom/pseudo, puis génération ou saisie d'un code couple à 6 caractères pour se lier au partenaire
+Choix du profil (Lui/Elle)
+
+➕ Onglet "Ajouter une dépense"
+Montant, date (sélecteur de date), description
+Sélecteur de catégorie en modal (avec budget restant mois/semaine affiché)
+Raccourcis "commerces habituels" (jusqu'à 8 enseignes favorites)
+Option "prévision" (dépense future anticipée 🔮)
+Dépense depuis la cagnotte commune
+Détection automatique des virements internes ("Transfert vers...")
+
+📊 Onglet "Vue" (Dashboard)
+Bascule mensuel / hebdomadaire
+Cartes résumé : total dépensé, budget restant, % utilisé
+Répartition Lui/Elle
+Barres de progression par catégorie avec alertes (presque atteint / dépassé)
+Graphique annuel (12 mois)
+
+📋 Onglet "Historique"
+Navigation mois par mois
+Filtres : type (dépenses / mouvements internes), par personne, par catégorie
+Récapitulatif des dépenses par catégorie
+Recatégorisation d'une dépense passée
+Suppression d'une dépense
+Notes sur les mouvements internes
+
+🎯 Onglet "Projets" (épargne)
+Cagnotte commune : solde, historique des entrées/sorties
+Création de projets : montant cible, déjà épargné, durée, jour de virement, répartition Lui/Elle en %, classification (besoin/envie/investissement/protection)
+Calcul automatique de l'épargne mensuelle nécessaire
+Pause/reprise d'un projet
+Réaffectation de l'épargne d'un projet vers un autre projet/catégorie/cagnotte
+Abandon d'un projet (avec récupération ou non de l'argent épargné)
+"Disponible pour projets" : surplus mensuel calculé automatiquement
+
+📈 Onglet "Analyse" (règle 50/30/20)
+Comparaison "votre idéal" vs "votre réalité" en donuts (besoin/envie/épargne)
+Navigation mois par mois
+Détail par catégorie avec validation d'accord entre partenaires
+Graphique de tendance (trajectoire) sur plusieurs mois
+
+📅 Onglet "Money Date" (Bilan)
+Checklist en 6 étapes pour le point financier mensuel du couple :
+
+État des lieux du mois
+Discussion des dépenses imprévues
+Transfert de surplus entre catégories/cagnotte
+Point sur les projets
+Anticiper le mois suivant (prévisions)
+Fixer la date du prochain Money Date
+Barre de progression "X/6 étapes"
+
+⚙️ Onglet "Réglages"
+Code couple (copiable), invitation du partenaire par WhatsApp/SMS
+Pilotage du budget (page complète) :
+Répartition des charges fixes communes (4 modes : proportionnel au salaire, % personnalisé, proportionnel au net, contribution fixe)
+Charges fixes personnelles et communes (avec verrouillage)
+Gestion des catégories (emoji, budget mensuel — l'hebdo est maintenant calculé automatiquement à partir du mensuel, classification besoin/envie/investissement/protection)
+Calcul du montant à virer chaque mois (compte commun + épargne projets) pour chacun
+Changer de profil / déconnexion
+Réinitialisation des dépenses
+Export des données en CSV
+Mode clair/sombre (toggle dans la barre de sync)
+
+🔧 Fonctionnalités transverses
+Synchronisation temps réel via Supabase
+Historique des changements de budget avec date d'effet (immédiat ou mois futur)
+Report du dépassement d'un mois sur le mois suivant
+Bouton de signalement de bug (🚨) toujours accessible
+Notifications toast pour confirmer les actions
