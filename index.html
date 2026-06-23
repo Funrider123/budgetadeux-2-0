@@ -467,7 +467,7 @@ function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('s
 /* ============================================================
    AUTH FLOW
    ============================================================ */
-let authStep = "login"; // login | signup | forgot | name | profile | code
+let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | profile | code
 let tmp = {};
 
 function renderAuth(){
@@ -498,13 +498,13 @@ function authLogin(){
     <div style="text-align:right; margin:-4px 2px 16px"><span class="link-text small" id="goForgot">Mot de passe oublié ?</span></div>
     <button class="btn btn-primary" id="doLogin">Se connecter</button>
     <div class="divider">nouveau ici ?</div>
-    <button class="btn btn-ghost" id="goSignup">Créer notre compte à deux</button>
+    <button class="btn btn-ghost" id="goSignup">Créer mon compte</button>
   </div>`);
 }
 function authSignup(){
   return authShell(`<div class="card fade">
-    <h1>Commençons votre duo 💞</h1>
-    <p class="muted small" style="margin-bottom:18px">Un compte, deux complices, zéro prise de tête.</p>
+    <h1>Créez votre compte 💞</h1>
+    <p class="muted small" style="margin-bottom:18px">Un compte chacun — vous relierez vos deux comptes juste après avec un code couple.</p>
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr"></div>
     <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe"></div>
     <button class="btn btn-primary" id="doSignup">Continuer</button>
