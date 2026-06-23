@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ============================================================
    BUDGET À DEUX · 2.0  —  Thème terracotta, chaleureux & aéré
@@ -321,6 +322,13 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 <div id="toasts"></div>
 
 <script>
+/* ============================================================
+   SUPABASE
+   ============================================================ */
+const SUPABASE_URL = "https://oleysrvrwaqorbaawiwd.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sZXlzcnZyd2Fxb3JiYWF3aXdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDE5MTUsImV4cCI6MjA5NTQ3NzkxNX0.yDu28geUEmNhAs0BLcfIpIEzBhzC9DO6DbyXZ3bnGPk";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 /* ============================================================
    ÉTAT & PERSISTANCE
    ============================================================ */
