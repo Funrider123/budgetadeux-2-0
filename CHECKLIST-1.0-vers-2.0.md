@@ -110,17 +110,19 @@ La 2.0 est aujourd'hui une **maquette front-end** : les écrans sont dessinés e
   4. Écran par défaut au premier lancement = signup (pas "Heureux de vous revoir") — déjà fait
   5. Copie clarifiée : chacun crée son propre compte, lié ensuite via le code couple (pas un compte partagé)
 
-**Reste à faire pour rebrancher l'auth réelle :**
-- Récupérer le schéma exact des tables 1.0 (`couples`, `profiles`, etc.) — requête SQL prête à lancer dans le SQL Editor Supabase :
-  ```sql
-  select table_name, column_name, data_type, is_nullable, column_default
-  from information_schema.columns
-  where table_schema = 'public'
-  order by table_name, ordinal_position;
-  ```
-- Écrire signup/login réels (`supabase.auth.signUp` / `signInWithPassword`)
-- Écrire la logique de création/jointure de couple par code (avec les 3 messages d'erreur ci-dessus)
-- Brancher la confirmation d'email et le "mot de passe oublié" réel
+**Reste à faire — la tâche complète au démarrage couvrira tout ça, dans cet ordre :**
+1. Récupérer le schéma exact des tables 1.0 (`couples`, `profiles`, etc.) — requête SQL prête à lancer dans le SQL Editor Supabase :
+   ```sql
+   select table_name, column_name, data_type, is_nullable, column_default
+   from information_schema.columns
+   where table_schema = 'public'
+   order by table_name, ordinal_position;
+   ```
+2. **Rédiger le schéma SQL en avance si besoin** (CREATE TABLE + RLS pour `couples`, `profiles`, `categories`, `expenses`, `mouvements`, `budget_history`, `projects`, `charges_fixes`, `perso_budget`, `revenues`, `cagnotte`) si le schéma 1.0 n'existe pas encore tel quel ou doit être complété
+3. **Simulation locale temporaire** des 3 messages de validation (code inconnu / couple complet / email non confirmé) via localStorage, pour valider l'UX rapidement — étape intermédiaire avant le vrai branchement, à ne pas oublier de retirer ensuite
+4. Écrire signup/login réels (`supabase.auth.signUp` / `signInWithPassword`)
+5. Écrire la logique de création/jointure de couple par code (avec les 3 messages d'erreur ci-dessus, cette fois branchés sur la vraie base)
+6. Brancher la confirmation d'email et le "mot de passe oublié" réel
 
 ## 🔧 Transverses — les vrais gros morceaux
 - [ ] ❌ **Synchro temps réel Supabase** — 2.0 = local seulement → CHANTIER N°1
