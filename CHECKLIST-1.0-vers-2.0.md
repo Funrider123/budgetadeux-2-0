@@ -96,6 +96,32 @@ La 2.0 est aujourd'hui une **maquette front-end** : les écrans sont dessinés e
 - [ ] ❌ **Verrou « figer les paramètres » + Annuler (undo)**
 - [ ] 🔧 **Date d'effet du budget** — affichée, logique d'application différée absente
 
+## 🚧 Chantier en pause — Moteur Supabase
+> En attente : accès Supabase (mot de passe DB / schéma exact des tables 1.0).
+> Pour reprendre : dire « ok on démarre [nom de la tâche] » à Claude, qui relira cette section.
+
+**Fait :**
+- SDK `@supabase/supabase-js` chargé dans `index.html` (`<head>`)
+- Client `sb` initialisé avec l'URL du projet 1.0 (`https://oleysrvrwaqorbaawiwd.supabase.co`) et la clé `anon`
+- Décisions déjà actées pour l'auth réelle (à implémenter dès le schéma connu) :
+  1. Code couple inconnu → message d'erreur explicite ("ce code n'est pas connu, merci de vérifier")
+  2. Email non confirmé → accès bloqué jusqu'à confirmation
+  3. Un couple = exactement 2 profils → message si on tente de rejoindre un code déjà complet
+  4. Écran par défaut au premier lancement = signup (pas "Heureux de vous revoir") — déjà fait
+  5. Copie clarifiée : chacun crée son propre compte, lié ensuite via le code couple (pas un compte partagé)
+
+**Reste à faire pour rebrancher l'auth réelle :**
+- Récupérer le schéma exact des tables 1.0 (`couples`, `profiles`, etc.) — requête SQL prête à lancer dans le SQL Editor Supabase :
+  ```sql
+  select table_name, column_name, data_type, is_nullable, column_default
+  from information_schema.columns
+  where table_schema = 'public'
+  order by table_name, ordinal_position;
+  ```
+- Écrire signup/login réels (`supabase.auth.signUp` / `signInWithPassword`)
+- Écrire la logique de création/jointure de couple par code (avec les 3 messages d'erreur ci-dessus)
+- Brancher la confirmation d'email et le "mot de passe oublié" réel
+
 ## 🔧 Transverses — les vrais gros morceaux
 - [ ] ❌ **Synchro temps réel Supabase** — 2.0 = local seulement → CHANTIER N°1
 - [ ] ❌ **Report du dépassement d'un mois sur l'autre**
