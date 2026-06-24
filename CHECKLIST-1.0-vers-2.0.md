@@ -15,11 +15,12 @@ La 2.0 est aujourd'hui une **maquette front-end** : les écrans sont dessinés e
 ---
 
 ## 🔐 Authentification & couple
-- [ ] 🔧 **Connexion / inscription email + mot de passe** — refaite mais simulée (pas le vrai Supabase Auth)
-- [ ] 🔧 **Mot de passe oublié + lien de réinitialisation** — écran présent, lien email pas branché
-- [x] ✅ **Accueil : prénom + code couple (créer / rejoindre)**
+- [x] ✅ **Connexion / inscription email + mot de passe** — vrai Supabase Auth (`signUp` / `signInWithPassword`)
+- [x] ✅ **Mot de passe oublié + lien de réinitialisation** — `resetPasswordForEmail` + écran « nouveau mot de passe »
+- [x] ✅ **Accueil : prénom + code couple (créer / rejoindre)** — code généré + réservé en base, validation réelle (inconnu / complet / profil déjà pris)
 - [x] ✅ **Choix profil Lui / Elle**
-- [ ] 🔧 **Restauration de session** — simple drapeau local
+- [x] ✅ **Restauration de session** — vraie session Supabase (`getSession` + `onAuthStateChange`)
+- [x] ✅ **Confirmation d'email obligatoire** — accès bloqué tant que l'email n'est pas confirmé (✨ nouveau)
 
 ## ➕ Ajouter une dépense
 - [x] ✅ **Montant, date, description**
@@ -96,36 +97,33 @@ La 2.0 est aujourd'hui une **maquette front-end** : les écrans sont dessinés e
 - [ ] ❌ **Verrou « figer les paramètres » + Annuler (undo)**
 - [ ] 🔧 **Date d'effet du budget** — affichée, logique d'application différée absente
 
-## 🚧 Chantier en pause — Moteur Supabase
-> En attente : accès Supabase (mot de passe DB / schéma exact des tables 1.0).
-> Pour reprendre : dire « ok on démarre [nom de la tâche] » à Claude, qui relira cette section.
+## ✅ Moteur Supabase — Auth & couple (FAIT)
+- SDK `@supabase/supabase-js` chargé + client `sb` (URL projet 1.0 `https://oleysrvrwaqorbaawiwd.supabase.co` + clé anon)
+- **Inscription** : `signUp` avec métadonnées (name, gender, intent, couple_code) ; mot de passe ≥ 6 car.
+- **Connexion** : `signInWithPassword` ; restauration de session via `getSession` + `onAuthStateChange`
+- **Confirmation email** : si activée côté Supabase, accès bloqué → écran « vérifie ta boîte mail »
+- **Mot de passe oublié** : `resetPasswordForEmail` + écran de récupération (`updateUser` nouveau mot de passe)
+- **Créer un couple** : code 6 car. généré (alphabet sans I/O/0/1), unicité vérifiée, réservé dans `couples` + `couple_names`
+- **Rejoindre un couple** : validation réelle → code inconnu / couple complet (≥2 profils) / profil déjà pris par le partenaire
+- La ligne `profiles` est créée après confirmation (lecture des métadonnées) ; le partenaire est chargé depuis `profiles`
 
-**Fait :**
-- SDK `@supabase/supabase-js` chargé dans `index.html` (`<head>`)
-- Client `sb` initialisé avec l'URL du projet 1.0 (`https://oleysrvrwaqorbaawiwd.supabase.co`) et la clé `anon`
-- Décisions déjà actées pour l'auth réelle (à implémenter dès le schéma connu) :
-  1. Code couple inconnu → message d'erreur explicite ("ce code n'est pas connu, merci de vérifier")
-  2. Email non confirmé → accès bloqué jusqu'à confirmation
-  3. Un couple = exactement 2 profils → message si on tente de rejoindre un code déjà complet
-  4. Écran par défaut au premier lancement = signup (pas "Heureux de vous revoir") — déjà fait
-  5. Copie clarifiée : chacun crée son propre compte, lié ensuite via le code couple (pas un compte partagé)
+### ⚙️ À activer côté Dashboard Supabase (sinon le comportement attendu ne marche pas)
+1. **Authentication → Providers → Email → "Confirm email" = ON** (pour réellement bloquer tant que l'email n'est pas confirmé)
+2. **Authentication → URL Configuration** : ajouter l'URL de l'app (ex. `https://budgetadeux2.netlify.app`) dans **Site URL** + **Redirect URLs** (sinon le lien de confirmation / réinit ne revient pas sur l'app)
 
-**Reste à faire — la tâche complète au démarrage couvrira tout ça, dans cet ordre :**
-1. Récupérer le schéma exact des tables 1.0 (`couples`, `profiles`, etc.) — requête SQL prête à lancer dans le SQL Editor Supabase :
-   ```sql
-   select table_name, column_name, data_type, is_nullable, column_default
-   from information_schema.columns
-   where table_schema = 'public'
-   order by table_name, ordinal_position;
-   ```
-2. **Rédiger le schéma SQL en avance si besoin** (CREATE TABLE + RLS pour `couples`, `profiles`, `categories`, `expenses`, `mouvements`, `budget_history`, `projects`, `charges_fixes`, `perso_budget`, `revenues`, `cagnotte`) si le schéma 1.0 n'existe pas encore tel quel ou doit être complété
-3. **Simulation locale temporaire** des 3 messages de validation (code inconnu / couple complet / email non confirmé) via localStorage, pour valider l'UX rapidement — étape intermédiaire avant le vrai branchement, à ne pas oublier de retirer ensuite
-4. Écrire signup/login réels (`supabase.auth.signUp` / `signInWithPassword`)
-5. Écrire la logique de création/jointure de couple par code (avec les 3 messages d'erreur ci-dessus, cette fois branchés sur la vraie base)
-6. Brancher la confirmation d'email et le "mot de passe oublié" réel
+### ⚠️ Dette / limites connues (pour plus tard)
+- **3 tables ont RLS activé SANS policy → bloquées pour la clé anon** : `budget_history`, `clotures`, `perso_budget`. À débloquer (ajouter des policies) avant de brancher leur synchro.
+- **Données financières encore en localStorage** : cette étape branche l'auth + l'identité de couple, mais PAS encore la synchro des dépenses/catégories/projets entre partenaires. → c'est le chunk suivant (« Synchro temps réel »).
+- Couple réservé mais abandonné (signup sans confirmation) = ligne `couples` orpheline. Nettoyage à prévoir.
+- Le toggle « changer de profil » (Réglages) reste cosmétique/local, non re-synchro DB.
+
+### ➡️ Prochain chunk : Synchro des données (remplacer localStorage)
+- Mapper l'état `S` ↔ tables : `categories` (tag↔cls, budget_monthly/weekly↔budget), `expenses` (gender/who, is_prevision/is_transfer), `projects`, `cagnotte`, `mouvements`, `revenues`, `charges_fixes`, `perso_budget`, `budget_history`, `clotures`
+- Lecture initiale par `couple_code` + abonnements temps réel (`sb.channel(...)`)
+- Ajouter les policies RLS manquantes (cf. dette ci-dessus)
 
 ## 🔧 Transverses — les vrais gros morceaux
-- [ ] ❌ **Synchro temps réel Supabase** — 2.0 = local seulement → CHANTIER N°1
+- [ ] 🔧 **Synchro temps réel Supabase** — auth + identité de couple ✅ branchées ; reste la synchro des données (dépenses/catégories/projets…) → chunk suivant
 - [ ] ❌ **Report du dépassement d'un mois sur l'autre**
 - [ ] ❌ **Virements figés (geler les virements du mois)**
 - [ ] 🔧 **Historique des budgets + date d'effet** — liste affichée, logique non branchée

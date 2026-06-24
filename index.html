@@ -475,8 +475,91 @@ function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('s
 /* ============================================================
    AUTH FLOW
    ============================================================ */
-let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | profile | code
+let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | profile | code | confirm | recovery
 let tmp = {};
+
+/* ----- Helpers Supabase auth ----- */
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans I,O,0,1 (ambigus)
+function randCode(){ let s=""; for(let i=0;i<6;i++) s+=CODE_ALPHABET[Math.floor(Math.random()*CODE_ALPHABET.length)]; return s; }
+async function generateUniqueCode(){
+  for(let t=0;t<8;t++){
+    const code=randCode();
+    const {data,error}=await sb.from('couples').select('code').eq('code',code).maybeSingle();
+    if(!error && !data) return code;
+  }
+  return randCode();
+}
+function authError(error){
+  const m=(error&&error.message||"").toLowerCase();
+  if(m.includes("already registered")||m.includes("already been registered")) return "Cet email a déjà un compte. Connecte-toi 👇";
+  if(m.includes("invalid login")||m.includes("invalid credentials")) return "Email ou mot de passe incorrect";
+  if(m.includes("email not confirmed")) return "Confirme d'abord ton email (vérifie ta boîte mail) 📩";
+  if(m.includes("password")) return "Mot de passe : 6 caractères minimum 🔑";
+  return "Oups, réessaie dans un instant ⚠️";
+}
+
+// Crée la ligne profile au besoin, puis charge le couple dans l'état local
+async function ensureProfile(user){
+  const uid=user.id;
+  let {data:prof}=await sb.from('profiles').select('*').eq('user_id',uid).maybeSingle();
+  if(!prof){
+    const md=user.user_metadata||{};
+    const code=md.couple_code, gender=md.gender, name=md.name, intent=md.intent;
+    if(code && gender && name){
+      if(intent==='join'){
+        const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',code);
+        if(members && members.length>=2) throw new Error("couple-full");
+        await sb.from('couple_names').update(gender==='lui'?{him:name}:{her:name}).eq('couple_code',code);
+      }
+      await sb.from('profiles').insert({ user_id:uid, email:user.email, gender, name, couple_code:code });
+      prof={ user_id:uid, email:user.email, gender, name, couple_code:code };
+    }
+  }
+  if(!prof) throw new Error("no-profile");
+  await loadCoupleIntoState(prof, user);
+}
+
+async function loadCoupleIntoState(prof, user){
+  S.auth.loggedIn=true;
+  S.auth.email=user.email||prof.email||"";
+  S.auth.name=prof.name;
+  S.auth.profile=prof.gender;
+  S.auth.coupleCode=prof.couple_code;
+  const {data:others}=await sb.from('profiles').select('*').eq('couple_code',prof.couple_code).neq('user_id',user.id);
+  const partner=others&&others[0];
+  if(partner){ S.partner.name=partner.name; S.partner.profile=partner.gender; }
+  else { S.partner.profile=partnerOf(prof.gender); S.partner.name=prof.gender==='lui'?'Elle':'Lui'; }
+  save();
+}
+
+// Point d'entrée unique vers l'app (dédupliqué : session restaurée, login, confirmation email…)
+let entering=false;
+async function enterWithSession(user){
+  if(entering || !$('#main').classList.contains('hidden')) return;
+  entering=true;
+  try{ await ensureProfile(user); enterApp(); }
+  catch(e){
+    if(e.message==="couple-full"){ await sb.auth.signOut(); toast("Ce code couple est déjà complet (2 personnes) 🔒","🔒"); authStep="login"; renderAuth(); }
+    else { console.error(e); toast("Souci de connexion, réessaie","⚠️"); }
+  }
+  finally{ entering=false; }
+}
+
+// Crée le compte Supabase une fois toutes les infos collectées
+async function finalizeSignup(){
+  const {email,pass,name,profile,intent,coupleCode}=tmp;
+  const {data,error}=await sb.auth.signUp({
+    email, password:pass,
+    options:{ emailRedirectTo: window.location.origin, data:{ name, gender:profile, intent, couple_code:coupleCode } }
+  });
+  if(error){ toast(authError(error),"⚠️"); return; }
+  if(intent==='create'){
+    await sb.from('couples').upsert({code:coupleCode});
+    await sb.from('couple_names').upsert({ couple_code:coupleCode, him: profile==='lui'?name:'Lui', her: profile==='elle'?name:'Elle' });
+  }
+  if(data.session){ await enterWithSession(data.session.user); }
+  else { authStep="confirm"; renderAuth(); }
+}
 
 function renderAuth(){
   const el=$('#auth');
@@ -487,6 +570,8 @@ function renderAuth(){
   else if(authStep==="name") body=authName();
   else if(authStep==="profile") body=authProfile();
   else if(authStep==="code") body=authCode();
+  else if(authStep==="confirm") body=authConfirm();
+  else if(authStep==="recovery") body=authRecovery();
   el.innerHTML=body;
   el.classList.add('fade');
   bindAuth();
@@ -554,7 +639,7 @@ function authCode(){
     <p class="muted small" style="margin-bottom:16px">Générez un code à partager, ou saisissez celui de votre partenaire.</p>
     <div class="card-soft" style="text-align:center; margin-bottom:14px">
       <p class="muted small" style="font-weight:800; letter-spacing:.1em; text-transform:uppercase">Votre code couple</p>
-      <p style="font-family:var(--serif); font-size:34px; font-weight:600; letter-spacing:.12em; color:var(--terra); margin:6px 0">${S.auth.coupleCode}</p>
+      <p style="font-family:var(--serif); font-size:34px; font-weight:600; letter-spacing:.12em; color:var(--terra); margin:6px 0">${tmp.coupleCode||S.auth.coupleCode}</p>
       <button class="btn btn-soft btn-sm" id="copyCode" style="width:auto; margin:0 auto">📋 Copier le code</button>
     </div>
     <div class="divider">ou rejoignez votre partenaire</div>
@@ -566,20 +651,74 @@ function authCode(){
     <button class="btn btn-primary" id="doCode" style="margin-top:8px">Entrer dans notre espace</button>
   </div>`);
 }
+function authConfirm(){
+  return authShell(`<div class="card fade">
+    <h1>Vérifie ta boîte mail 📩</h1>
+    <p class="muted small" style="margin-bottom:18px">On a envoyé un lien de confirmation à <b>${escapeHtml(tmp.email||'')}</b>. Clique dessus pour activer ton compte, puis reviens te connecter.</p>
+    <button class="btn btn-primary" id="goLogin">J'ai confirmé, me connecter</button>
+  </div>`);
+}
+function authRecovery(){
+  return authShell(`<div class="card fade">
+    <h1>Choisis un nouveau mot de passe 🔑</h1>
+    <p class="muted small" style="margin-bottom:18px">Saisis ton nouveau mot de passe pour terminer la réinitialisation.</p>
+    <div class="field"><label>Nouveau mot de passe</label><input class="input" id="aPass" type="password" placeholder="Au moins 6 caractères"></div>
+    <button class="btn btn-primary" id="doRecovery">Enregistrer</button>
+  </div>`);
+}
 function bindAuth(){
   const on=(id,ev,fn)=>{ const x=$('#'+id); if(x) x.addEventListener(ev,fn); };
+  const busy=(id,label,fn)=>on(id,'click',async ()=>{ const b=$('#'+id); if(b){b.disabled=true; b.dataset.t=b.textContent; b.textContent=label;} try{ await fn(); } finally { if(b){b.disabled=false; b.textContent=b.dataset.t;} } });
   on('goSignup','click',()=>{authStep="signup"; renderAuth();});
   on('goLogin','click',()=>{authStep="login"; renderAuth();});
   on('goForgot','click',()=>{authStep="forgot"; renderAuth();});
-  on('doLogin','click',()=>{ const em=$('#aEmail').value.trim(); if(!em){toast("Entrez votre email","✉️");return;} S.auth.email=em; S.auth.loggedIn=true; save(); enterApp(); });
-  on('doSignup','click',()=>{ const em=$('#aEmail').value.trim(); if(!em){toast("Entrez votre email","✉️");return;} S.auth.email=em; tmp={}; authStep="name"; renderAuth(); });
-  on('doForgot','click',()=>{ toast("Lien de réinitialisation envoyé 💌","✓"); setTimeout(()=>{authStep="login"; renderAuth();},900); });
+  busy('doLogin','Connexion…',async ()=>{
+    const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
+    if(!em||!pw){ toast("Email et mot de passe requis","✉️"); return; }
+    const {data,error}=await sb.auth.signInWithPassword({email:em,password:pw});
+    if(error){ toast(authError(error),"⚠️"); return; }
+    await enterWithSession(data.user);
+  });
+  on('doSignup','click',()=>{
+    const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
+    if(!em){toast("Entrez votre email","✉️");return;}
+    if(!pw||pw.length<6){toast("Mot de passe : 6 caractères minimum","🔑");return;}
+    tmp={email:em, pass:pw}; authStep="name"; renderAuth();
+  });
+  busy('doForgot','Envoi…',async ()=>{
+    const em=$('#aEmail').value.trim(); if(!em){toast("Entrez votre email","✉️");return;}
+    const {error}=await sb.auth.resetPasswordForEmail(em,{redirectTo:window.location.origin});
+    if(error){ toast(authError(error),"⚠️"); return; }
+    toast("Lien de réinitialisation envoyé 💌","✓"); setTimeout(()=>{authStep="login"; renderAuth();},900);
+  });
+  busy('doRecovery','Enregistrement…',async ()=>{
+    const pw=$('#aPass').value; if(!pw||pw.length<6){toast("Mot de passe : 6 caractères minimum","🔑");return;}
+    const {error}=await sb.auth.updateUser({password:pw});
+    if(error){ toast(authError(error),"⚠️"); return; }
+    toast("Mot de passe mis à jour 🔑","✓"); const {data:{session}}=await sb.auth.getSession();
+    if(session) await enterWithSession(session.user); else { authStep="login"; renderAuth(); }
+  });
   on('doName','click',()=>{ const nm=$('#aName').value.trim(); if(!nm){toast("Dites-nous votre prénom","😊");return;} tmp.name=nm; authStep="profile"; renderAuth(); });
   document.querySelectorAll('.pp').forEach(b=>b.addEventListener('click',()=>{ tmp.profile=b.dataset.p; renderAuth(); }));
-  on('doProfile','click',()=>{ if(!tmp.profile){toast("Choisissez votre profil","💞");return;} authStep="code"; renderAuth(); });
-  on('copyCode','click',()=>{ navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
+  busy('doProfile','…',async ()=>{ if(!tmp.profile){toast("Choisissez votre profil","💞");return;}
+    if(!tmp.coupleCode){ try{ tmp.coupleCode=await generateUniqueCode(); }catch(_){ tmp.coupleCode=randCode(); } }
+    authStep="code"; renderAuth();
+  });
+  on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode||S.auth.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
   document.querySelectorAll('.ci').forEach((inp,i,arr)=>inp.addEventListener('input',()=>{ inp.value=inp.value.toUpperCase(); if(inp.value && i<arr.length-1) arr[i+1].focus(); }));
-  on('doCode','click',()=>{ S.auth.name=tmp.name; S.auth.profile=tmp.profile; S.partner.profile=partnerOf(tmp.profile); S.partner.name= tmp.profile==="lui"?"Elle":"Lui"; S.auth.loggedIn=true; save(); toast("Vous voilà reliés 🤎","💞"); enterApp(); });
+  busy('doCode','Un instant…',async ()=>{
+    const entered=[...document.querySelectorAll('.ci')].map(i=>i.value.trim().toUpperCase()).join('');
+    if(entered){
+      if(entered.length<6){ toast("Le code couple fait 6 caractères","🔢"); return; }
+      const {data:couple}=await sb.from('couples').select('code').eq('code',entered).maybeSingle();
+      if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
+      const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
+      if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
+      if(members && members.some(m=>m.gender===tmp.profile)){ toast(`Ton/ta partenaire a déjà pris le profil « ${tmp.profile==='lui'?'Lui':'Elle'} » — choisis l'autre 🔄`,"🔄"); authStep="profile"; renderAuth(); return; }
+      tmp.intent='join'; tmp.coupleCode=entered;
+    } else { tmp.intent='create'; }
+    await finalizeSignup();
+  });
 }
 
 /* ============================================================
@@ -1433,7 +1572,7 @@ function bindReglages(){
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${np==='lui'?'Lui':'Elle'} 🔁`); };
-  const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",()=>{ S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
+  const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
 function exportCSV(){
   const rows=[["Date","Description","Catégorie","Personne","Type","Montant","Prévision","Cagnotte","Note"]];
@@ -1501,7 +1640,23 @@ function openEditCat(id){
    BOOT
    ============================================================ */
 save();
-if(S.auth.loggedIn){ enterApp(); } else { renderAuth(); }
+
+// Lien de réinitialisation de mot de passe : Supabase ouvre l'app avec un événement de récupération
+let recovering = /type=recovery/.test(location.hash);
+if(recovering){ $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="recovery"; renderAuth(); }
+sb.auth.onAuthStateChange((event,session)=>{
+  if(event==='PASSWORD_RECOVERY'){ recovering=true; $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="recovery"; renderAuth(); return; }
+  if(event==='SIGNED_IN' && session && !recovering){ enterWithSession(session.user); }
+  if(event==='SIGNED_OUT'){ $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }
+});
+
+(async function boot(){
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(session && !recovering){ await enterWithSession(session.user); }
+    else if(!recovering){ renderAuth(); }
+  }catch(e){ console.error(e); renderAuth(); }
+})();
 </script>
 </body>
 </html>
