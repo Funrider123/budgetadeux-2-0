@@ -542,8 +542,9 @@ async function enterWithSession(user){
   entering=true;
   try{ await ensureProfile(user); enterApp(); }
   catch(e){
-    if(e.message==="couple-full"){ await sb.auth.signOut(); toast("Ce code couple est déjà complet (2 personnes) 🔒","🔒"); authStep="login"; renderAuth(); }
-    else { console.error(e); toast("Souci de connexion, réessaie","⚠️"); }
+    if(e.message==="couple-full"){ await sb.auth.signOut(); toast("Ce code couple est déjà complet (2 personnes) 🔒","🔒"); }
+    else { console.error(e); await sb.auth.signOut(); toast("Souci de connexion, réessaie","⚠️"); }
+    $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth();
   }
   finally{ entering=false; }
 }
