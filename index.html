@@ -477,7 +477,7 @@ function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('s
 /* ============================================================
    AUTH FLOW
    ============================================================ */
-let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | code | confirm | recovery
+let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | intent | code-create | code-join | confirm | recovery
 let tmp = {};
 
 /* ----- Helpers Supabase auth ----- */
@@ -571,7 +571,9 @@ function renderAuth(){
   else if(authStep==="signup") body=authSignup();
   else if(authStep==="forgot") body=authForgot();
   else if(authStep==="name") body=authName();
-  else if(authStep==="code") body=authCode();
+  else if(authStep==="intent") body=authIntent();
+  else if(authStep==="code-create") body=authCodeCreate();
+  else if(authStep==="code-join") body=authCodeJoin();
   else if(authStep==="confirm") body=authConfirm();
   else if(authStep==="recovery") body=authRecovery();
   el.innerHTML=body;
@@ -624,13 +626,21 @@ function authName(){
     <button class="btn btn-primary" id="doName">Continuer</button>
   </div>`);
 }
-function authCode(){
+function authIntent(){
   return authShell(`<div class="card fade">
-    <h1>Reliez-vous à votre moitié 🔗</h1>
-    <p class="muted small" style="margin-bottom:16px">Générez un code à partager, ou saisissez celui de votre partenaire.</p>
+    <h1>Tu démarres votre espace, ou ton/ta partenaire a déjà un code ?</h1>
+    <p class="muted small" style="margin-bottom:18px">Un seul de vous deux crée l'espace ; l'autre le rejoint juste après avec un code.</p>
+    <button class="btn btn-primary" id="goCreate" style="margin-bottom:10px">🆕 Je démarre notre espace</button>
+    <button class="btn btn-soft" id="goJoin">🔗 J'ai un code de mon/ma partenaire</button>
+  </div>`);
+}
+function authCodeCreate(){
+  return authShell(`<div class="card fade">
+    <h1>Voici votre code couple 🔗</h1>
+    <p class="muted small" style="margin-bottom:16px">Partage-le à ton/ta partenaire : il/elle pourra rejoindre votre espace avec.</p>
     <div class="card-soft" style="text-align:center; margin-bottom:14px">
       <p class="muted small" style="font-weight:800; letter-spacing:.1em; text-transform:uppercase">Votre code couple</p>
-      <p style="font-family:var(--serif); font-size:34px; font-weight:600; letter-spacing:.12em; color:var(--terra); margin:6px 0">${tmp.coupleCode||S.auth.coupleCode}</p>
+      <p style="font-family:var(--serif); font-size:34px; font-weight:600; letter-spacing:.12em; color:var(--terra); margin:6px 0">${tmp.coupleCode}</p>
       <button class="btn btn-soft btn-sm" id="copyCode" style="width:auto; margin:0 auto">📋 Copier le code</button>
       <div class="divider" style="margin:14px 0 10px">ou partager via</div>
       <div class="row" style="gap:8px">
@@ -638,13 +648,19 @@ function authCode(){
         <button class="btn btn-soft btn-sm" id="codeSMS" style="flex:1">✉️ SMS</button>
       </div>
     </div>
-    <div class="divider">ou rejoignez votre partenaire</div>
-    <div class="field"><label>Saisir un code reçu</label>
+    <button class="btn btn-primary" id="doCreate">Entrer dans notre espace</button>
+  </div>`);
+}
+function authCodeJoin(){
+  return authShell(`<div class="card fade">
+    <h1>Entre le code de ton/ta partenaire 🔗</h1>
+    <p class="muted small" style="margin-bottom:18px">Demande-lui le code à 6 caractères qu'il/elle a reçu en créant votre espace.</p>
+    <div class="field"><label>Code couple</label>
       <div class="code-input">
         ${[0,1,2,3,4,5].map(i=>`<input maxlength="1" data-i="${i}" class="ci">`).join('')}
       </div>
     </div>
-    <button class="btn btn-primary" id="doCode" style="margin-top:8px">Entrer dans notre espace</button>
+    <button class="btn btn-primary" id="doJoin" style="margin-top:8px">Entrer dans notre espace</button>
   </div>`);
 }
 function authConfirm(){
@@ -696,24 +712,27 @@ function bindAuth(){
   });
   busy('doName','…',async ()=>{ const nm=$('#aName').value.trim(); if(!nm){toast("Dites-nous comment t'appeler","😊");return;}
     tmp.name=nm;
-    if(!tmp.coupleCode){ try{ tmp.coupleCode=await generateUniqueCode(); }catch(_){ tmp.coupleCode=randCode(); } }
-    authStep="code"; renderAuth();
+    authStep="intent"; renderAuth();
   });
-  on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode||S.auth.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
-  on('codeWA','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${c}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
-  on('codeSMS','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${c}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
+  busy('goCreate','…',async ()=>{
+    if(!tmp.coupleCode){ try{ tmp.coupleCode=await generateUniqueCode(); }catch(_){ tmp.coupleCode=randCode(); } }
+    tmp.intent='create'; tmp.profile='lui';
+    authStep="code-create"; renderAuth();
+  });
+  on('goJoin','click',()=>{ tmp.intent='join'; authStep="code-join"; renderAuth(); });
+  on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
+  on('codeWA','click',()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
+  on('codeSMS','click',()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
+  busy('doCreate','Un instant…',async ()=>{ await finalizeSignup(); });
   document.querySelectorAll('.ci').forEach((inp,i,arr)=>inp.addEventListener('input',()=>{ inp.value=inp.value.toUpperCase(); if(inp.value && i<arr.length-1) arr[i+1].focus(); }));
-  busy('doCode','Un instant…',async ()=>{
+  busy('doJoin','Un instant…',async ()=>{
     const entered=[...document.querySelectorAll('.ci')].map(i=>i.value.trim().toUpperCase()).join('');
-    if(entered){
-      if(entered.length<6){ toast("Le code couple fait 6 caractères","🔢"); return; }
-      const {data:couple}=await sb.from('couples').select('code').eq('code',entered).maybeSingle();
-      if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
-      const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
-      if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
-      // Le créateur du couple est toujours le Profil 1 ; qui rejoint devient automatiquement le Profil 2
-      tmp.intent='join'; tmp.profile='elle'; tmp.coupleCode=entered;
-    } else { tmp.intent='create'; tmp.profile='lui'; }
+    if(entered.length<6){ toast("Le code couple fait 6 caractères","🔢"); return; }
+    const {data:couple}=await sb.from('couples').select('code').eq('code',entered).maybeSingle();
+    if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
+    const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
+    if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
+    tmp.profile='elle'; tmp.coupleCode=entered;
     await finalizeSignup();
   });
 }
