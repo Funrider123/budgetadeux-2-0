@@ -699,8 +699,8 @@ function bindAuth(){
     authStep="code"; renderAuth();
   });
   on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode||S.auth.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
-  on('codeWA','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${c}`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
-  on('codeSMS','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${c}`)}`); toast("SMS prêt ✉️"); });
+  on('codeWA','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${c}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
+  on('codeSMS','click',()=>{ const c=tmp.coupleCode||S.auth.coupleCode; window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${c}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
   document.querySelectorAll('.ci').forEach((inp,i,arr)=>inp.addEventListener('input',()=>{ inp.value=inp.value.toUpperCase(); if(inp.value && i<arr.length-1) arr[i+1].focus(); }));
   busy('doCode','Un instant…',async ()=>{
     const entered=[...document.querySelectorAll('.ci')].map(i=>i.value.trim().toUpperCase()).join('');
@@ -1560,8 +1560,8 @@ function bindMoneyDate(){
 
 function bindReglages(){
   const cp=$('#copyC2'); if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code couple copié 📋");};
-  const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${S.auth.coupleCode}`)}`,'_blank'); toast("WhatsApp ouvert 💬"); };
-  const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}`)}`); toast("SMS prêt ✉️"); };
+  const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); };
+  const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
   const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne");};
