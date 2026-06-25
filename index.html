@@ -270,11 +270,6 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .code-input{display:flex; gap:8px; justify-content:center; margin:6px 0;}
 .code-input input{width:46px;height:56px; text-align:center; font-size:24px; font-weight:800; font-family:var(--serif); background:var(--card); border:1.5px solid var(--line-2); border-radius:14px; text-transform:uppercase;}
 .code-input input:focus{border-color:var(--terra); outline:none;}
-.profile-pick{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:8px 0;}
-.profile-pick .pp{display:flex; flex-direction:column; align-items:center; gap:10px; padding:22px; border-radius:22px; background:var(--card); border:2px solid var(--line); transition:.18s;}
-.profile-pick .pp.on{border-color:var(--terra); background:var(--blush);}
-.profile-pick .pp img{width:74px;height:74px;border-radius:50%; object-fit:cover;}
-.profile-pick .pp .nm{font-weight:800; font-family:var(--serif); font-size:18px;}
 .link-text{color:var(--terra); font-weight:800; cursor:pointer;}
 .divider{display:flex; align-items:center; gap:12px; color:var(--muted-2); font-size:12px; font-weight:700; margin:18px 0;}
 .divider:before,.divider:after{content:""; flex:1; height:1px; background:var(--line-2);}
@@ -337,8 +332,6 @@ function makeAvatarSVG(bg, label){
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="${bg}"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="Nunito Sans, sans-serif" font-size="42" font-weight="800" fill="#fff">${label}</text></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
-// Avatars neutres (couleur + initiale) — aucun visuel genré, le profil ne présuppose pas qui vous êtes
-const AV = { lui: makeAvatarSVG('#A84B32','1'), elle: makeAvatarSVG('#5E7E8B','2') };
 const PHOTO = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=800&h=500&fit=crop";
 
 const DEFAULT = {
@@ -479,7 +472,7 @@ function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('s
 /* ============================================================
    AUTH FLOW
    ============================================================ */
-let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | profile | code | confirm | recovery
+let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | code | confirm | recovery
 let tmp = {};
 
 /* ----- Helpers Supabase auth ----- */
@@ -573,7 +566,6 @@ function renderAuth(){
   else if(authStep==="signup") body=authSignup();
   else if(authStep==="forgot") body=authForgot();
   else if(authStep==="name") body=authName();
-  else if(authStep==="profile") body=authProfile();
   else if(authStep==="code") body=authCode();
   else if(authStep==="confirm") body=authConfirm();
   else if(authStep==="recovery") body=authRecovery();
@@ -621,21 +613,10 @@ function authForgot(){
 }
 function authName(){
   return authShell(`<div class="card fade">
-    <h1>Comment on vous appelle ? 😊</h1>
-    <p class="muted small" style="margin-bottom:18px">Votre prénom ou un petit surnom, comme vous voulez.</p>
+    <h1>Comment veux-tu t'appeler dans l'App ?</h1>
+    <p class="muted small" style="margin-bottom:18px">Ton prénom ou un petit surnom, comme tu veux.</p>
     <div class="field"><label>Prénom / pseudo</label><input class="input" id="aName" placeholder="Ex : Alice" value=""></div>
     <button class="btn btn-primary" id="doName">Continuer</button>
-  </div>`);
-}
-function authProfile(){
-  return authShell(`<div class="card fade">
-    <h1>Choisissez votre profil</h1>
-    <p class="muted small" style="margin-bottom:18px">Peu importe qui vous êtes : chacun prend simplement sa place dans le couple.</p>
-    <div class="profile-pick">
-      <button class="pp ${tmp.profile==='lui'?'on':''}" data-p="lui"><img src="${AV.lui}"><span class="nm">Profil 1</span></button>
-      <button class="pp ${tmp.profile==='elle'?'on':''}" data-p="elle"><img src="${AV.elle}"><span class="nm">Profil 2</span></button>
-    </div>
-    <button class="btn btn-primary" id="doProfile" style="margin-top:8px">Continuer</button>
   </div>`);
 }
 function authCode(){
@@ -703,9 +684,8 @@ function bindAuth(){
     toast("Mot de passe mis à jour 🔑","✓"); const {data:{session}}=await sb.auth.getSession();
     if(session) await enterWithSession(session.user); else { authStep="login"; renderAuth(); }
   });
-  on('doName','click',()=>{ const nm=$('#aName').value.trim(); if(!nm){toast("Dites-nous votre prénom","😊");return;} tmp.name=nm; authStep="profile"; renderAuth(); });
-  document.querySelectorAll('.pp').forEach(b=>b.addEventListener('click',()=>{ tmp.profile=b.dataset.p; renderAuth(); }));
-  busy('doProfile','…',async ()=>{ if(!tmp.profile){toast("Choisissez votre profil","💞");return;}
+  busy('doName','…',async ()=>{ const nm=$('#aName').value.trim(); if(!nm){toast("Dites-nous comment t'appeler","😊");return;}
+    tmp.name=nm;
     if(!tmp.coupleCode){ try{ tmp.coupleCode=await generateUniqueCode(); }catch(_){ tmp.coupleCode=randCode(); } }
     authStep="code"; renderAuth();
   });
@@ -719,9 +699,9 @@ function bindAuth(){
       if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
       const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
       if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
-      if(members && members.some(m=>m.gender===tmp.profile)){ toast(`Ton/ta partenaire a déjà pris le profil « ${tmp.profile==='lui'?'Profil 1':'Profil 2'} » — choisis l'autre 🔄`,"🔄"); authStep="profile"; renderAuth(); return; }
-      tmp.intent='join'; tmp.coupleCode=entered;
-    } else { tmp.intent='create'; }
+      // Le créateur du couple est toujours le Profil 1 ; qui rejoint devient automatiquement le Profil 2
+      tmp.intent='join'; tmp.profile='elle'; tmp.coupleCode=entered;
+    } else { tmp.intent='create'; tmp.profile='lui'; }
     await finalizeSignup();
   });
 }
