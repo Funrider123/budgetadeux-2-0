@@ -332,10 +332,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /* ============================================================
    ÉTAT & PERSISTANCE
    ============================================================ */
-const AV = {
-  lui:"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop",
-  elle:"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop"
-};
+function makeAvatarSVG(bg, label){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="${bg}"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="Nunito Sans, sans-serif" font-size="42" font-weight="800" fill="#fff">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+// Avatars neutres (couleur + initiale) — aucun visuel genré, le profil ne présuppose pas qui vous êtes
+const AV = { lui: makeAvatarSVG('#A84B32','1'), elle: makeAvatarSVG('#5E7E8B','2') };
 const PHOTO = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=800&h=500&fit=crop";
 
 const DEFAULT = {
@@ -419,7 +421,8 @@ const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août"
 const catById = id => S.categories.find(c=>c.id===id) || {emoji:"📦",name:"Autre",cls:"besoin",budget:0};
 const me = ()=> S.auth.profile, partnerOf = w => w==="lui"?"elle":"lui";
 const nameOf = w => w===S.auth.profile ? S.auth.name : S.partner.name;
-const avatarOf = w => AV[w];
+// Avatar affiché dans l'appli : couleur du slot + initiale du prénom réel, jamais une photo genrée
+const avatarOf = w => makeAvatarSVG(w==='lui'?'#A84B32':'#5E7E8B', (nameOf(w)||'?').trim().charAt(0).toUpperCase()||'?');
 function monthLabel(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return MOIS[d.getMonth()]+" "+d.getFullYear(); }
 function inMonth(dateStr, offset=0){ const d=new Date(dateStr), n=new Date(); n.setMonth(n.getMonth()+offset); return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear(); }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -528,7 +531,7 @@ async function loadCoupleIntoState(prof, user){
   const {data:others}=await sb.from('profiles').select('*').eq('couple_code',prof.couple_code).neq('user_id',user.id);
   const partner=others&&others[0];
   if(partner){ S.partner.name=partner.name; S.partner.profile=partner.gender; }
-  else { S.partner.profile=partnerOf(prof.gender); S.partner.name=prof.gender==='lui'?'Elle':'Lui'; }
+  else { S.partner.profile=partnerOf(prof.gender); S.partner.name='Partenaire'; }
   save();
 }
 
@@ -555,7 +558,7 @@ async function finalizeSignup(){
   if(error){ toast(authError(error),"⚠️"); return; }
   if(intent==='create'){
     await sb.from('couples').upsert({code:coupleCode});
-    await sb.from('couple_names').upsert({ couple_code:coupleCode, him: profile==='lui'?name:'Lui', her: profile==='elle'?name:'Elle' });
+    await sb.from('couple_names').upsert({ couple_code:coupleCode, him: profile==='lui'?name:'Partenaire', her: profile==='elle'?name:'Partenaire' });
   }
   if(data.session){ await enterWithSession(data.session.user); }
   else { authStep="confirm"; renderAuth(); }
@@ -624,11 +627,11 @@ function authName(){
 }
 function authProfile(){
   return authShell(`<div class="card fade">
-    <h1>Qui êtes-vous dans le duo ?</h1>
-    <p class="muted small" style="margin-bottom:18px">On adapte les couleurs et l'équilibre à deux.</p>
+    <h1>Choisissez votre profil</h1>
+    <p class="muted small" style="margin-bottom:18px">Peu importe qui vous êtes : chacun prend simplement sa place dans le couple.</p>
     <div class="profile-pick">
-      <button class="pp ${tmp.profile==='lui'?'on':''}" data-p="lui"><img src="${AV.lui}"><span class="nm">Lui</span></button>
-      <button class="pp ${tmp.profile==='elle'?'on':''}" data-p="elle"><img src="${AV.elle}"><span class="nm">Elle</span></button>
+      <button class="pp ${tmp.profile==='lui'?'on':''}" data-p="lui"><img src="${AV.lui}"><span class="nm">Profil 1</span></button>
+      <button class="pp ${tmp.profile==='elle'?'on':''}" data-p="elle"><img src="${AV.elle}"><span class="nm">Profil 2</span></button>
     </div>
     <button class="btn btn-primary" id="doProfile" style="margin-top:8px">Continuer</button>
   </div>`);
@@ -714,7 +717,7 @@ function bindAuth(){
       if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
       const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
       if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
-      if(members && members.some(m=>m.gender===tmp.profile)){ toast(`Ton/ta partenaire a déjà pris le profil « ${tmp.profile==='lui'?'Lui':'Elle'} » — choisis l'autre 🔄`,"🔄"); authStep="profile"; renderAuth(); return; }
+      if(members && members.some(m=>m.gender===tmp.profile)){ toast(`Ton/ta partenaire a déjà pris le profil « ${tmp.profile==='lui'?'Profil 1':'Profil 2'} » — choisis l'autre 🔄`,"🔄"); authStep="profile"; renderAuth(); return; }
       tmp.intent='join'; tmp.coupleCode=entered;
     } else { tmp.intent='create'; }
     await finalizeSignup();
@@ -821,15 +824,15 @@ function renderVue(){
     <span class="chev" style="color:var(--terra); font-size:20px">→</span>
   </div>
 
-  <div class="section-title">Répartition Lui / Elle</div>
+  <div class="section-title">Répartition à deux</div>
   <div class="card">
     <div class="row" style="margin-bottom:14px">
-      <img class="avatar sm" src="${AV.lui}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('lui')}</div></div>
+      <img class="avatar sm" src="${avatarOf('lui')}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('lui')}</div></div>
       <b style="font-family:var(--serif)">${fmt0(lui)}</b><span class="muted small">${luiPct}%</span>
     </div>
     <div class="bar" style="margin-bottom:14px"><i style="width:${luiPct}%"></i></div>
     <div class="row" style="margin-bottom:14px">
-      <img class="avatar sm" src="${AV.elle}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('elle')}</div></div>
+      <img class="avatar sm" src="${avatarOf('elle')}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('elle')}</div></div>
       <b style="font-family:var(--serif)">${fmt0(elle)}</b><span class="muted small">${ellePct}%</span>
     </div>
     <div class="bar over"><i style="width:${ellePct}%; background:linear-gradient(90deg,var(--peach),var(--clay))"></i></div>
@@ -867,8 +870,8 @@ function renderVue(){
     </div>
     <p class="muted small">Vos contributions s'équilibrent — vous avancez du même pas.</p>
     <div class="equi-people">
-      <div class="p"><img class="avatar sm" src="${AV.lui}"><span class="n">${nameOf('lui')}</span><span class="a">${fmt0(lui)}</span></div>
-      <div class="p"><img class="avatar sm" src="${AV.elle}"><span class="n">${nameOf('elle')}</span><span class="a">${fmt0(elle)}</span></div>
+      <div class="p"><img class="avatar sm" src="${avatarOf('lui')}"><span class="n">${nameOf('lui')}</span><span class="a">${fmt0(lui)}</span></div>
+      <div class="p"><img class="avatar sm" src="${avatarOf('elle')}"><span class="n">${nameOf('elle')}</span><span class="a">${fmt0(elle)}</span></div>
     </div>
   </div>
 
@@ -1302,7 +1305,7 @@ function renderReglages(){
   <div class="card" style="padding:6px 18px">
     <button class="menu-row" id="exportCSV"><div class="mi">📤</div><div class="grow"><div class="nm">Exporter en CSV</div><div class="sub">Toutes vos dépenses et mouvements</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="resetExp"><div class="mi">🧹</div><div class="grow"><div class="nm">Réinitialiser les dépenses</div><div class="sub">Repartir sur un mois vierge</div></div><span class="chev">→</span></button>
-    <button class="menu-row" id="switchProf"><div class="mi">🔁</div><div class="grow"><div class="nm">Changer de profil</div><div class="sub">Actuel : ${me()==='lui'?'Lui':'Elle'}</div></div><span class="chev">→</span></button>
+    <button class="menu-row" id="switchProf"><div class="mi">🔁</div><div class="grow"><div class="nm">Changer de profil</div><div class="sub">Actuel : ${S.auth.name}</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="logout"><div class="mi">👋</div><div class="grow"><div class="nm" style="color:var(--danger)">Se déconnecter</div></div><span class="chev">→</span></button>
   </div>
   <p class="small muted" style="text-align:center; margin-top:20px">Budget à Deux 2.0 · fait avec 🤎</p>
@@ -1513,7 +1516,7 @@ function openNewProject(){
     <div class="grid2"><div class="field"><label>Montant cible</label><input class="input" type="number" id="npTarget" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="0"></div></div>
     <div class="grid2"><div class="field"><label>Durée (mois)</label><input class="input" type="number" id="npMonths" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="5" min="1" max="28"></div></div>
     <div class="field"><label>Classification</label><select class="select" id="npCls"><option value="besoin">Besoin</option><option value="envie" selected>Envie</option><option value="invest">Investissement</option><option value="protection">Protection</option></select></div>
-    <div class="field"><label>Répartition Lui / Elle</label><input type="range" min="0" max="100" value="50" id="npSplit" style="width:100%; accent-color:var(--terra)"><div class="between small muted"><span id="npSL">${nameOf('lui')} 50%</span><span id="npSE">${nameOf('elle')} 50%</span></div></div>
+    <div class="field"><label>Répartition entre vous deux</label><input type="range" min="0" max="100" value="50" id="npSplit" style="width:100%; accent-color:var(--terra)"><div class="between small muted"><span id="npSL">${nameOf('lui')} 50%</span><span id="npSE">${nameOf('elle')} 50%</span></div></div>
     <div class="card-soft" style="margin-bottom:12px; text-align:center"><span class="small muted">Épargne mensuelle nécessaire</span><div id="npCalc" style="font-family:var(--serif); font-size:22px; color:var(--terra)">— €</div></div>
     <button class="btn btn-primary" id="npSave">Créer ce projet</button>`);
   const calc=()=>{ const t=+$('#npTarget').value||0, s=+$('#npSaved').value||0, m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
@@ -1571,7 +1574,7 @@ function bindReglages(){
   const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne");};
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
-  const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${np==='lui'?'Lui':'Elle'} 🔁`); };
+  const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${S.auth.name} 🔁`); };
   const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
 function exportCSV(){
