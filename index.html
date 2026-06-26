@@ -84,6 +84,10 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .avatar.mini{width:26px;height:26px;}
 .avatar.sm{width:30px;height:30px;}
 
+/* setup banner */
+.setup-banner{display:flex; align-items:center; gap:10px; padding:10px 20px; background:var(--blush); color:var(--terra); font-size:12.5px; font-weight:700; cursor:pointer;}
+.setup-banner .chev{margin-left:auto; font-size:15px;}
+
 /* sync chip */
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
 .sync .dot{width:7px;height:7px;border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
@@ -323,6 +327,7 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
   <!-- MAIN APP -->
   <div id="main" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div id="appbar"></div>
+    <div id="setupBanner"></div>
     <div id="screen" class="screen"></div>
     <button class="fab-bug" id="bugBtn" title="Signaler un bug">🚨</button>
     <nav class="tabbar" id="tabbar"></nav>
@@ -733,8 +738,18 @@ let current="vue";
 function enterApp(){
   $('#auth').classList.add('hidden');
   $('#main').classList.remove('hidden');
-  renderAppbar(); renderTab(); go("vue");
+  renderAppbar(); renderSetupBanner(); renderTab(); go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
+}
+function needsSetup(){ return !S.settings.salaries.lui && !S.settings.salaries.elle; }
+function renderSetupBanner(){
+  const el=$('#setupBanner'); if(!el) return;
+  if(!needsSetup()){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
+    <span>⚙️ Complétez votre profil : revenus, catégories, répartition</span>
+    <span class="chev">→</span>
+  </div>`;
+  $('#setupBannerBtn').onclick=()=>go('pilotage');
 }
 function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
@@ -766,6 +781,7 @@ function renderTab(){
 }
 function go(screen){
   current=screen;
+  renderSetupBanner();
   const map={vue:renderVue, historique:renderHistorique, ajouter:renderAjouter, projets:renderProjets, analyse:renderAnalyse, moneydate:renderMoneyDate, reglages:renderReglages, pilotage:renderPilotage};
   const fn=map[screen]||renderVue;
   const el=$('#screen'); el.scrollTop=0; el.innerHTML=fn(); el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
@@ -869,7 +885,7 @@ function renderVue(){
       }).join('');
       return `<div class="between" style="margin-bottom:6px"><b class="small">Dépenses sur 12 mois</b><span class="muted small">moy. ${fmt0(avg)}</span></div>
       <div class="year">${bars}</div>
-      ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant</p>`:''}`;
+      ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p>`:''}`;
     })()}
   </div>
 
