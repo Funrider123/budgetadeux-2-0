@@ -85,8 +85,8 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .avatar.sm{width:30px;height:30px;}
 
 /* setup banner */
-.setup-banner{display:flex; align-items:center; gap:10px; padding:10px 20px; background:var(--blush); color:var(--terra); font-size:12.5px; font-weight:700; cursor:pointer;}
-.setup-banner .chev{margin-left:auto; font-size:15px;}
+.setup-banner{display:flex; align-items:center; gap:10px; padding:14px 20px; background:var(--terra); color:#fff; font-size:13px; font-weight:700; cursor:pointer;}
+.setup-banner .cta{margin-left:auto; background:#fff; color:var(--terra); font-size:11.5px; font-weight:800; padding:7px 13px; border-radius:20px; white-space:nowrap;}
 
 /* sync chip */
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
@@ -746,8 +746,8 @@ function renderSetupBanner(){
   const el=$('#setupBanner'); if(!el) return;
   if(!needsSetup()){ el.innerHTML=''; return; }
   el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
-    <span>⚙️ Complétez votre profil : revenus, catégories, répartition</span>
-    <span class="chev">→</span>
+    <span>⚙️ À configurer : revenus, catégories...</span>
+    <span class="cta">Configurer →</span>
   </div>`;
   $('#setupBannerBtn').onclick=()=>go('pilotage');
 }
