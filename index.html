@@ -355,7 +355,7 @@ function makeAvatarSVG(bg, label){
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="${bg}"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="Nunito Sans, sans-serif" font-size="42" font-weight="800" fill="#fff">${label}</text></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
-const PHOTO = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=800&h=500&fit=crop";
+const PHOTO = "assets/objectif-cible.jpg";
 
 const DEFAULT = {
   auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
