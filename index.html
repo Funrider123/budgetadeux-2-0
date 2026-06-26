@@ -342,7 +342,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
    ============================================================ */
 const EMAILJS_PUBLIC_KEY = "SY3nTF1pENQhnmOw9";
 const EMAILJS_SERVICE_ID = "service_m998ctj";
-const EMAILJS_TEMPLATE_ID = "REPLACE_ME_TEMPLATE_ID";
+const EMAILJS_TEMPLATE_ID = "template_uup9bv1";
 if(window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
 /* ============================================================
@@ -1411,9 +1411,10 @@ function openBugModal(){
     btn.disabled = true; btn.textContent = "Envoi...";
     try{
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-        from_name: S.auth.name || "Utilisateur Budget à Deux",
-        from_email: S.auth.email || "",
+        name: S.auth.name || "Utilisateur Budget à Deux",
+        email: S.auth.email || "",
         message: msg,
+        time: new Date().toLocaleString('fr-FR'),
       });
       closeModal();
       toast("Merci ! Signalement envoyé 💌","✓");
