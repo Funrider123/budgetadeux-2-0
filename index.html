@@ -350,59 +350,23 @@ const DEFAULT = {
   partner:{ name:"Marc", profile:"lui" },
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, sync:true },
   settings:{
-    salaries:{lui:2800, elle:3100},
-    mode:"salaire", custom:{lui:47, elle:53}
+    salaries:{lui:0, elle:0},
+    mode:"5050", custom:{lui:50, elle:50}
   },
   categories:[
-    {id:"courses", emoji:"🛒", name:"Courses", budget:500, cls:"besoin"},
-    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:200, cls:"envie"},
-    {id:"logement", emoji:"🏠", name:"Logement", budget:1250, cls:"besoin"},
-    {id:"resto", emoji:"🍝", name:"Restaurants", budget:180, cls:"envie"},
-    {id:"transport", emoji:"🚗", name:"Transport", budget:160, cls:"besoin"},
-    {id:"sante", emoji:"💊", name:"Santé", budget:90, cls:"protection"},
-    {id:"epargne", emoji:"💰", name:"Épargne projets", budget:200, cls:"invest"}
+    {id:"courses", emoji:"🛒", name:"Courses", budget:300, cls:"besoin"},
+    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:100, cls:"envie"}
   ],
-  charges:[
-    {id:"c1", emoji:"🏠", name:"Loyer & Charges", amount:1250, scope:"commune", locked:true},
-    {id:"c2", emoji:"⚡", name:"Électricité & Gaz", amount:130, scope:"commune", locked:false},
-    {id:"c3", emoji:"📶", name:"Internet & Mobiles", amount:65, scope:"commune", locked:false},
-    {id:"c4", emoji:"🏋️", name:"Salle de sport", amount:35, scope:"elle", locked:false},
-    {id:"c5", emoji:"🚙", name:"Assurance voiture", amount:48, scope:"lui", locked:false}
-  ],
-  merchants:[
-    {id:"m1", emoji:"🛒", name:"Carrefour", cat:"courses"},
-    {id:"m2", emoji:"☕", name:"Le Bistrot", cat:"resto"},
-    {id:"m3", emoji:"⛽", name:"Total", cat:"transport"},
-    {id:"m4", emoji:"🎬", name:"Cinéma", cat:"loisirs"},
-    {id:"m5", emoji:"🥖", name:"Boulangerie", cat:"courses"},
-    {id:"m6", emoji:"💊", name:"Pharmacie", cat:"sante"}
-  ],
-  expenses:[
-    {id:e(), amount:84.20, date:iso(0), desc:"Course Bio", cat:"courses", who:"elle", type:"depense", prevision:false, cagnotte:false, note:""},
-    {id:e(), amount:1250, date:iso(1), desc:"Loyer", cat:"logement", who:"lui", type:"depense", prevision:false, cagnotte:false, note:""},
-    {id:e(), amount:46, date:iso(2), desc:"Resto italien", cat:"resto", who:"lui", type:"depense", prevision:false, cagnotte:false, note:""},
-    {id:e(), amount:62, date:iso(3), desc:"Essence", cat:"transport", who:"elle", type:"depense", prevision:false, cagnotte:false, note:""},
-    {id:e(), amount:28, date:iso(4), desc:"Ciné + popcorn", cat:"loisirs", who:"lui", type:"depense", prevision:false, cagnotte:true, note:""},
-    {id:e(), amount:120, date:iso(5), desc:"Courses semaine", cat:"courses", who:"elle", type:"depense", prevision:false, cagnotte:false, note:""},
-    {id:e(), amount:300, date:iso(6), desc:"Transfert vers Cagnotte commune", cat:"epargne", who:"elle", type:"transfert", prevision:false, cagnotte:false, note:"Épargne du mois"},
-    {id:e(), amount:75, date:iso(9), desc:"Anniversaire maman", cat:"loisirs", who:"lui", type:"depense", prevision:true, cagnotte:false, note:""}
-  ],
-  cagnotte:{ balance:4250, history:[
-    {date:iso(6), label:"Virement mensuel", amount:+300},
-    {date:iso(12), label:"Achat cadeau commun", amount:-90},
-    {date:iso(20), label:"Virement mensuel", amount:+300}
-  ]},
+  charges:[],
+  merchants:[],
+  expenses:[],
+  cagnotte:{ balance:0, history:[] },
   projects:[
-    {id:"p1", name:"Voyage au Japon", emoji:"🗾", target:6000, saved:5100, months:14, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif"},
-    {id:"p2", name:"Apport Maison", emoji:"🏡", target:25000, saved:10500, months:36, day:2, split:{lui:55,elle:45}, cls:"invest", status:"actif"},
-    {id:"p3", name:"Épargne de secours", emoji:"🛟", target:9000, saved:7800, months:24, day:2, split:{lui:50,elle:50}, cls:"protection", status:"actif"},
-    {id:"p4", name:"Nouvelle Literie", emoji:"🛏️", target:1500, saved:600, months:6, day:10, split:{lui:50,elle:50}, cls:"envie", status:"pause"}
+    {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3000, saved:0, months:10, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif"},
+    {id:"p2", name:"Apport maison", emoji:"🏡", target:20000, saved:0, months:36, day:2, split:{lui:50,elle:50}, cls:"invest", status:"actif"}
   ],
   moneyDate:{ doneSteps:[], nextDate:"" },
-  budgetHistory:[
-    {date:iso(40), label:"Budget Loisirs 180€ → 200€", effect:"immediate"},
-    {date:iso(70), label:"Loyer 1200€ → 1250€", effect:"futur"}
-  ]
+  budgetHistory:[]
 };
 
 function e(){ return 'x'+Math.random().toString(36).slice(2,9); }
@@ -642,6 +606,7 @@ function authIntent(){
 }
 function authCodeCreate(){
   return authShell(`<div class="card fade">
+    <div style="margin-bottom:10px"><span class="link-text small" id="backIntent">← Retour</span></div>
     <h1>Voici votre code couple 🔗</h1>
     <p class="muted small" style="margin-bottom:16px">Partage-le à ton/ta partenaire : il/elle pourra rejoindre votre espace avec.</p>
     <div class="card-soft" style="text-align:center; margin-bottom:14px">
@@ -659,6 +624,7 @@ function authCodeCreate(){
 }
 function authCodeJoin(){
   return authShell(`<div class="card fade">
+    <div style="margin-bottom:10px"><span class="link-text small" id="backIntent">← Retour</span></div>
     <h1>Entre le code de ton/ta partenaire 🔗</h1>
     <p class="muted small" style="margin-bottom:18px">Demande-lui le code à 6 caractères qu'il/elle a reçu en créant votre espace.</p>
     <div class="field"><label>Code couple</label>
@@ -726,6 +692,7 @@ function bindAuth(){
     authStep="code-create"; renderAuth();
   });
   on('goJoin','click',()=>{ tmp.intent='join'; authStep="code-join"; renderAuth(); });
+  on('backIntent','click',()=>{ authStep="intent"; renderAuth(); });
   on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
   on('codeWA','click',()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
   on('codeSMS','click',()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
