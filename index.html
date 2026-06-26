@@ -355,7 +355,7 @@ function makeAvatarSVG(bg, label){
 const PHOTO = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=800&h=500&fit=crop";
 
 const DEFAULT = {
-  auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO" },
+  auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
   partner:{ name:"Marc", profile:"lui" },
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, sync:true },
   settings:{
@@ -508,8 +508,8 @@ async function loadCoupleIntoState(prof, user){
   S.auth.coupleCode=prof.couple_code;
   const {data:others}=await sb.from('profiles').select('*').eq('couple_code',prof.couple_code).neq('user_id',user.id);
   const partner=others&&others[0];
-  if(partner){ S.partner.name=partner.name; S.partner.profile=partner.gender; }
-  else { S.partner.profile=partnerOf(prof.gender); S.partner.name='Partenaire'; }
+  if(partner){ S.partner.name=partner.name; S.partner.profile=partner.gender; S.auth.partnerLinked=true; }
+  else { S.partner.profile=partnerOf(prof.gender); S.partner.name='Partenaire'; S.auth.partnerLinked=false; }
   save();
 }
 
@@ -733,7 +733,7 @@ function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
     <div class="brand">Budget à Deux <span class="v">2.0</span></div>
     <div class="appbar-actions">
-      ${S.ui.sync?`<span class="sync"><span class="dot"></span>Synchro</span>`:`<span class="sync" style="color:var(--muted); background:var(--cream-2)">Hors ligne</span>`}
+      ${S.auth.partnerLinked && S.ui.sync?`<span class="sync"><span class="dot"></span>Synchro</span>`:`<span class="sync" style="color:var(--muted); background:var(--cream-2)">Hors ligne</span>`}
       <button class="icon-btn" id="themeBtn" title="Thème">${S.ui.dark?'☀️':'🌙'}</button>
       <button class="icon-btn" id="menuBtn" title="Plus">☰</button>
       <img class="avatar" src="${avatarOf(me())}" id="avatarBtn">
@@ -851,11 +851,20 @@ function renderVue(){
 
   <div class="section-title">Vue annuelle</div>
   <div class="card">
-    <div class="between" style="margin-bottom:6px"><b class="small">Dépenses sur 12 mois</b><span class="muted small">moy. ${fmt0(totalSpent()*0.92)}</span></div>
-    <div class="year">
-      ${MOIS.map((m,i)=>{ const cur=new Date().getMonth(); const h=20+Math.abs(Math.sin(i*1.7))*78; const dim=i>cur;
-        return `<div class="col ${dim?'dim':''} ${i===cur?'':''}"><div class="b" style="height:${dim?14:h}%"></div><div class="m">${m[0]}</div></div>`;}).join('')}
-    </div>
+    ${(() => {
+      const cur = new Date().getMonth();
+      const monthly = MOIS.map((m,i)=>({ m, spent: i<=cur ? totalSpent(i-cur) : 0, future: i>cur }));
+      const max = Math.max(...monthly.map(x=>x.spent), 0);
+      const elapsed = cur+1;
+      const avg = monthly.reduce((s,x)=>s+x.spent,0)/elapsed;
+      const bars = monthly.map(x=>{
+        const h = x.future ? 14 : (max>0 ? Math.round(x.spent/max*100) : 0);
+        return `<div class="col ${x.future?'dim':''}"><div class="b" style="height:${h}%"></div><div class="m">${x.m[0]}</div></div>`;
+      }).join('');
+      return `<div class="between" style="margin-bottom:6px"><b class="small">Dépenses sur 12 mois</b><span class="muted small">moy. ${fmt0(avg)}</span></div>
+      <div class="year">${bars}</div>
+      ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant</p>`:''}`;
+    })()}
   </div>
 
   <div class="section-title">Équilibre du couple</div>
@@ -872,7 +881,10 @@ function renderVue(){
 
   <div class="photo-card" style="margin-top:16px">
     <img src="${PHOTO}">
-    <div class="ov"><h3>« Le bonheur se partage à deux »</h3><p>Objectif épargne · Voyage au Japon dans ${Math.max(1,Math.round((S.projects[0].target-S.projects[0].saved)/300))} mois</p></div>
+    <div class="ov"><h3>« Le bonheur se partage à deux »</h3>${(() => {
+      const p = S.projects.find(p=>p.status==="actif");
+      return p ? `<p>Objectif épargne · ${p.name} dans ${Math.max(1,Math.round((p.target-p.saved)/300))} mois</p>` : `<p>Ajoutez un projet pour suivre votre prochain objectif ici.</p>`;
+    })()}</div>
   </div>
   `;
 }
@@ -1326,7 +1338,7 @@ function renderPilotage(){
   </div>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens","Recommandé")}
+  ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens","")}
   ${repOption("5050","50 / 50","Partage égalitaire strict","")}
   ${repOption("net","Proportionnel au net restant","Équilibre le reste à vivre","")}
   ${repOption("custom","Pourcentage personnalisé","Vous fixez vous-mêmes","")}
