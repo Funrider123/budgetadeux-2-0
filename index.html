@@ -788,6 +788,21 @@ function renderVue(){
   const rep=repartition();
   // money date status
   const mdDone=S.moneyDate.doneSteps.length;
+  const mdInProgress = mdDone>0 && mdDone<6;
+  let mdTitle, mdSub;
+  if(mdInProgress){
+    mdTitle = "C'est l'heure de votre Money Date";
+    mdSub = `${mdDone}/6 étapes — reprendre votre bilan`;
+  } else if(!S.moneyDate.nextDate){
+    mdTitle = "C'est l'heure de votre Money Date";
+    mdSub = "Votre rendez-vous financier à deux, en 6 étapes";
+  } else {
+    const days = Math.ceil((new Date(S.moneyDate.nextDate)-new Date(new Date().toDateString()))/86400000);
+    if(days>1){ mdTitle = `Encore ${days} jours avant votre prochain Money Date`; mdSub = "Votre rendez-vous financier à deux"; }
+    else if(days===1){ mdTitle = "Votre Money Date, c'est demain !"; mdSub = "Préparez-vous à deux"; }
+    else if(days===0){ mdTitle = "C'est aujourd'hui votre Money Date !"; mdSub = "Votre rendez-vous financier à deux, en 6 étapes"; }
+    else { mdTitle = "C'est l'heure de votre Money Date"; mdSub = "Votre rendez-vous financier à deux, en 6 étapes"; }
+  }
   return `
   <div style="padding-top:6px">
     <span class="pill">Période actuelle</span>
@@ -814,16 +829,6 @@ function renderVue(){
     <div class="stat"><div class="k">Budget restant</div><div class="v">${fmt0(remaining)}</div><div class="d ${remaining>=0?'up':'down'}">${remaining>=0?'En bonne voie':'Dépassement'}</div></div>
   </div>
 
-  <!-- Money date hero -->
-  <div class="card" style="margin-top:14px; background:linear-gradient(135deg,var(--blush),var(--card)); display:flex; align-items:center; gap:14px; cursor:pointer" id="mdCard">
-    <div class="emoji-badge" style="background:var(--terra); color:#fff; width:48px;height:48px; font-size:22px">❤️</div>
-    <div class="grow">
-      <div class="name" style="font-family:var(--serif); font-size:16px">C'est l'heure de votre Money Date</div>
-      <div class="sub">${mdDone>0?`${mdDone}/6 étapes — reprendre votre bilan`:'Votre rendez-vous financier à deux, en 6 étapes'}</div>
-    </div>
-    <span class="chev" style="color:var(--terra); font-size:20px">→</span>
-  </div>
-
   <div class="section-title">Budgets par catégorie <span class="link" data-go="historique">Détail →</span></div>
   <div class="card">
     ${S.categories.filter(c=>c.budget>0).map(c=>{
@@ -838,6 +843,16 @@ function renderVue(){
         <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
       </div>`;
     }).join('')}
+  </div>
+
+  <!-- Money date hero -->
+  <div class="card" style="margin-top:14px; background:linear-gradient(135deg,var(--blush),var(--card)); display:flex; align-items:center; gap:14px; cursor:pointer" id="mdCard">
+    <div class="emoji-badge" style="background:var(--terra); color:#fff; width:48px;height:48px; font-size:22px">❤️</div>
+    <div class="grow">
+      <div class="name" style="font-family:var(--serif); font-size:16px">${mdTitle}</div>
+      <div class="sub">${mdSub}</div>
+    </div>
+    <span class="chev" style="color:var(--terra); font-size:20px">→</span>
   </div>
 
   <div class="section-title">Vue annuelle</div>
