@@ -278,6 +278,9 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .auth-hero{text-align:center; padding:46px 0 10px;}
 .auth-hero .brand{justify-content:center; font-size:30px; margin-bottom:14px;}
 .auth-hero h1{font-size:27px; margin-bottom:8px;}
+.auth-tabs{display:flex; gap:8px; max-width:340px; margin:18px auto 0; background:var(--cream-2); border-radius:var(--r-sm); padding:5px;}
+.auth-tabs button{flex:1; padding:10px 0; border-radius:calc(var(--r-sm) - 5px); font-weight:800; font-size:13.5px; color:var(--muted); transition:.18s;}
+.auth-tabs button.on{background:var(--card); color:var(--terra); box-shadow:var(--shadow-sm);}
 .auth .card h1{font-size:21px; line-height:1.25; margin-bottom:6px;}
 .code-input{display:flex; gap:8px; justify-content:center; margin:6px 0;}
 .code-input input{width:46px;height:56px; text-align:center; font-size:24px; font-weight:800; font-family:var(--serif); background:var(--card); border:1.5px solid var(--line-2); border-radius:14px; text-transform:uppercase;}
@@ -559,10 +562,15 @@ function renderAuth(){
   el.classList.add('fade');
   bindAuth();
 }
-function authShell(inner){
+function authShell(inner, activeTab){
+  const tabs = activeTab ? `<div class="auth-tabs">
+      <button class="${activeTab==='login'?'on':''}" id="tabLogin">Se connecter</button>
+      <button class="${activeTab==='signup'?'on':''}" id="tabSignup">Créer mon compte</button>
+    </div>` : '';
   return `<div class="auth-hero">
       <div class="brand">Budget à Deux <span class="v">2.0</span></div>
       <p class="quote" style="margin-top:4px">« L'argent n'est qu'un outil pour<br>construire la vie que nous aimons ensemble. »</p>
+      ${tabs}
     </div>${inner}`;
 }
 function authLogin(){
@@ -573,9 +581,7 @@ function authLogin(){
     <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="••••••••"></div>
     <div style="text-align:right; margin:-4px 2px 16px"><span class="link-text small" id="goForgot">Mot de passe oublié ?</span></div>
     <button class="btn btn-primary" id="doLogin">Se connecter</button>
-    <div class="divider">nouveau ici ?</div>
-    <button class="btn btn-ghost" id="goSignup">Créer mon compte</button>
-  </div>`);
+  </div>`, 'login');
 }
 function authSignup(){
   return authShell(`<div class="card fade">
@@ -584,9 +590,7 @@ function authSignup(){
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr"></div>
     <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe"></div>
     <button class="btn btn-primary" id="doSignup">Continuer</button>
-    <div class="divider">déjà un compte ?</div>
-    <button class="btn btn-ghost" id="goLogin">Se connecter</button>
-  </div>`);
+  </div>`, 'signup');
 }
 function authForgot(){
   return authShell(`<div class="card fade">
@@ -599,6 +603,7 @@ function authForgot(){
 }
 function authName(){
   return authShell(`<div class="card fade">
+    <div style="margin-bottom:10px"><span class="link-text small" id="backSignup">← Retour</span></div>
     <h1>Comment veux-tu t'appeler dans l'App ?</h1>
     <p class="muted small" style="margin-bottom:18px">Ton prénom ou un petit surnom, comme tu veux.</p>
     <div class="field"><label>Prénom / pseudo</label><input class="input" id="aName" placeholder="Ex : Alice" value=""></div>
@@ -662,8 +667,9 @@ function authRecovery(){
 function bindAuth(){
   const on=(id,ev,fn)=>{ const x=$('#'+id); if(x) x.addEventListener(ev,fn); };
   const busy=(id,label,fn)=>on(id,'click',async ()=>{ const b=$('#'+id); if(b){b.disabled=true; b.dataset.t=b.textContent; b.textContent=label;} try{ await fn(); } finally { if(b){b.disabled=false; b.textContent=b.dataset.t;} } });
-  on('goSignup','click',()=>{authStep="signup"; renderAuth();});
   on('goLogin','click',()=>{authStep="login"; renderAuth();});
+  on('tabLogin','click',()=>{authStep="login"; renderAuth();});
+  on('tabSignup','click',()=>{authStep="signup"; renderAuth();});
   on('goForgot','click',()=>{authStep="forgot"; renderAuth();});
   busy('doLogin','Connexion…',async ()=>{
     const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
@@ -702,6 +708,7 @@ function bindAuth(){
   });
   on('goJoin','click',()=>{ tmp.intent='join'; authStep="code-join"; renderAuth(); });
   on('backIntent','click',()=>{ authStep="intent"; renderAuth(); });
+  on('backSignup','click',()=>{ authStep="signup"; renderAuth(); });
   on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
   on('codeWA','click',()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
   on('codeSMS','click',()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
@@ -779,8 +786,6 @@ function renderVue(){
   const usedPct = Math.min(100, Math.round(totalSpent()/totalBudget()*100));
   const remaining = totalBudget()-totalSpent();
   const rep=repartition();
-  const lui=spentByWho("lui"), elle=spentByWho("elle"); const tot=lui+elle||1;
-  const luiPct=Math.round(lui/tot*100), ellePct=100-luiPct;
   // money date status
   const mdDone=S.moneyDate.doneSteps.length;
   return `
@@ -819,20 +824,6 @@ function renderVue(){
     <span class="chev" style="color:var(--terra); font-size:20px">→</span>
   </div>
 
-  <div class="section-title">Répartition à deux</div>
-  <div class="card">
-    <div class="row" style="margin-bottom:14px">
-      <img class="avatar sm" src="${avatarOf('lui')}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('lui')}</div></div>
-      <b style="font-family:var(--serif)">${fmt0(lui)}</b><span class="muted small">${luiPct}%</span>
-    </div>
-    <div class="bar" style="margin-bottom:14px"><i style="width:${luiPct}%"></i></div>
-    <div class="row" style="margin-bottom:14px">
-      <img class="avatar sm" src="${avatarOf('elle')}"><div class="grow"><div class="small" style="font-weight:800">${nameOf('elle')}</div></div>
-      <b style="font-family:var(--serif)">${fmt0(elle)}</b><span class="muted small">${ellePct}%</span>
-    </div>
-    <div class="bar over"><i style="width:${ellePct}%; background:linear-gradient(90deg,var(--peach),var(--clay))"></i></div>
-  </div>
-
   <div class="section-title">Budgets par catégorie <span class="link" data-go="historique">Détail →</span></div>
   <div class="card">
     ${S.categories.filter(c=>c.budget>0).map(c=>{
@@ -865,18 +856,6 @@ function renderVue(){
       <div class="year">${bars}</div>
       ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant</p>`:''}`;
     })()}
-  </div>
-
-  <div class="section-title">Équilibre du couple</div>
-  <div class="card equi">
-    <div class="equi-ring" style="background:conic-gradient(var(--terra) ${luiPct}%, var(--peach) 0)">
-      <div class="heart">❤️</div>
-    </div>
-    <p class="muted small">Vos contributions s'équilibrent — vous avancez du même pas.</p>
-    <div class="equi-people">
-      <div class="p"><img class="avatar sm" src="${avatarOf('lui')}"><span class="n">${nameOf('lui')}</span><span class="a">${fmt0(lui)}</span></div>
-      <div class="p"><img class="avatar sm" src="${avatarOf('elle')}"><span class="n">${nameOf('elle')}</span><span class="a">${fmt0(elle)}</span></div>
-    </div>
   </div>
 
   <div class="photo-card" style="margin-top:16px">
