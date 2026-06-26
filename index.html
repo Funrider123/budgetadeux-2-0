@@ -20,6 +20,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 /* ============================================================
    BUDGET À DEUX · 2.0  —  Thème terracotta, chaleureux & aéré
@@ -335,6 +336,14 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 const SUPABASE_URL = "https://oleysrvrwaqorbaawiwd.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sZXlzcnZyd2Fxb3JiYWF3aXdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDE5MTUsImV4cCI6MjA5NTQ3NzkxNX0.yDu28geUEmNhAs0BLcfIpIEzBhzC9DO6DbyXZ3bnGPk";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============================================================
+   EMAILJS (signalement de bugs)
+   ============================================================ */
+const EMAILJS_PUBLIC_KEY = "REPLACE_ME_PUBLIC_KEY";
+const EMAILJS_SERVICE_ID = "service_m998ctj";
+const EMAILJS_TEMPLATE_ID = "REPLACE_ME_TEMPLATE_ID";
+if(window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
 /* ============================================================
    ÉTAT & PERSISTANCE
@@ -1395,7 +1404,24 @@ function openBugModal(){
   openModal(`<h3>🚨 Signaler un souci</h3><p class="small muted" style="margin-bottom:14px">Un bug, une idée ? On vous lit avec attention.</p>
     <textarea class="input" id="bugTxt" placeholder="Décrivez ce qui s'est passé..." style="min-height:100px"></textarea>
     <button class="btn btn-primary" id="bugSend" style="margin-top:12px">Envoyer</button>`);
-  $('#bugSend').onclick=()=>{ closeModal(); toast("Merci ! Signalement envoyé 💌","✓"); };
+  $('#bugSend').onclick=async ()=>{
+    const msg = $('#bugTxt').value.trim();
+    if(!msg){ toast("Décris un peu le souci avant d'envoyer 🙂"); return; }
+    const btn = $('#bugSend');
+    btn.disabled = true; btn.textContent = "Envoi...";
+    try{
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        from_name: S.auth.name || "Utilisateur Budget à Deux",
+        from_email: S.auth.email || "",
+        message: msg,
+      });
+      closeModal();
+      toast("Merci ! Signalement envoyé 💌","✓");
+    }catch(err){
+      btn.disabled = false; btn.textContent = "Envoyer";
+      toast("Échec de l'envoi, réessaie dans un instant 😕");
+    }
+  };
 }
 
 /* ============================================================
