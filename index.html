@@ -1350,14 +1350,22 @@ function renderReglages(){
       <div class="row"><img class="avatar sm" src="${avatarOf(me())}"><div><div class="small" style="font-weight:800">${S.auth.name}</div><div class="small muted">${S.auth.email||'vous'}</div></div></div>
       <span class="tag besoin">Vous</span>
     </div>
+    ${S.auth.partnerLinked?`
+    <div class="between" style="padding:14px 0; border-bottom:1px solid var(--line)">
+      <div class="row"><img class="avatar sm" src="${avatarOf(partnerOf(me()))}"><div><div class="small" style="font-weight:800">${S.partner.name}</div><div class="small muted">Relié·e à votre couple</div></div></div>
+      <span class="tag envie">Partenaire</span>
+    </div>`:''}
     <div class="between" style="padding-top:14px">
       <div class="small muted" style="font-weight:700">Code couple</div>
       <div class="row" style="gap:8px"><b style="font-family:var(--serif); font-size:18px; letter-spacing:.1em; color:var(--terra)">${S.auth.coupleCode}</b><button class="btn btn-soft btn-sm" id="copyC2">📋</button></div>
     </div>
-    <div class="row" style="gap:8px; margin-top:14px">
+    ${S.auth.partnerLinked?`
+    <p class="small muted" style="margin:12px 0 0; text-align:center">💑 Vous êtes reliés — vos budgets se synchronisent.</p>`:`
+    <p class="small muted" style="margin:12px 0 6px">En attente que votre partenaire rejoigne avec ce code.</p>
+    <div class="row" style="gap:8px; margin-top:8px">
       <button class="btn btn-soft btn-sm" id="invWA" style="flex:1">💬 Inviter via WhatsApp</button>
       <button class="btn btn-soft btn-sm" id="invSMS" style="flex:1">✉️ Inviter par SMS</button>
-    </div>
+    </div>`}
   </div>
 
   <div class="card" style="margin-top:14px; display:flex; align-items:center; gap:14px; cursor:pointer" id="goPilotage">
