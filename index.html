@@ -395,7 +395,56 @@ function load(){
   return JSON.parse(JSON.stringify(DEFAULT));
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
-  document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light"); }
+  document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
+  schedulePush(); }
+
+/* ============================================================
+   SYNCHRONISATION CLOUD (entre les deux téléphones du couple)
+   Le budget partagé est stocké comme un document JSON unique par
+   couple dans la table `couple_state`, avec mise à jour temps réel.
+   ============================================================ */
+// Champs partagés entre partenaires ; le reste (auth/partner/ui) reste local à l'appareil.
+const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory'];
+let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
+let pushTimer=null, applyingRemote=false, syncChan=null;
+function syncActive(){ return !!(S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
+function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
+function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
+function schedulePush(){ if(!syncActive()||applyingRemote) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushState,800); }
+async function pushState(){
+  if(!syncActive()||applyingRemote) return;
+  try{ await sb.from('couple_state').upsert({ couple_code:S.auth.coupleCode, data:sharedSnapshot(), updated_at:new Date().toISOString(), updated_by:deviceId }); }
+  catch(e){ console.error('sync push', e); }
+}
+async function pullState(){
+  if(!(S.auth.loggedIn && S.auth.coupleCode)) return;
+  try{
+    const {data,error}=await sb.from('couple_state').select('data').eq('couple_code',S.auth.coupleCode).maybeSingle();
+    if(error){ console.error('sync pull', error); return; }
+    if(data && data.data && Object.keys(data.data).length){
+      applyingRemote=true; applyShared(data.data); save(); applyingRemote=false;
+      if(!$('#main').classList.contains('hidden')){ renderAppbar(); go(current); }
+    } else {
+      // Cloud vide : on initialise avec les données locales de cet appareil.
+      await pushState();
+    }
+  }catch(e){ console.error('sync pull', e); }
+}
+function subscribeSync(){
+  if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} syncChan=null; }
+  if(!syncActive()) return;
+  syncChan = sb.channel('couple_'+S.auth.coupleCode)
+    .on('postgres_changes', { event:'*', schema:'public', table:'couple_state', filter:'couple_code=eq.'+S.auth.coupleCode }, payload=>{
+      const row=payload.new;
+      if(!row || !row.data || row.updated_by===deviceId) return; // on ignore nos propres écritures
+      applyingRemote=true; applyShared(row.data); save(); applyingRemote=false;
+      if(!$('#main').classList.contains('hidden')){ renderAppbar(); go(current); }
+      toast('Budget mis à jour par '+(S.partner.name||'votre partenaire'),'🔄');
+    })
+    .subscribe();
+}
+async function initSync(){ if(!syncActive()){ subscribeSync(); return; } await pullState(); subscribeSync(); }
+function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} syncChan=null; } clearTimeout(pushTimer); }
 
 /* ============================================================
    HELPERS
@@ -740,6 +789,7 @@ function enterApp(){
   $('#main').classList.remove('hidden');
   renderAppbar(); renderSetupBanner(); renderTab(); go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
+  initSync();
 }
 function needsSetup(){ return !S.settings.salaries.lui && !S.settings.salaries.elle; }
 function renderSetupBanner(){
@@ -1606,11 +1656,11 @@ function bindReglages(){
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
-  const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne");};
+  const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne"); if(S.ui.sync) initSync(); else stopSync();};
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${S.auth.name} 🔁`); };
-  const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
+  const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
 function exportCSV(){
   const rows=[["Date","Description","Catégorie","Personne","Type","Montant","Prévision","Cagnotte","Note"]];
