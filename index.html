@@ -411,7 +411,14 @@ function syncActive(){ return !!(S.auth.loggedIn && S.auth.coupleCode && S.ui.sy
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
 function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
 // On ne signale une erreur de synchro qu'une fois par session, pour ne pas spammer.
-function syncError(phase,e){ const msg=(e&&e.message)||(typeof e==='string'?e:JSON.stringify(e)); console.error('sync '+phase, e); if(!syncErrShown){ syncErrShown=true; toast('Synchro indisponible ('+phase+') — réessai auto','⚠️'); } }
+// Le détail (code + message) est exposé pour diagnostiquer (cache de schéma, droits…).
+function syncError(phase,e){
+  const code=(e&&(e.code||e.status))||'';
+  const msg=(e&&(e.message||e.error_description||e.error))||(typeof e==='string'?e:JSON.stringify(e));
+  window.__lastSyncError={phase,code,msg};
+  console.error('sync '+phase, e);
+  if(!syncErrShown){ syncErrShown=true; toast('Synchro '+phase+' — '+(code?code+' : ':'')+msg, '⚠️'); }
+}
 function applyRemote(data, stamp){
   applyingRemote=true; applyShared(data); save(); applyingRemote=false;
   lastAppliedStamp=stamp||null;
@@ -1386,6 +1393,7 @@ function renderReglages(){
     </div>
     ${S.ui.sync?`<button class="menu-row" id="syncNow" style="border:none; width:100%; text-align:left; background:none"><div class="row" style="gap:12px"><div class="mi">⬇️</div><div><div class="nm">Synchroniser maintenant</div><div class="sub">Forcer la récupération des données du couple</div></div></div><span class="chev">→</span></button>`:''}
   </div>
+  ${(window.__lastSyncError)?`<div class="card" style="margin-top:10px; background:#FBE9E4; border:1px solid var(--terra)"><div class="small" style="font-weight:800; color:var(--terra)">⚠️ Dernière erreur de synchro</div><div class="small muted" style="margin-top:4px; word-break:break-word">Étape : ${escapeHtml(window.__lastSyncError.phase)}${window.__lastSyncError.code?' · Code : '+escapeHtml(''+window.__lastSyncError.code):''}<br>${escapeHtml(''+window.__lastSyncError.msg)}</div></div>`:''}
 
   <div class="section-title">Historique des budgets</div>
   <div class="card">
@@ -1681,7 +1689,7 @@ function bindReglages(){
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
   const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne"); if(S.ui.sync) initSync(); else stopSync();};
-  const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); lastAppliedStamp=null; await pullState(); };
+  const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${S.auth.name} 🔁`); };
