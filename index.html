@@ -533,14 +533,16 @@ function toast(msg, emoji="✓"){
 /* ============================================================
    MODALS
    ============================================================ */
+let modalCloseTimer=null;
 function openModal(html){
+  clearTimeout(modalCloseTimer); // évite qu'une fermeture différée n'efface la modale qu'on vient d'ouvrir
   const root=$('#modalRoot');
   root.innerHTML=`<div class="modal-back" id="mb"><div class="modal"><div class="modal-grip"></div>${html}</div></div>`;
   const mb=$('#mb');
   requestAnimationFrame(()=>mb.classList.add('show'));
   mb.addEventListener('click',ev=>{ if(ev.target===mb) closeModal(); });
 }
-function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('show'); setTimeout(()=>$('#modalRoot').innerHTML="",240); }
+function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('show'); clearTimeout(modalCloseTimer); modalCloseTimer=setTimeout(()=>$('#modalRoot').innerHTML="",240); }
 
 /* ============================================================
    AUTH FLOW
@@ -1520,10 +1522,80 @@ function openProfile(){
       <button class="menu-row" id="pmCouple"><div class="mi" style="background:var(--blush)">💑</div><div class="grow"><div class="nm">Notre couple</div><div class="sub">Partenaire, code, invitation</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmSwitch"><div class="mi">🔁</div><div class="grow"><div class="nm">Changer de profil</div><div class="sub">Basculer entre ${escapeHtml(nameOf('lui'))} et ${escapeHtml(nameOf('elle'))}</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`);
   $('#pmCouple').onclick=()=>{ closeModal(); go('reglages'); };
   $('#pmSwitch').onclick=()=>{ closeModal(); const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go(current); toast(`Profil : ${S.auth.name} 🔁`); };
   $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
+  $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
+}
+
+/* ============================================================
+   SUPPRESSION DE COMPTE / DONNÉES COUPLE
+   ============================================================ */
+async function callDeleteAccount(mode){
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  if(!token) throw new Error("Session expirée, reconnectez-vous.");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+    method:'POST',
+    headers:{ 'Authorization':`Bearer ${token}`, 'apikey':SUPABASE_ANON_KEY, 'Content-Type':'application/json' },
+    body: JSON.stringify({ mode })
+  });
+  const out = await res.json().catch(()=>({}));
+  if(!res.ok || out.error) throw new Error(out.error || ('HTTP '+res.status));
+  return out;
+}
+// Après suppression du compte : on vide l'appareil et on repart à zéro.
+async function wipeLocalAndRestart(){
+  try{ stopSync(); }catch(_){}
+  try{ await sb.auth.signOut(); }catch(_){}
+  try{ localStorage.removeItem('bad2'); localStorage.removeItem('bad2_device'); }catch(_){}
+  location.reload();
+}
+function openDeleteAccount(){
+  const linked = S.auth.partnerLinked;
+  openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
+    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>.</p>
+    <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
+      <button class="menu-row" id="daAccount"><div class="mi">👤</div><div class="grow"><div class="nm">Mon compte uniquement</div><div class="sub">Nom, email, connexion. Le budget du couple reste${linked?' pour votre partenaire':''}.</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Les données du couple</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro.${linked?' <b style="color:var(--danger)">Affecte aussi votre partenaire.</b>':''}</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Tout supprimer</div><div class="sub">Mon compte + le budget commun.${linked?' <b style="color:var(--danger)">Affecte aussi votre partenaire.</b>':''}</div></div><span class="chev">→</span></button>
+    </div>
+    <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
+  $('#daCancel').onclick=()=>closeModal();
+
+  const run = async (mode, label)=>{
+    closeModal();
+    try{
+      toast("Suppression…","⏳");
+      const out = await callDeleteAccount(mode);
+      if(mode==='couple'){
+        // Budget réinitialisé côté serveur : on adopte l'état vierge du cloud.
+        lastAppliedStamp=null; await pullState();
+        toast("Budget du couple réinitialisé 🧹");
+      } else {
+        toast("Compte supprimé. À bientôt 👋");
+        setTimeout(wipeLocalAndRestart, 900);
+      }
+    }catch(e){
+      openModal(`<h3 style="color:var(--danger)">Suppression impossible</h3><p class="small muted" style="margin:6px 0 18px">${escapeHtml(e.message||'Erreur inconnue')}<br><br>Réessayez dans un instant. Si le souci persiste, le service n'est peut-être pas encore activé.</p><button class="btn btn-soft" id="okErr" style="width:100%">Fermer</button>`);
+      const b=$('#okErr'); if(b) b.onclick=closeModal;
+    }
+  };
+
+  $('#daAccount').onclick=()=>openConfirm(
+    "Supprimer votre compte ?",
+    (linked?"Votre profil (nom, email, connexion) sera supprimé définitivement. Le budget du couple restera pour votre partenaire.":"Vous êtes le dernier membre : votre compte ET toutes les données du couple seront supprimés définitivement.")+"<br><br>Cette action est irréversible.",
+    ()=>run('account'));
+  $('#daCouple').onclick=()=>openConfirm(
+    "Réinitialiser le budget du couple ?",
+    "Toutes les données du budget commun (dépenses, catégories, projets, revenus, historique) seront effacées et remises à zéro."+(linked?" Cela affecte aussi votre partenaire.":"")+"<br><br>Vos comptes restent actifs. Cette action est irréversible.",
+    ()=>run('couple'));
+  $('#daAll').onclick=()=>openConfirm(
+    "Tout supprimer ?",
+    "Votre compte (nom, email, connexion) ET tout le budget commun seront supprimés définitivement."+(linked?" Le budget disparaîtra aussi pour votre partenaire.":"")+"<br><br>Cette action est irréversible.",
+    ()=>run('all'));
 }
 
 /* ============================================================
