@@ -128,13 +128,20 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .pers-card{border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-top:10px; background:var(--card);}
 .pers-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 14px; background:var(--cream-2);}
 .pers-hdr .who{font-size:12px; font-weight:800; color:var(--ink);}
-.pers-hdr .pct{font-size:11.5px; font-weight:800; color:var(--terra); background:var(--blush); padding:2px 8px; border-radius:10px; margin-left:6px;}
+.pers-card .pct{font-size:11.5px; font-weight:800; color:var(--terra); background:var(--blush); padding:2px 8px; border-radius:10px; margin-left:6px; flex-shrink:0;}
 .pers-hdr .tot-lbl{font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); margin-right:5px;}
 .pers-hdr .tot{font-size:13px; font-weight:800; color:var(--terra);}
 .pers-body{padding:9px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line);}
 .pers-body label{font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; width:46px;}
 .pers-body .inwrap{flex:1;}
-.pers-perso-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line);}
+/* Cartes compactes (modes brut / personnalisé) : nom + % + salaire sur une seule ligne */
+.pers-compact{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px;}
+.pers-compact .who{font-size:12px; font-weight:800; color:var(--ink); flex-shrink:0;}
+.pers-pct-edit, .pers-sal-edit{display:flex; align-items:center; gap:3px; background:var(--cream-2); border-radius:10px; padding:5px 10px; flex-shrink:0;}
+.pers-pct-edit input, .pers-sal-edit input{border:none; background:none; font-size:13px; font-weight:800; color:var(--ink); width:50px; text-align:right; padding:0;}
+.pers-pct-edit span, .pers-sal-edit span{font-size:11px; color:var(--muted); font-weight:700;}
+.pers-perso-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line); -webkit-tap-highlight-color:transparent;}
+.pers-perso-hdr:active{background:var(--cream-2);}
 .pers-perso-hdr b{font-size:12.5px; font-weight:700; color:var(--ink);}
 .pers-perso-hdr .chev{font-size:10px; color:var(--muted); margin-left:6px;}
 .pers-perso-hdr .tot{font-size:12.5px; font-weight:700; color:var(--ink);}
@@ -151,7 +158,8 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .pilot-row .pnm-row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px;}
 .pilot-row .pnm{font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .pilot-row .pamt-input{width:66px; flex-shrink:0; border:1px solid var(--line); border-radius:8px; padding:4px 6px; font-size:12.5px; font-weight:700; color:var(--terra); text-align:right; background:var(--card); font-family:inherit;}
-.pilot-collapse-hdr{display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:4px 2px;}
+.pilot-collapse-hdr{display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:4px 2px; -webkit-tap-highlight-color:transparent;}
+.pilot-collapse-hdr:active{opacity:.6;}
 .pilot-collapse-hdr .chev{transition:transform .2s; color:var(--muted); font-size:12px;}
 .pilot-collapse-hdr.open .chev{transform:rotate(180deg);}
 
@@ -163,7 +171,11 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 /* ---------- Generic ---------- */
 .pill{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--terra); background:var(--blush); padding:6px 13px; border-radius:20px;}
 .section-title{font-size:13px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:26px 2px 12px; display:flex; align-items:center; justify-content:space-between;}
-.section-title .link{font-family:var(--sans); font-size:12px; font-weight:700; color:var(--terra); text-transform:none; letter-spacing:0;}
+/* Lien cliquable générique : curseur "main" au survol (PC), retour visuel au clic (tactile). */
+.link{color:var(--terra); font-weight:700; cursor:pointer; -webkit-tap-highlight-color:transparent;}
+.link:active{opacity:.55;}
+@media (hover:hover){ .link:hover{text-decoration:underline;} }
+.section-title .link{font-family:var(--sans); font-size:12px; text-transform:none; letter-spacing:0;}
 .card{background:var(--card); border-radius:var(--r); padding:20px; box-shadow:var(--shadow); border:1px solid color-mix(in srgb,var(--line) 60%, transparent);}
 .card+.card{margin-top:14px;}
 .card-soft{background:var(--card-2); border-radius:var(--r); padding:18px; border:1px solid var(--line);}
@@ -1557,17 +1569,30 @@ function personCard(who){
   const persoList=S.charges.filter(c=>c.scope===who);
   const persoTotal=chargesPerso(who);
   const rep=repartition();
-  // Les charges perso ne servent qu'au mode "net" (elles sont déduites du salaire pour
-  // calculer le reste à vivre) ; en "brut" et en "personnalisé", elles n'entrent dans
-  // aucun calcul, donc pas la peine de les afficher ici.
-  const showPerso=S.settings.mode==='net';
-  const open=pilotOpen['perso_'+who];
+  const mode=S.settings.mode;
   const idSal=who==='lui'?'salLui':'salElle';
+
+  // Modes "brut" et "personnalisé" : juste le % (éditable en personnalisé, calculé en
+  // brut) et le salaire, sur une ligne compacte — pas besoin de la carte plus riche
+  // (charges perso, disponible...) qui ne concerne que le mode "net".
+  if(mode!=='net'){
+    const idPct=who==='lui'?'prepHim':'prepHer';
+    const pctField = mode==='custom'
+      ? `<div class="pers-pct-edit"><input type="number" min="0" max="100" id="${idPct}" value="${rep[who]}"><span>%</span></div>`
+      : `<span class="pct" id="persPct_${who}">${rep[who]}%</span>`;
+    return `<div class="pers-card pers-compact">
+      <div class="who">👤 ${escapeHtml(name)}</div>
+      ${pctField}
+      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}"><span>€</span></div>
+    </div>`;
+  }
+
+  const open=pilotOpen['perso_'+who];
   const disponible=sal-persoTotal;
   return `<div class="pers-card">
     <div class="pers-hdr">
       <div class="who">👤 ${escapeHtml(name)} <span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
-      <div style="text-align:right">${showPerso?'<span class="tot-lbl">Disponible</span>':''}<span class="tot" id="persTot_${who}">${showPerso?fmt0(disponible):fmt0(sal)}</span></div>
+      <div style="text-align:right"><span class="tot-lbl">Disponible</span><span class="tot" id="persTot_${who}">${fmt0(disponible)}</span></div>
     </div>
     <div class="pers-body">
       <label>Salaire</label>
@@ -1575,7 +1600,6 @@ function personCard(who){
         <input class="input" type="number" id="${idSal}" value="${sal}">
       </div>
     </div>
-    ${showPerso?`
     <div class="pers-perso-hdr" data-toggleperso="${who}">
       <b>Total charges fixes perso <span class="chev">${open?'▲':'▼'}</span></b>
       <span class="tot" id="persoTot_${who}">${fmt0(persoTotal)}</span>
@@ -1588,7 +1612,7 @@ function personCard(who){
         delAttr:`data-delcharge="${c.id}"`
       })).join(''):'<p class="small muted" style="padding:8px 4px">Aucune charge perso pour le moment.</p>'}
       <div style="padding:6px 4px 2px"><span class="link" data-addpersocharge="${who}">+ Ajouter une charge perso</span></div>
-    </div>`:''}
+    </div>
   </div>`;
 }
 // Bloc distinct (même famille visuelle que "Total à verser chaque mois" plus bas) pour
@@ -1618,13 +1642,7 @@ function renderPilotage(){
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
   ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires",null,true)}
-  ${repOption("custom","Personnalisé aux revenus","% choisi librement",`
-    <div class="rep-inline" onclick="event.stopPropagation()">
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" max="100" id="prepHim" value="${S.settings.custom.lui}"></div>
-      <span class="rep-inline-sep">/</span>
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" max="100" id="prepHer" value="${S.settings.custom.elle}"></div>
-      <span class="rep-inline-unit">%</span>
-    </div>`)}
+  ${repOption("custom","Personnalisé aux revenus","% choisi librement")}
   ${repOption("net","Proportionnel aux revenus nets","Après charges perso")}
   ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
     <div class="rep-inline" onclick="event.stopPropagation()">
