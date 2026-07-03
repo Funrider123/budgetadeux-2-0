@@ -109,8 +109,9 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 /* mode de répartition : cartes compactes séparées */
 .rep-opt{display:flex; flex-direction:column; width:100%; text-align:left; padding:9px 14px; border-radius:14px; border:1px solid var(--line); background:var(--card); margin-top:6px; cursor:pointer;}
 .rep-opt-hdr{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;}
-.rep-opt .txt b{display:block; font-size:12.5px; font-weight:800; color:var(--ink); line-height:1.3;}
-.rep-opt .txt span{font-size:11px; color:var(--muted);}
+.rep-opt .txt{line-height:1.35;}
+.rep-opt .txt b{font-size:12.5px; font-weight:800; color:var(--ink);}
+.rep-opt .txt span{font-size:11px; color:var(--muted); margin-left:3px;}
 .rep-opt .radio{width:17px; height:17px; border-radius:50%; border:2px solid var(--line-2); flex-shrink:0; display:grid; place-items:center;}
 .rep-opt.on{background:var(--terra); border-color:var(--terra);}
 .rep-opt.on .txt b{color:#fff;}
@@ -583,11 +584,11 @@ function repartition(){
 function totalRevenuFoyer(){ return S.settings.mode==="fixe" ? (S.settings.fixed.lui||0)+(S.settings.fixed.elle||0) : S.settings.salaries.lui+S.settings.salaries.elle; }
 function chargesCommunes(){ return S.charges.filter(c=>c.scope==="commune").reduce((s,c)=>s+c.amount,0); }
 function epargneProjetsMensuelle(){ return S.projects.filter(p=>p.status==="actif").reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
-// Ce qu'il reste chaque mois une fois charges perso (si mode revenus), charges communes et
-// catégories couvertes — base de l'allocation projets. En mode "fixe", les contributions
-// déclarées sont déjà nettes des charges perso de chacun, donc on ne les redéduit pas.
+// Ce qu'il reste chaque mois une fois charges communes et catégories couvertes — base de
+// l'allocation projets. Les charges perso ne sont déduites qu'en mode "net" : c'est le
+// seul mode où elles ont un sens (brut/personnalisé/fixe ne les utilisent pas).
 function disponiblePourProjets(){
-  const perso = S.settings.mode==="fixe" ? 0 : chargesPerso('lui')+chargesPerso('elle');
+  const perso = S.settings.mode==="net" ? chargesPerso('lui')+chargesPerso('elle') : 0;
   return totalRevenuFoyer() - perso - chargesCommunes() - totalBudget();
 }
 
@@ -1542,7 +1543,10 @@ function personCard(who){
   const persoList=S.charges.filter(c=>c.scope===who);
   const persoTotal=chargesPerso(who);
   const rep=repartition();
-  const showPerso=S.settings.mode!=='custom';
+  // Les charges perso ne servent qu'au mode "net" (elles sont déduites du salaire pour
+  // calculer le reste à vivre) ; en "brut" et en "personnalisé", elles n'entrent dans
+  // aucun calcul, donc pas la peine de les afficher ici.
+  const showPerso=S.settings.mode==='net';
   const open=pilotOpen['perso_'+who];
   const idSal=who==='lui'?'salLui':'salElle', idSlSal=who==='lui'?'slSalLui':'slSalElle';
   return `<div class="pers-card">
@@ -1592,7 +1596,7 @@ function renderPilotage(){
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel aux revenus","Basé sur les salaires bruts",null,true)}
+  ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires bruts",null,true)}
   ${repOption("custom","Personnalisé aux revenus","% choisi librement",`
     <div class="rep-inline" onclick="event.stopPropagation()">
       <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" max="100" id="prepHim" value="${S.settings.custom.lui}"></div>
@@ -1697,7 +1701,7 @@ function repOption(id,title,sub,extra,first){
   const on=S.settings.mode===id;
   return `<div class="rep-opt ${on?'on':''}" data-mode="${id}" ${first?'style="margin-top:0"':''}>
     <div class="rep-opt-hdr">
-      <div class="txt"><b>${title}</b><span>${sub}</span></div>
+      <div class="txt"><b>${title}</b><span>(${sub})</span></div>
       <div class="radio">${on?'<i></i>':''}</div>
     </div>
     ${on&&extra?extra:''}
