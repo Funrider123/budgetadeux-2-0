@@ -1416,7 +1416,6 @@ function renderReglages(){
   <div class="card" style="padding:6px 18px">
     <button class="menu-row" id="exportCSV"><div class="mi">📤</div><div class="grow"><div class="nm">Exporter en CSV</div><div class="sub">Toutes vos dépenses et mouvements</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="resetExp"><div class="mi">🧹</div><div class="grow"><div class="nm">Réinitialiser les dépenses</div><div class="sub">Repartir sur un mois vierge</div></div><span class="chev">→</span></button>
-    <button class="menu-row" id="switchProf"><div class="mi">🔁</div><div class="grow"><div class="nm">Changer de profil</div><div class="sub">Actuel : ${S.auth.name}</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="logout"><div class="mi">👋</div><div class="grow"><div class="nm" style="color:var(--danger)">Se déconnecter</div></div><span class="chev">→</span></button>
   </div>
   <p class="small muted" style="text-align:center; margin-top:20px">Budget à Deux 2.0 · fait avec 🤎</p>
@@ -1520,12 +1519,10 @@ function openProfile(){
     <p class="small muted" style="margin:12px 0 16px">Votre profil et votre session.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" id="pmCouple"><div class="mi" style="background:var(--blush)">💑</div><div class="grow"><div class="nm">Notre couple</div><div class="sub">Partenaire, code, invitation</div></div><span class="chev">→</span></button>
-      <button class="menu-row" id="pmSwitch"><div class="mi">🔁</div><div class="grow"><div class="nm">Changer de profil</div><div class="sub">Basculer entre ${escapeHtml(nameOf('lui'))} et ${escapeHtml(nameOf('elle'))}</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`);
   $('#pmCouple').onclick=()=>{ closeModal(); go('reglages'); };
-  $('#pmSwitch').onclick=()=>{ closeModal(); const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go(current); toast(`Profil : ${S.auth.name} 🔁`); };
   $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
   $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
 }
@@ -1793,7 +1790,6 @@ function bindReglages(){
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
-  const sw=$('#switchProf'); if(sw) sw.onclick=()=>{ const np=partnerOf(me()); const oldName=S.auth.name; S.auth.name=S.partner.name; S.partner.name=oldName; S.auth.profile=np; S.partner.profile=partnerOf(np); save(); renderAppbar(); go('reglages'); toast(`Profil : ${S.auth.name} 🔁`); };
   const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
 function exportCSV(){
