@@ -1592,7 +1592,7 @@ function renderPilotage(){
     <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
     <span class="pill">Pilotage</span>
   </div>
-  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation budgétaire</h1>
+  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Définition budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
@@ -1613,7 +1613,7 @@ function renderPilotage(){
       <span class="rep-inline-unit">€/mois</span>
     </div>`)}
 
-  ${S.settings.mode==='fixe'?fixedTotalCard():personCard('lui')+personCard('elle')}
+  ${S.settings.mode==='fixe'?fixedTotalCard():`<div class="section-title" style="margin-top:18px">👥 Détail par personne</div>${personCard('lui')}${personCard('elle')}`}
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
     <span class="section-title" style="margin:0">🧾 Charges fixes communes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
