@@ -1553,14 +1553,13 @@ function projectEta(p, mensuel){
   return {label:'→ '+d.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}), color:'var(--terra)'};
 }
 function pilotRow(opts){
-  // Ligne compacte réutilisée pour charges fixes / catégories : emoji, nom, tag optionnel, input€ + slider.
-  const {id,emoji,name,sub,amount,max,onInputAttr,delAttr,editAttr}=opts;
+  // Ligne compacte réutilisée pour charges fixes / catégories : nom (+ classification), tag optionnel, input€ + slider.
+  const {id,name,sub,cls,amount,max,onInputAttr,delAttr,editAttr}=opts;
   return `<div class="pilot-row">
     ${delAttr?`<button class="pdel" ${delAttr}>✕</button>`:''}
-    <div class="emoji-badge" style="flex-shrink:0">${emoji}</div>
     <div class="pmain">
       <div class="pnm-row">
-        <span class="pnm">${name}${sub?` <span class="small muted" style="font-weight:500">· ${sub}</span>`:''}</span>
+        <span class="pnm">${name}${cls?` <span class="small muted" style="font-weight:500">(${cls})</span>`:''}${sub?` <span class="small muted" style="font-weight:500">${sub}</span>`:''}</span>
         <input class="pamt-input" type="number" value="${Math.round(amount)}" data-id="${id}" ${onInputAttr}>
       </div>
       <input type="range" class="mini-slider" min="0" max="${max}" step="1" value="${amount}" data-id="${id}" ${onInputAttr}>
@@ -1612,7 +1611,7 @@ function personCard(who){
     </div>
     <div class="pers-perso-list" id="persoList_${who}" style="display:${open?'block':'none'}">
       ${persoList.length?persoList.map(c=>pilotRow({
-        id:c.id, emoji:c.emoji, name:c.name, sub:c.locked?'🔒':'',
+        id:c.id, name:c.name, sub:c.locked?'🔒':'',
         amount:c.amount, max:sliderMax(c.amount,500),
         onInputAttr:`data-charge oninput="onChargeInput(this)"`,
         delAttr:`data-delcharge="${c.id}"`
@@ -1628,6 +1627,14 @@ function totalMensuelCard(){
   return `<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
     <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em">💰 Montant total mensuel alimentant le compte commun</span>
     <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span>
+  </div>`;
+}
+// Encadré dédié (même famille visuelle que totalMensuelCard) pour bien mettre en évidence
+// le calcul : montant total mensuel − charges fixes communes − somme des catégories.
+function disponibleProjetsCard(reste){
+  return `<div class="panel-terra" style="margin-top:10px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
+    <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em">🎯 Disponible pour nos projets</span>
+    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0; color:${reste<0?'#FFD6C9':'#fff'}" id="pilReste">${fmt0(reste)}</span>
   </div>`;
 }
 function renderPilotage(){
@@ -1670,8 +1677,8 @@ function renderPilotage(){
   </div>
   <div class="card" id="chgList" style="display:${pilotOpen.charges?'block':'none'}">
     ${(()=>{ const communes=S.charges.filter(c=>c.scope==='commune'); return communes.length?communes.map(c=>pilotRow({
-      id:c.id, emoji:c.emoji, name:c.name,
-      sub:c.locked?'🔒':'',
+      id:c.id, name:c.name,
+      sub:c.locked?'🔒':'', cls:clsLabel(c.cls),
       amount:c.amount, max:sliderMax(c.amount,500),
       onInputAttr:`data-charge oninput="onChargeInput(this)"`,
       delAttr:`data-delcharge="${c.id}"`
@@ -1679,10 +1686,13 @@ function renderPilotage(){
     <div style="padding:8px 4px 2px"><span class="link" data-addpersocharge="commune">+ Ajouter une charge fixe</span></div>
   </div>
 
-  <div class="section-title" style="margin-top:18px">📦 Catégories & enveloppes <span class="small muted" style="font-weight:500" id="catTotalLbl">(${fmt0(totalBudget())})</span></div>
+  <div class="between" style="margin-top:18px">
+    <span class="section-title" style="margin:0">📦 Catégories</span>
+    <span class="tot" id="catTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt0(totalBudget())}</span>
+  </div>
   <div class="card">
     ${S.categories.map(c=>pilotRow({
-      id:c.id, emoji:c.emoji, name:c.name, sub:clsLabel(c.cls),
+      id:c.id, name:c.name, cls:clsLabel(c.cls),
       amount:c.budget, max:sliderMax(c.budget,500),
       onInputAttr:`data-cat oninput="onCatInput(this)"`,
       editAttr:`data-editcat="${c.id}"`
@@ -1697,9 +1707,9 @@ function renderPilotage(){
   <div class="card" id="pilTip" style="display:none; background:var(--cream-2); font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:8px">
     Revenu du foyer<br>− Charges fixes communes<br>− Catégories de dépenses<br>= Ce qui reste pour vos projets
   </div>
-  <div class="card">
-    <div class="between"><b class="small">Reste disponible</b><b style="color:${reste<0?'var(--danger)':'var(--terra)'}" id="pilReste">${fmt0(reste)}</b></div>
-    ${reste<0?`<p class="small" style="color:var(--danger); margin-top:8px" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
+  ${disponibleProjetsCard(reste)}
+  <div class="card" style="margin-top:10px">
+    ${reste<0?`<p class="small" style="color:var(--danger)" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
     ${activeProjects.length?`
     <div style="margin-top:12px">
       <div class="between small muted"><span>Alloué aux projets</span><span id="pilAlloc">${fmt0(allocProjets)} / ${fmt0(reste)}</span></div>
@@ -2074,9 +2084,9 @@ function recalcPilotage(){
   const luiV=totVerser*rep.lui/100, elleV=totVerser*rep.elle/100;
 
   const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=fmt0(chargesCommunes());
-  const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=`(${fmt0(totalBudget())})`;
+  const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=fmt0(totalBudget());
 
-  const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'var(--danger)':'var(--terra)'; }
+  const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'#FFD6C9':'#fff'; }
   const pd=$('#pilDeficit'); if(pd) pd.style.display=reste<0?'block':'none';
   const pa=$('#pilAlloc'); if(pa) pa.textContent=`${fmt0(allocProjets)} / ${fmt0(reste)}`;
   const pb=$('#pilBar'); if(pb){
