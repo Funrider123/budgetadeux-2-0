@@ -1517,6 +1517,16 @@ function renderPilotage(){
   <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulons votre mois</h1>
   <p class="hero-sub">Ajustez vos revenus et vos envies pour trouver la répartition parfaite, à deux.</p>
 
+  <div class="section-title">⚖️ Mode de répartition des charges communes</div>
+  <div class="card" style="padding:6px 16px">
+    ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens",true)}
+    ${repOption("5050","50 / 50","Partage égalitaire strict")}
+    ${repOption("net","Proportionnel au net restant","Déduit les charges perso")}
+    ${repOption("custom","Pourcentage personnalisé","Vous fixez vous-mêmes")}
+    ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe")}
+  </div>
+
+  ${S.settings.mode!=='fixe'?`
   <div class="section-title">💑 Revenus mensuels</div>
   <div class="card grid2">
     <div class="field" style="margin:0">
@@ -1529,14 +1539,8 @@ function renderPilotage(){
       <input class="input" type="number" id="salElle" value="${S.settings.salaries.elle}">
       <input type="range" class="mini-slider" id="slSalElle" min="0" max="${sliderMax(S.settings.salaries.elle,3000)}" step="50" value="${S.settings.salaries.elle}" style="margin-top:8px">
     </div>
-  </div>
+  </div>`:''}
 
-  <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens","")}
-  ${repOption("5050","50 / 50","Partage égalitaire strict","")}
-  ${repOption("net","Proportionnel au net restant","Équilibre le reste à vivre (déduit les charges perso)","")}
-  ${repOption("custom","Pourcentage personnalisé","Vous fixez vous-mêmes","")}
-  ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe","")}
   <div class="card" style="margin-top:10px" id="repCard">
     ${S.settings.mode==='custom'?`
     <div class="between" style="margin-bottom:8px"><b class="small" id="repLuiLbl">${nameOf('lui')} : ${rep.lui}%</b><b class="small" id="repElleLbl">${nameOf('elle')} : ${rep.elle}%</b></div>
@@ -1635,12 +1639,14 @@ function renderPilotage(){
   <button class="btn btn-primary" id="validBudget" style="margin-top:16px">Valider le budget du mois ✓</button>
   `;
 }
-function repOption(id,title,sub,badge){
+function repOption(id,title,sub,first){
   const on=S.settings.mode===id;
-  return `<button class="card" data-mode="${id}" style="display:flex; align-items:center; gap:13px; margin-top:10px; ${on?'background:var(--terra); color:#fff; border-color:var(--terra)':''}">
-    <div style="flex:1; text-align:left"><div style="font-weight:800; font-size:14.5px">${title}</div><div class="small" style="${on?'color:rgba(255,255,255,.85)':'color:var(--muted)'}">${sub}</div></div>
-    ${badge?`<span class="tag" style="${on?'background:rgba(255,255,255,.2); color:#fff':'background:var(--blush); color:var(--terra)'}">${badge}</span>`:''}
-    <div style="width:22px;height:22px;border-radius:50%;border:2px solid ${on?'#fff':'var(--line-2)'}; display:grid; place-items:center">${on?'<div style="width:10px;height:10px;border-radius:50%;background:#fff"></div>':''}</div>
+  return `<button class="menu-row" data-mode="${id}" style="background:none; border:none; ${first?'border-top:none;':''} cursor:pointer;">
+    <div style="width:20px;height:20px;border-radius:50%;border:2px solid ${on?'var(--terra)':'var(--line-2)'}; display:grid; place-items:center; flex-shrink:0">${on?'<div style="width:9px;height:9px;border-radius:50%;background:var(--terra)"></div>':''}</div>
+    <div style="flex:1; text-align:left">
+      <div style="font-weight:700; font-size:13.5px; color:${on?'var(--terra)':'var(--ink)'}">${title}</div>
+      <div class="small muted">${sub}</div>
+    </div>
   </button>`;
 }
 
@@ -1989,12 +1995,15 @@ function recalcPilotage(){
   const ev=$('#elleVerseAmt'); if(ev) ev.textContent=fmt(elleV);
 }
 // Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
+// Important : on ne réajuste le max du slider QUE si c'est le champ € qui a changé
+// (on tape une valeur). Si c'est le slider lui-même qu'on glisse, on ne touche pas à
+// son échelle — sinon le curseur reste "collé" au milieu pendant tout le glissement.
 function onChargeInput(el){
   const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
-  if(numEl) numEl.value=val;
-  if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; }
+  if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; } }
+  else if(numEl) numEl.value=val;
   const c=S.charges.find(x=>x.id===id); if(c){ c.amount=val; save(); }
   recalcPilotage();
 }
@@ -2002,8 +2011,8 @@ function onCatInput(el){
   const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
-  if(numEl) numEl.value=val;
-  if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; }
+  if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; } }
+  else if(numEl) numEl.value=val;
   const c=S.categories.find(x=>x.id===id); if(c){ c.budget=val; save(); }
   recalcPilotage();
 }
@@ -2016,18 +2025,20 @@ function bindPilotage(){
   const br=$('#backReg'); if(br) br.onclick=()=>go('reglages');
 
   const sl=$('#salLui'), se=$('#salElle'), slSl=$('#slSalLui'), slSe=$('#slSalElle');
-  const syncSalary=(who,val)=>{
+  // Même règle que les charges/catégories : on ne réajuste l'échelle du slider que
+  // lorsque c'est le champ € qui a changé, jamais pendant qu'on glisse le slider.
+  const syncSalary=(who,val,fromSlider)=>{
     val=Math.max(0, Math.round(val)||0);
     S.settings.salaries[who]=val; save();
     const numEl=who==='lui'?sl:se, rangeEl=who==='lui'?slSl:slSe;
-    if(numEl) numEl.value=val;
-    if(rangeEl){ rangeEl.max=sliderMax(val,3000); rangeEl.value=val; }
+    if(fromSlider){ if(numEl) numEl.value=val; }
+    else if(rangeEl){ rangeEl.max=sliderMax(val,3000); rangeEl.value=val; }
     recalcPilotage();
   };
-  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value);
-  if(se) se.oninput=()=>syncSalary('elle',+se.value);
-  if(slSl) slSl.oninput=()=>syncSalary('lui',+slSl.value);
-  if(slSe) slSe.oninput=()=>syncSalary('elle',+slSe.value);
+  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value,false);
+  if(se) se.oninput=()=>syncSalary('elle',+se.value,false);
+  if(slSl) slSl.oninput=()=>syncSalary('lui',+slSl.value,true);
+  if(slSe) slSe.oninput=()=>syncSalary('elle',+slSe.value,true);
 
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{S.settings.mode=b.dataset.mode; save(); go('pilotage');}));
 
