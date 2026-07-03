@@ -124,21 +124,20 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .rep-opt .rep-inline-col input{width:100%; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); border-radius:8px; padding:4px 2px; color:#fff; font-size:12.5px; text-align:center; font-weight:700;}
 .rep-opt .rep-inline-sep, .rep-opt .rep-inline-unit{font-size:11px; color:rgba(255,255,255,.85); flex-shrink:0;}
 
-/* cartes personne (salaire + charges perso + contribution) */
+/* cartes personne (salaire + charges perso + contribution) — bandeau fusionné (nom + % + total) */
 .pers-card{border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-top:10px; background:var(--card);}
-.pers-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 14px; background:var(--cream-2);}
-.pers-hdr b{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--ink);}
-.pers-hdr .sub{font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); margin-left:4px;}
+.pers-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 14px; background:var(--cream-2);}
+.pers-hdr .who{font-size:12px; font-weight:800; color:var(--ink);}
+.pers-hdr .pct{font-size:11.5px; font-weight:800; color:var(--terra); background:var(--blush); padding:2px 8px; border-radius:10px; margin-left:6px;}
 .pers-hdr .tot{font-size:13px; font-weight:800; color:var(--terra);}
-.pers-sal{padding:10px 14px; border-bottom:1px solid var(--line);}
+.pers-body{padding:9px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line);}
+.pers-body label{font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; width:46px;}
+.pers-body .inwrap{flex:1;}
 .pers-perso-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line);}
 .pers-perso-hdr b{font-size:12.5px; font-weight:700; color:var(--ink);}
 .pers-perso-hdr .chev{font-size:10px; color:var(--muted); margin-left:6px;}
 .pers-perso-hdr .tot{font-size:12.5px; font-weight:700; color:var(--ink);}
 .pers-perso-list{padding:4px 14px 10px;}
-.pers-foot{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px;}
-.pers-foot .lbl{font-size:10.5px; color:var(--muted); font-weight:700;}
-.pers-foot .pct{font-family:var(--serif); font-size:19px; font-weight:600; color:var(--terra);}
 
 /* pilotage — sliders compacts de simulation */
 .mini-slider{-webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:99px; outline:none; cursor:pointer; background:var(--line);}
@@ -1550,10 +1549,13 @@ function personCard(who){
   const open=pilotOpen['perso_'+who];
   const idSal=who==='lui'?'salLui':'salElle', idSlSal=who==='lui'?'slSalLui':'slSalElle';
   return `<div class="pers-card">
-    <div class="pers-hdr"><div><b>👤 ${escapeHtml(name)}</b><span class="sub">pour le compte commun</span></div><span class="tot" id="persTot_${who}">${fmt0(sal)}</span></div>
-    <div class="pers-sal">
-      <div class="field" style="margin:0">
-        <label>Salaire ${escapeHtml(name)}</label>
+    <div class="pers-hdr">
+      <div class="who">👤 ${escapeHtml(name)} <span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
+      <span class="tot" id="persTot_${who}">${fmt0(sal)}</span>
+    </div>
+    <div class="pers-body">
+      <label>Salaire</label>
+      <div class="inwrap">
         <input class="input" type="number" id="${idSal}" value="${sal}">
         <input type="range" class="mini-slider" id="${idSlSal}" min="0" max="${sliderMax(sal,3000)}" step="1" value="${sal}" style="margin-top:8px">
       </div>
@@ -1572,12 +1574,11 @@ function personCard(who){
       })).join(''):'<p class="small muted" style="padding:8px 4px">Aucune charge perso pour le moment.</p>'}
       <div style="padding:6px 4px 2px"><span class="link" data-addpersocharge="${who}">+ Ajouter une charge perso</span></div>
     </div>`:''}
-    <div class="pers-foot"><span class="lbl">Contribution compte commun</span><span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
   </div>`;
 }
 // Mode "Contribution fixe" : pas de carte salaire/charges perso, juste le total déclaré.
 function fixedTotalCard(){
-  return `<div class="pers-card"><div class="pers-hdr" style="background:var(--card)"><b style="text-transform:none; letter-spacing:0; font-size:13px">💰 Montant total mensuel alimentant le compte commun</b><span class="tot" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span></div></div>`;
+  return `<div class="pers-card"><div class="pers-hdr" style="background:var(--card)"><span class="who" style="text-transform:none">💰 Montant total mensuel alimentant le compte commun</span><span class="tot" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span></div></div>`;
 }
 function renderPilotage(){
   initPilotSim();
