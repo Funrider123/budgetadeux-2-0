@@ -1596,7 +1596,7 @@ function renderPilotage(){
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires bruts",null,true)}
+  ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires",null,true)}
   ${repOption("custom","Personnalisé aux revenus","% choisi librement",`
     <div class="rep-inline" onclick="event.stopPropagation()">
       <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" max="100" id="prepHim" value="${S.settings.custom.lui}"></div>
