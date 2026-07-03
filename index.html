@@ -836,7 +836,7 @@ function enterApp(){
 function needsSetup(){ return !S.settings.salaries.lui && !S.settings.salaries.elle; }
 function renderSetupBanner(){
   const el=$('#setupBanner'); if(!el) return;
-  if(!needsSetup()){ el.innerHTML=''; return; }
+  if(!needsSetup() || current==='pilotage'){ el.innerHTML=''; return; }
   el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
     <span>⚙️ À configurer : revenus, catégories...</span>
     <span class="cta">Configurer →</span>
