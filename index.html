@@ -1672,16 +1672,16 @@ function renderPilotage(){
     </div>`:`<p class="small muted" style="margin-top:10px">Aucun projet actif — <span class="link" onclick="go('projets')">ajoutez-en un</span> pour simuler son épargne ici.</p>`}
   </div>
 
-  <div class="panel-terra" style="margin-top:18px">
+  <div class="panel-terra" style="margin-top:18px; padding:16px 20px">
     <div style="text-align:center">
-      <div class="lbl">Total à verser chaque mois</div>
-      <div class="big" id="totVerserBig">${fmt(totVerser)}</div>
+      <div class="lbl" style="font-size:10px">Total à verser chaque mois</div>
+      <div class="big" id="totVerserBig" style="font-size:27px; margin:2px 0">${fmt(totVerser)}</div>
       <div class="small" style="opacity:.85" id="totVerserSub">Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})</div>
     </div>
-    <div style="height:1px; background:rgba(255,255,255,.2); margin:16px 0"></div>
+    <div style="height:1px; background:rgba(255,255,255,.2); margin:12px 0"></div>
     <div class="grid2" style="text-align:center">
-      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:22px" id="luiVerseAmt">${fmt(luiV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('lui')} copié','📋')">Copier RIB</button></div>
-      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:22px" id="elleVerseAmt">${fmt(elleV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('elle')} copié','📋')">Copier RIB</button></div>
+      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px" id="luiVerseAmt">${fmt(luiV)}</div></div>
+      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px" id="elleVerseAmt">${fmt(elleV)}</div></div>
     </div>
   </div>
 
