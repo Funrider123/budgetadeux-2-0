@@ -1555,25 +1555,29 @@ async function wipeLocalAndRestart(){
 }
 function openDeleteAccount(){
   const linked = S.auth.partnerLinked;
+  // Seul sur le couple : "mon compte" et "tout supprimer" ont le même effet (plus personne
+  // pour qui garder le budget) → on ne propose que 2 choix distincts au lieu de 3.
+  const rows = linked ? `
+      <button class="menu-row" id="daAccount"><div class="mi">👤</div><div class="grow"><div class="nm">Mon compte uniquement</div><div class="sub">Nom, email, connexion. Le budget du couple reste pour votre partenaire.</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Les données du couple</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. <b style="color:var(--danger)">Affecte aussi votre partenaire.</b></div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Tout supprimer</div><div class="sub">Mon compte + le budget commun. <b style="color:var(--danger)">Affecte aussi votre partenaire.</b></div></div><span class="chev">→</span></button>` : `
+      <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Réinitialiser mes données</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. Votre connexion reste active.</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer définitivement mon compte</div><div class="sub">Nom, email, connexion et tout le budget.</div></div><span class="chev">→</span></button>`;
   openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
     <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>.</p>
-    <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
-      <button class="menu-row" id="daAccount"><div class="mi">👤</div><div class="grow"><div class="nm">Mon compte uniquement</div><div class="sub">Nom, email, connexion. Le budget du couple reste${linked?' pour votre partenaire':''}.</div></div><span class="chev">→</span></button>
-      <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Les données du couple</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro.${linked?' <b style="color:var(--danger)">Affecte aussi votre partenaire.</b>':''}</div></div><span class="chev">→</span></button>
-      <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Tout supprimer</div><div class="sub">Mon compte + le budget commun.${linked?' <b style="color:var(--danger)">Affecte aussi votre partenaire.</b>':''}</div></div><span class="chev">→</span></button>
-    </div>
+    <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">${rows}</div>
     <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
   $('#daCancel').onclick=()=>closeModal();
 
-  const run = async (mode, label)=>{
+  const run = async (mode)=>{
     closeModal();
     try{
       toast("Suppression…","⏳");
-      const out = await callDeleteAccount(mode);
+      await callDeleteAccount(mode);
       if(mode==='couple'){
         // Budget réinitialisé côté serveur : on adopte l'état vierge du cloud.
         lastAppliedStamp=null; await pullState();
-        toast("Budget du couple réinitialisé 🧹");
+        toast("Budget réinitialisé 🧹");
       } else {
         toast("Compte supprimé. À bientôt 👋");
         setTimeout(wipeLocalAndRestart, 900);
@@ -1584,18 +1588,18 @@ function openDeleteAccount(){
     }
   };
 
-  $('#daAccount').onclick=()=>openConfirm(
+  const da=$('#daAccount'); if(da) da.onclick=()=>openConfirm(
     "Supprimer votre compte ?",
-    (linked?"Votre profil (nom, email, connexion) sera supprimé définitivement. Le budget du couple restera pour votre partenaire.":"Vous êtes le dernier membre : votre compte ET toutes les données du couple seront supprimés définitivement.")+"<br><br>Cette action est irréversible.",
+    "Votre profil (nom, email, connexion) sera supprimé définitivement. Le budget du couple restera pour votre partenaire.<br><br>Cette action est irréversible.",
     ()=>run('account'));
   $('#daCouple').onclick=()=>openConfirm(
-    "Réinitialiser le budget du couple ?",
-    "Toutes les données du budget commun (dépenses, catégories, projets, revenus, historique) seront effacées et remises à zéro."+(linked?" Cela affecte aussi votre partenaire.":"")+"<br><br>Vos comptes restent actifs. Cette action est irréversible.",
+    linked?"Réinitialiser le budget du couple ?":"Réinitialiser vos données ?",
+    "Toutes les données du budget (dépenses, catégories, projets, revenus, historique) seront effacées et remises à zéro."+(linked?" Cela affecte aussi votre partenaire.":"")+"<br><br>Votre connexion reste active. Cette action est irréversible.",
     ()=>run('couple'));
   $('#daAll').onclick=()=>openConfirm(
-    "Tout supprimer ?",
-    "Votre compte (nom, email, connexion) ET tout le budget commun seront supprimés définitivement."+(linked?" Le budget disparaîtra aussi pour votre partenaire.":"")+"<br><br>Cette action est irréversible.",
-    ()=>run('all'));
+    linked?"Tout supprimer ?":"Supprimer définitivement votre compte ?",
+    (linked?"Votre compte (nom, email, connexion) ET tout le budget commun seront supprimés définitivement. Le budget disparaîtra aussi pour votre partenaire.":"Votre compte (nom, email, connexion) ET tout votre budget seront supprimés définitivement.")+"<br><br>Cette action est irréversible.",
+    ()=>run(linked?'all':'account'));
 }
 
 /* ============================================================
