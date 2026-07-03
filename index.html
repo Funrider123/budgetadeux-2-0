@@ -98,6 +98,14 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .setup-banner{display:flex; align-items:center; gap:10px; padding:14px 20px; background:var(--terra); color:#fff; font-size:13px; font-weight:700; cursor:pointer;}
 .setup-banner .cta{margin-left:auto; background:#fff; color:var(--terra); font-size:11.5px; font-weight:800; padding:7px 13px; border-radius:20px; white-space:nowrap;}
 
+/* partage code couple (icônes compactes) */
+.share-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.share-sep{font-size:11px; color:var(--muted); font-weight:700; white-space:nowrap;}
+.icon-circle{width:28px; height:28px; border-radius:50%; display:grid; place-items:center; cursor:pointer; flex-shrink:0; border:none;}
+.icon-circle svg{width:14px; height:14px;}
+.icon-circle.wa{background:#25D366;}
+.icon-circle.sms{background:var(--terra);}
+
 /* sync chip */
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
 .sync .dot{width:7px;height:7px;border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
@@ -1374,17 +1382,19 @@ function renderReglages(){
       <div class="row"><img class="avatar sm" src="${avatarOf(partnerOf(me()))}"><div><div class="small" style="font-weight:800">${S.partner.name}</div><div class="small muted">Relié·e à votre couple</div></div></div>
       <span class="tag envie">Partenaire</span>
     </div>`:''}
-    <div class="between" style="padding-top:14px">
-      <div class="small muted" style="font-weight:700">Code couple</div>
-      <div class="row" style="gap:8px"><b style="font-family:var(--serif); font-size:18px; letter-spacing:.1em; color:var(--terra)">${S.auth.coupleCode}</b><button class="btn btn-soft btn-sm" id="copyC2">📋</button></div>
+    <div style="padding-top:14px">
+      <div class="small muted" style="font-weight:700; margin-bottom:8px">Code couple</div>
+      <div class="share-row">
+        <b style="font-family:var(--serif); font-size:15px; letter-spacing:.1em; color:var(--terra)">${S.auth.coupleCode}</b>
+        <button class="btn btn-soft btn-sm" id="copyC2">📋 Copier</button>
+        <span class="share-sep">partager via :</span>
+        <button class="icon-circle wa" id="invWA" title="WhatsApp"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.38 5.07L2 22l5.07-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.13c-.22.62-1.29 1.18-1.78 1.24-.46.06-.91.24-3.05-.64-2.58-1.06-4.24-3.7-4.37-3.87-.13-.17-1.04-1.38-1.04-2.64 0-1.25.66-1.86.89-2.12.23-.25.5-.31.67-.31l.48.01c.16 0 .37-.06.58.44.22.53.74 1.83.8 1.97.06.14.1.3.02.48-.09.18-.13.29-.26.44-.13.15-.27.34-.39.46-.13.13-.26.27-.11.53.15.26.68 1.12 1.46 1.82 1 .89 1.85 1.17 2.11 1.3.26.13.41.11.56-.07.16-.18.65-.76.82-1.02.17-.26.34-.21.57-.13.23.08 1.47.69 1.72.82.25.13.42.19.48.3.06.11.06.62-.16 1.24z"/></svg></button>
+        <button class="icon-circle sms" id="invSMS" title="SMS"><svg viewBox="0 0 24 24" fill="#fff"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2z"/></svg></button>
+      </div>
     </div>
     ${S.auth.partnerLinked?`
     <p class="small muted" style="margin:12px 0 0; text-align:center">💑 Vous êtes reliés — vos budgets se synchronisent.</p>`:`
-    <p class="small muted" style="margin:12px 0 6px">En attente que votre partenaire rejoigne avec ce code.</p>
-    <div class="row" style="gap:8px; margin-top:8px">
-      <button class="btn btn-soft btn-sm" id="invWA" style="flex:1">💬 Inviter via WhatsApp</button>
-      <button class="btn btn-soft btn-sm" id="invSMS" style="flex:1">✉️ Inviter par SMS</button>
-    </div>`}
+    <p class="small muted" style="margin:12px 0 0; text-align:center">En attente que votre partenaire rejoigne avec ce code.</p>`}
   </div>
 
   <div class="card" style="margin-top:14px; display:flex; align-items:center; gap:14px; cursor:pointer" id="goPilotage">
