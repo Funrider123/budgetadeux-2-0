@@ -595,16 +595,21 @@ function repartition(){
   if(S.settings.mode==="custom") return S.settings.custom;
   return pctPair(sLui, sElle);
 }
-// Revenu qui alimente le foyer : salaires en mode revenus, contributions déclarées en mode fixe.
-function totalRevenuFoyer(){ return S.settings.mode==="fixe" ? (S.settings.fixed.lui||0)+(S.settings.fixed.elle||0) : S.settings.salaries.lui+S.settings.salaries.elle; }
+// Revenu qui alimente le foyer : salaires en mode revenus (nets des charges perso en
+// mode "net", pour rester cohérent avec le "Disponible" affiché sur chaque carte
+// personne), contributions déclarées en mode fixe.
+function totalRevenuFoyer(){
+  if(S.settings.mode==="fixe") return (S.settings.fixed.lui||0)+(S.settings.fixed.elle||0);
+  if(S.settings.mode==="net") return (S.settings.salaries.lui-chargesPerso('lui')) + (S.settings.salaries.elle-chargesPerso('elle'));
+  return S.settings.salaries.lui+S.settings.salaries.elle;
+}
 function chargesCommunes(){ return S.charges.filter(c=>c.scope==="commune").reduce((s,c)=>s+c.amount,0); }
 function epargneProjetsMensuelle(){ return S.projects.filter(p=>p.status==="actif").reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
 // Ce qu'il reste chaque mois une fois charges communes et catégories couvertes — base de
-// l'allocation projets. Les charges perso ne sont déduites qu'en mode "net" : c'est le
-// seul mode où elles ont un sens (brut/personnalisé/fixe ne les utilisent pas).
+// l'allocation projets. Les charges perso sont déjà déduites dans totalRevenuFoyer() pour
+// le mode "net" (pas la peine de les redéduire ici, sinon on les compterait deux fois).
 function disponiblePourProjets(){
-  const perso = S.settings.mode==="net" ? chargesPerso('lui')+chargesPerso('elle') : 0;
-  return totalRevenuFoyer() - perso - chargesCommunes() - totalBudget();
+  return totalRevenuFoyer() - chargesCommunes() - totalBudget();
 }
 
 /* ============================================================
@@ -1657,8 +1662,11 @@ function renderPilotage(){
   ${totalMensuelCard()}
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
-    <span class="section-title" style="margin:0">🧾 Charges fixes communes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
-    <span class="chev">▼</span>
+    <span class="section-title" style="margin:0">🧾 Charges fixes communes</span>
+    <div class="row" style="gap:10px">
+      <span class="tot" id="chgTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt0(chargesCommunes())}</span>
+      <span class="chev">▼</span>
+    </div>
   </div>
   <div class="card" id="chgList" style="display:${pilotOpen.charges?'block':'none'}">
     ${(()=>{ const communes=S.charges.filter(c=>c.scope==='commune'); return communes.length?communes.map(c=>pilotRow({
@@ -2065,7 +2073,7 @@ function recalcPilotage(){
   const totVerser=chargesCommunes()+allocProjets;
   const luiV=totVerser*rep.lui/100, elleV=totVerser*rep.elle/100;
 
-  const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=`(${fmt0(chargesCommunes())})`;
+  const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=fmt0(chargesCommunes());
   const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=`(${fmt0(totalBudget())})`;
 
   const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'var(--danger)':'var(--terra)'; }
@@ -2191,16 +2199,30 @@ function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
   // Le scope est déjà déterminé par le contexte (carte de la personne ou section
   // "communes") : pas besoin de le redemander. Formulaire réduit au strict utile.
-  openModal(`<h3>${scope==='commune'?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
+  // La classification (règle 50/30/20) n'a de sens que pour les charges communes.
+  const isCommune=scope==='commune';
+  openModal(`<h3>${isCommune?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="chN" placeholder="Ex : Netflix"></div>
     <div class="field"><label>Montant /mois</label><input class="input" type="number" id="chA" placeholder="15"></div>
+    ${isCommune?`<div class="field"><label>Classification (règle 50/30/20)</label>
+      <div class="grid2" style="gap:8px">
+        ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
+      </div>
+    </div>`:''}
     <button class="btn btn-primary" id="chSave" style="margin-top:6px">Ajouter</button>`, true);
-  $('#chSave').onclick=()=>{ const n=$('#chN').value.trim(); if(!n){toast("Nom requis","✏️");return;} S.charges.push({id:e(),emoji:'📄',name:n,amount:+$('#chA').value||0,scope,locked:false}); save(); closeModal(); go('pilotage'); toast("Charge ajoutée"); };
+  let cls=null;
+  document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
+  $('#chSave').onclick=()=>{
+    const n=$('#chN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
+    if(isCommune && !cls){ toast("Choisissez une classification","🏷️"); return; }
+    S.charges.push({id:e(),emoji:'📄',name:n,amount:+$('#chA').value||0,scope,locked:false,cls:isCommune?cls:undefined});
+    save(); closeModal(); go('pilotage'); toast("Charge ajoutée");
+  };
 }
 function openEditCat(id){
-  const c=id?catById(id):{emoji:"📦",name:"",budget:0,cls:"besoin"};
+  const c=id?catById(id):{emoji:"📦",name:"",budget:0,cls:null};
   openModal(`<h3>${id?'Modifier la catégorie':'Nouvelle catégorie'}</h3>
-    <div class="grid2"><div class="field"><label>Emoji</label><input class="input" id="ceE" value="${c.emoji}" maxlength="2"></div><div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div></div>
+    <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
     <div class="field"><label>Budget mensuel</label><input class="input" type="number" id="ceB" value="${c.budget}"></div>
     <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmt0((c.budget||0)/4)} / semaine</b></p>
     <div class="field"><label>Classification (règle 50/30/20)</label>
@@ -2209,12 +2231,13 @@ function openEditCat(id){
       </div>
     </div>
     <div class="row" style="gap:10px; margin-top:6px"><button class="btn btn-primary" id="ceSave" style="flex:1">Enregistrer</button>
-    ${id?`<button class="btn btn-ghost btn-sm" id="ceDel" style="color:var(--danger)">🗑</button>`:''}</div>`);
+    ${id?`<button class="btn btn-ghost btn-sm" id="ceDel" style="color:var(--danger)">🗑</button>`:''}</div>`, true);
   let cls=c.cls;
   document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
   $('#ceSave').onclick=()=>{ const n=$('#ceN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
-    if(id){ c.emoji=$('#ceE').value; c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls; }
-    else { S.categories.push({id:e(),emoji:$('#ceE').value||'📦',name:n,budget:+$('#ceB').value||0,cls:cls}); }
+    if(!cls){ toast("Choisissez une classification","🏷️"); return; }
+    if(id){ c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls; }
+    else { S.categories.push({id:e(),emoji:'📦',name:n,budget:+$('#ceB').value||0,cls:cls}); }
     save(); closeModal(); go('pilotage'); toast("Catégorie enregistrée"); };
   const del=$('#ceDel'); if(del) del.onclick=()=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go('pilotage'); toast("Catégorie supprimée 🗑"); };
 }
