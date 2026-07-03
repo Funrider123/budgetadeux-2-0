@@ -634,6 +634,15 @@ async function generateUniqueCode(){
   }
   return randCode();
 }
+// Combien de personnes sont déjà reliées à ce code couple ? Passe par une fonction
+// serveur (RPC) plutôt qu'une lecture directe de `profiles` : ce contrôle a lieu
+// avant la création du compte (donc en anonyme), et `profiles` contient des données
+// personnelles (email, nom) qu'on ne veut pas exposer sans authentification.
+async function coupleMemberCount(code){
+  const {data,error}=await sb.rpc('couple_member_count',{p_code:code});
+  if(error){ console.error('couple_member_count', error); return 0; }
+  return data||0;
+}
 function authError(error){
   const m=(error&&error.message||"").toLowerCase();
   if(m.includes("already registered")||m.includes("already been registered")) return "Cet email a déjà un compte. Connecte-toi 👇";
@@ -652,8 +661,7 @@ async function ensureProfile(user){
     const code=md.couple_code, gender=md.gender, name=md.name, intent=md.intent;
     if(code && gender && name){
       if(intent==='join'){
-        const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',code);
-        if(members && members.length>=2) throw new Error("couple-full");
+        if((await coupleMemberCount(code))>=2) throw new Error("couple-full");
         await sb.from('couple_names').update(gender==='lui'?{him:name}:{her:name}).eq('couple_code',code);
       }
       await sb.from('profiles').insert({ user_id:uid, email:user.email, gender, name, couple_code:code });
@@ -880,8 +888,7 @@ function bindAuth(){
     if(entered.length<6){ toast("Le code couple fait 6 caractères","🔢"); return; }
     const {data:couple}=await sb.from('couples').select('code').eq('code',entered).maybeSingle();
     if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
-    const {data:members}=await sb.from('profiles').select('gender').eq('couple_code',entered);
-    if(members && members.length>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
+    if((await coupleMemberCount(entered))>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
     tmp.profile='elle'; tmp.coupleCode=entered;
     await finalizeSignup();
   });
