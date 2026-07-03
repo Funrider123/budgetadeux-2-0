@@ -123,6 +123,22 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .rep-opt .rep-inline-col input{width:100%; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); border-radius:8px; padding:4px 2px; color:#fff; font-size:12.5px; text-align:center; font-weight:700;}
 .rep-opt .rep-inline-sep, .rep-opt .rep-inline-unit{font-size:11px; color:rgba(255,255,255,.85); flex-shrink:0;}
 
+/* cartes personne (salaire + charges perso + contribution) */
+.pers-card{border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-top:10px; background:var(--card);}
+.pers-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 14px; background:var(--cream-2);}
+.pers-hdr b{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--ink);}
+.pers-hdr .sub{font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); margin-left:4px;}
+.pers-hdr .tot{font-size:13px; font-weight:800; color:var(--terra);}
+.pers-sal{padding:10px 14px; border-bottom:1px solid var(--line);}
+.pers-perso-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line);}
+.pers-perso-hdr b{font-size:12.5px; font-weight:700; color:var(--ink);}
+.pers-perso-hdr .chev{font-size:10px; color:var(--muted); margin-left:6px;}
+.pers-perso-hdr .tot{font-size:12.5px; font-weight:700; color:var(--ink);}
+.pers-perso-list{padding:4px 14px 10px;}
+.pers-foot{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px;}
+.pers-foot .lbl{font-size:10.5px; color:var(--muted); font-weight:700;}
+.pers-foot .pct{font-family:var(--serif); font-size:19px; font-weight:600; color:var(--terra);}
+
 /* pilotage — sliders compacts de simulation */
 .mini-slider{-webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:99px; outline:none; cursor:pointer; background:var(--line);}
 .mini-slider::-webkit-slider-thumb{-webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:var(--terra); cursor:pointer; box-shadow:0 1px 4px rgba(80,40,20,.35);}
@@ -1482,7 +1498,7 @@ function renderReglages(){
 
 /* ── Simulation Pilotage : état de session (non persisté tant que non validé) ── */
 let pilotSim = {};        // id projet -> mensualité simulée
-let pilotOpen = {charges:false}; // charges fixes repliées par défaut (plus compact)
+let pilotOpen = {charges:false, perso_lui:false, perso_elle:false}; // repliées par défaut (plus compact)
 function sliderMax(val, floor){ return val>0 ? Math.ceil(val*2/50)*50 : floor; }
 function initPilotSim(){
   S.projects.filter(p=>p.status==="actif").forEach(p=>{
@@ -1516,6 +1532,48 @@ function pilotRow(opts){
     </div>
     ${editAttr?`<button class="pdel" ${editAttr}>✎</button>`:''}
   </div>`;
+}
+// Carte "personne" (salaire + charges perso + contribution) — affichée pour tous les
+// modes de répartition sauf "Contribution fixe". Les charges perso sont masquées en
+// mode "Personnalisé aux revenus" (répartition purement déclarative, comme en V321).
+function personCard(who){
+  const name=nameOf(who);
+  const sal=S.settings.salaries[who];
+  const persoList=S.charges.filter(c=>c.scope===who);
+  const persoTotal=chargesPerso(who);
+  const rep=repartition();
+  const showPerso=S.settings.mode!=='custom';
+  const open=pilotOpen['perso_'+who];
+  const idSal=who==='lui'?'salLui':'salElle', idSlSal=who==='lui'?'slSalLui':'slSalElle';
+  return `<div class="pers-card">
+    <div class="pers-hdr"><div><b>👤 ${escapeHtml(name)}</b><span class="sub">pour le compte commun</span></div><span class="tot" id="persTot_${who}">${fmt0(sal)}</span></div>
+    <div class="pers-sal">
+      <div class="field" style="margin:0">
+        <label>Salaire ${escapeHtml(name)}</label>
+        <input class="input" type="number" id="${idSal}" value="${sal}">
+        <input type="range" class="mini-slider" id="${idSlSal}" min="0" max="${sliderMax(sal,3000)}" step="1" value="${sal}" style="margin-top:8px">
+      </div>
+    </div>
+    ${showPerso?`
+    <div class="pers-perso-hdr" data-toggleperso="${who}">
+      <b>Total charges fixes perso <span class="chev">${open?'▲':'▼'}</span></b>
+      <span class="tot" id="persoTot_${who}">${fmt0(persoTotal)}</span>
+    </div>
+    <div class="pers-perso-list" id="persoList_${who}" style="display:${open?'block':'none'}">
+      ${persoList.length?persoList.map(c=>pilotRow({
+        id:c.id, emoji:c.emoji, name:c.name, sub:c.locked?'🔒':'',
+        amount:c.amount, max:sliderMax(c.amount,500),
+        onInputAttr:`data-charge oninput="onChargeInput(this)"`,
+        delAttr:`data-delcharge="${c.id}"`
+      })).join(''):'<p class="small muted" style="padding:8px 4px">Aucune charge perso pour le moment.</p>'}
+      <div style="padding:6px 4px 2px"><span class="link" data-addpersocharge="${who}">+ Ajouter une charge perso</span></div>
+    </div>`:''}
+    <div class="pers-foot"><span class="lbl">Contribution compte commun</span><span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
+  </div>`;
+}
+// Mode "Contribution fixe" : pas de carte salaire/charges perso, juste le total déclaré.
+function fixedTotalCard(){
+  return `<div class="pers-card"><div class="pers-hdr" style="background:var(--card)"><b style="text-transform:none; letter-spacing:0; font-size:13px">💰 Montant total mensuel alimentant le compte commun</b><span class="tot" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span></div></div>`;
 }
 function renderPilotage(){
   initPilotSim();
@@ -1551,34 +1609,21 @@ function renderPilotage(){
       <span class="rep-inline-unit">€/mois</span>
     </div>`)}
 
-  ${S.settings.mode!=='fixe'?`
-  <div class="section-title">💑 Revenus mensuels</div>
-  <div class="card grid2">
-    <div class="field" style="margin:0">
-      <label>Salaire ${nameOf('lui')}</label>
-      <input class="input" type="number" id="salLui" value="${S.settings.salaries.lui}">
-      <input type="range" class="mini-slider" id="slSalLui" min="0" max="${sliderMax(S.settings.salaries.lui,3000)}" step="1" value="${S.settings.salaries.lui}" style="margin-top:8px">
-    </div>
-    <div class="field" style="margin:0">
-      <label>Salaire ${nameOf('elle')}</label>
-      <input class="input" type="number" id="salElle" value="${S.settings.salaries.elle}">
-      <input type="range" class="mini-slider" id="slSalElle" min="0" max="${sliderMax(S.settings.salaries.elle,3000)}" step="1" value="${S.settings.salaries.elle}" style="margin-top:8px">
-    </div>
-  </div>`:''}
+  ${S.settings.mode==='fixe'?fixedTotalCard():personCard('lui')+personCard('elle')}
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
-    <span class="section-title" style="margin:0">🧾 Charges fixes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
+    <span class="section-title" style="margin:0">🧾 Charges fixes communes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
     <span class="chev">▼</span>
   </div>
   <div class="card" id="chgList" style="display:${pilotOpen.charges?'block':'none'}">
-    ${S.charges.length?S.charges.map(c=>pilotRow({
+    ${(()=>{ const communes=S.charges.filter(c=>c.scope==='commune'); return communes.length?communes.map(c=>pilotRow({
       id:c.id, emoji:c.emoji, name:c.name,
-      sub:(c.scope==='commune'?'Commune':nameOf(c.scope))+(c.locked?' · 🔒':''),
+      sub:c.locked?'🔒':'',
       amount:c.amount, max:sliderMax(c.amount,500),
       onInputAttr:`data-charge oninput="onChargeInput(this)"`,
       delAttr:`data-delcharge="${c.id}"`
-    })).join(''):'<p class="small muted" style="padding:10px 4px">Aucune charge fixe pour le moment.</p>'}
-    <div style="padding:8px 4px 2px"><span class="link" id="addCharge">+ Ajouter une charge fixe</span></div>
+    })).join(''):'<p class="small muted" style="padding:10px 4px">Aucune charge fixe commune pour le moment.</p>'; })()}
+    <div style="padding:8px 4px 2px"><span class="link" data-addpersocharge="commune">+ Ajouter une charge fixe</span></div>
   </div>
 
   <div class="section-title" style="margin-top:18px">📦 Catégories & enveloppes <span class="small muted" style="font-weight:500" id="catTotalLbl">(${fmt0(totalBudget())})</span></div>
@@ -1997,6 +2042,14 @@ function recalcPilotage(){
   const ts=$('#totVerserSub'); if(ts) ts.textContent=`Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})`;
   const lv=$('#luiVerseAmt'); if(lv) lv.textContent=fmt(luiV);
   const ev=$('#elleVerseAmt'); if(ev) ev.textContent=fmt(elleV);
+
+  // Cartes personne (salaire + charges perso + contribution)
+  ['lui','elle'].forEach(who=>{
+    const pt=$('#persTot_'+who); if(pt) pt.textContent=fmt0(S.settings.salaries[who]);
+    const pot=$('#persoTot_'+who); if(pot) pot.textContent=fmt0(chargesPerso(who));
+    const pp=$('#persPct_'+who); if(pp) pp.textContent=`${rep[who]}%`;
+  });
+  const ptf=$('#persTot_fixed'); if(ptf) ptf.textContent=fmt0(totalRevenuFoyer());
 }
 // Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
 // Important : on ne réajuste le max du slider QUE si c'est le champ € qui a changé
@@ -2065,8 +2118,10 @@ function bindPilotage(){
     chgHdr.classList.toggle('open',pilotOpen.charges);
     const list=$('#chgList'); if(list) list.style.display=pilotOpen.charges?'block':'none';
   };
-
-  const ac=$('#addCharge'); if(ac) ac.onclick=openAddCharge;
+  document.querySelectorAll('[data-toggleperso]').forEach(b=>b.addEventListener('click',()=>{
+    const who=b.dataset.toggleperso; pilotOpen['perso_'+who]=!pilotOpen['perso_'+who]; go('pilotage');
+  }));
+  document.querySelectorAll('[data-addpersocharge]').forEach(b=>b.addEventListener('click',()=>openAddCharge(b.dataset.addpersocharge)));
   const acat=$('#addCat'); if(acat) acat.onclick=()=>openEditCat(null);
   document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat)));
   document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
@@ -2090,11 +2145,12 @@ function bindPilotage(){
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️"); go('vue');
   };
 }
-function openAddCharge(){
-  openModal(`<h3>Nouvelle charge fixe</h3>
+function openAddCharge(defaultScope){
+  const scope=defaultScope||'commune';
+  openModal(`<h3>${scope==='commune'?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
     <div class="grid2"><div class="field"><label>Emoji</label><input class="input" id="chE" value="📄" maxlength="2"></div><div class="field"><label>Nom</label><input class="input" id="chN" placeholder="Ex : Netflix"></div></div>
     <div class="grid2"><div class="field"><label>Montant /mois</label><input class="input" type="number" id="chA" placeholder="15"></div>
-    <div class="field"><label>À qui</label><select class="select" id="chS"><option value="commune">Commune</option><option value="lui">${nameOf('lui')}</option><option value="elle">${nameOf('elle')}</option></select></div></div>
+    <div class="field"><label>À qui</label><select class="select" id="chS"><option value="commune" ${scope==='commune'?'selected':''}>Commune</option><option value="lui" ${scope==='lui'?'selected':''}>${nameOf('lui')}</option><option value="elle" ${scope==='elle'?'selected':''}>${nameOf('elle')}</option></select></div></div>
     <label class="agree" id="chLock" style="margin-bottom:14px"><span class="bx">✓</span>Verrouiller cette charge</label>
     <button class="btn btn-primary" id="chSave">Ajouter</button>`);
   let lock=false; $('#chLock').onclick=()=>{lock=!lock; $('#chLock').classList.toggle('on',lock);};
