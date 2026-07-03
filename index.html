@@ -129,6 +129,7 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .pers-hdr{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 14px; background:var(--cream-2);}
 .pers-hdr .who{font-size:12px; font-weight:800; color:var(--ink);}
 .pers-hdr .pct{font-size:11.5px; font-weight:800; color:var(--terra); background:var(--blush); padding:2px 8px; border-radius:10px; margin-left:6px;}
+.pers-hdr .tot-lbl{font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); margin-right:5px;}
 .pers-hdr .tot{font-size:13px; font-weight:800; color:var(--terra);}
 .pers-body{padding:9px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line);}
 .pers-body label{font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; width:46px;}
@@ -1555,10 +1556,11 @@ function personCard(who){
   const showPerso=S.settings.mode==='net';
   const open=pilotOpen['perso_'+who];
   const idSal=who==='lui'?'salLui':'salElle';
+  const disponible=sal-persoTotal;
   return `<div class="pers-card">
     <div class="pers-hdr">
       <div class="who">👤 ${escapeHtml(name)} <span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
-      <span class="tot" id="persTot_${who}">${fmt0(sal)}</span>
+      <div style="text-align:right">${showPerso?'<span class="tot-lbl">Disponible</span>':''}<span class="tot" id="persTot_${who}">${showPerso?fmt0(disponible):fmt0(sal)}</span></div>
     </div>
     <div class="pers-body">
       <label>Salaire</label>
@@ -2056,7 +2058,8 @@ function recalcPilotage(){
 
   // Cartes personne (salaire + charges perso + contribution)
   ['lui','elle'].forEach(who=>{
-    const pt=$('#persTot_'+who); if(pt) pt.textContent=fmt0(S.settings.salaries[who]);
+    const pt=$('#persTot_'+who);
+    if(pt) pt.textContent = S.settings.mode==='net' ? fmt0(S.settings.salaries[who]-chargesPerso(who)) : fmt0(S.settings.salaries[who]);
     const pot=$('#persoTot_'+who); if(pot) pot.textContent=fmt0(chargesPerso(who));
     const pp=$('#persPct_'+who); if(pp) pp.textContent=`${rep[who]}%`;
   });
