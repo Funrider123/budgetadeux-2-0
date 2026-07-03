@@ -936,11 +936,18 @@ function renderTab(){
   document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 }
 function go(screen){
+  // Si on reste sur le même écran (ex: changer un réglage dans Pilotage), on ne rejoue
+  // ni le fondu ni le retour en haut de page — sinon chaque petite mise à jour donne
+  // l'impression d'un rechargement complet (flash + perte de la position de scroll).
+  const samePage = (current===screen);
+  const prevScroll = samePage ? $('#screen').scrollTop : 0;
   current=screen;
   renderSetupBanner();
   const map={vue:renderVue, historique:renderHistorique, ajouter:renderAjouter, projets:renderProjets, analyse:renderAnalyse, moneydate:renderMoneyDate, reglages:renderReglages, pilotage:renderPilotage};
   const fn=map[screen]||renderVue;
-  const el=$('#screen'); el.scrollTop=0; el.innerHTML=fn(); el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
+  const el=$('#screen'); el.innerHTML=fn();
+  if(samePage){ el.scrollTop=prevScroll; }
+  else { el.scrollTop=0; el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); }
   if(["vue","historique","projets","analyse","ajouter"].includes(screen)){ renderTab(); }
   else { document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); }
   bindScreen(screen);
