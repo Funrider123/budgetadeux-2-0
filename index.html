@@ -107,7 +107,8 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .icon-circle.sms{background:var(--terra);}
 
 /* mode de répartition : cartes compactes séparées */
-.rep-opt{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:9px 14px; border-radius:14px; border:1px solid var(--line); background:var(--card); margin-top:6px; cursor:pointer;}
+.rep-opt{display:flex; flex-direction:column; width:100%; text-align:left; padding:9px 14px; border-radius:14px; border:1px solid var(--line); background:var(--card); margin-top:6px; cursor:pointer;}
+.rep-opt-hdr{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;}
 .rep-opt .txt b{display:block; font-size:12.5px; font-weight:800; color:var(--ink); line-height:1.3;}
 .rep-opt .txt span{font-size:11px; color:var(--muted);}
 .rep-opt .radio{width:17px; height:17px; border-radius:50%; border:2px solid var(--line-2); flex-shrink:0; display:grid; place-items:center;}
@@ -116,6 +117,11 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .rep-opt.on .txt span{color:rgba(255,255,255,.85);}
 .rep-opt.on .radio{border-color:#fff;}
 .rep-opt.on .radio i{width:7px; height:7px; border-radius:50%; background:#fff; display:block;}
+.rep-opt .rep-inline{display:flex; align-items:center; gap:6px; margin-top:8px; width:100%;}
+.rep-opt .rep-inline-col{display:flex; flex-direction:column; align-items:center; gap:2px; flex:1;}
+.rep-opt .rep-inline-col span{font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:rgba(255,255,255,.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+.rep-opt .rep-inline-col input{width:100%; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); border-radius:8px; padding:4px 2px; color:#fff; font-size:12.5px; text-align:center; font-weight:700;}
+.rep-opt .rep-inline-sep, .rep-opt .rep-inline-unit{font-size:11px; color:rgba(255,255,255,.85); flex-shrink:0;}
 
 /* pilotage — sliders compacts de simulation */
 .mini-slider{-webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:99px; outline:none; cursor:pointer; background:var(--line);}
@@ -412,7 +418,7 @@ const DEFAULT = {
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, sync:true },
   settings:{
     salaries:{lui:0, elle:0},
-    mode:"5050", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0}
+    mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0}
   },
   categories:[
     {id:"courses", emoji:"🛒", name:"Courses", budget:300, cls:"besoin"},
@@ -552,7 +558,6 @@ function chargesPerso(who){ return S.charges.filter(c=>c.scope===who).reduce((s,
 function pctPair(a,b){ const tot=a+b; if(tot<=0) return {lui:50, elle:50}; return {lui:Math.round(a/tot*100), elle:Math.round(b/tot*100)}; }
 function repartition(){
   const sLui=S.settings.salaries.lui, sElle=S.settings.salaries.elle;
-  if(S.settings.mode==="5050") return {lui:50, elle:50};
   if(S.settings.mode==="fixe") return pctPair(S.settings.fixed.lui||0, S.settings.fixed.elle||0);
   if(S.settings.mode==="net") return pctPair(Math.max(0,sLui-chargesPerso('lui')), Math.max(0,sElle-chargesPerso('elle')));
   if(S.settings.mode==="custom") return S.settings.custom;
@@ -1525,15 +1530,26 @@ function renderPilotage(){
     <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
     <span class="pill">Pilotage</span>
   </div>
-  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulons votre mois</h1>
-  <p class="hero-sub">Ajustez vos revenus et vos envies pour trouver la répartition parfaite, à deux.</p>
+  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation budgétaire</h1>
+  <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens",true)}
-  ${repOption("5050","50 / 50","Partage égalitaire strict")}
-  ${repOption("net","Proportionnel au net restant","Déduit les charges perso")}
-  ${repOption("custom","Pourcentage personnalisé","Vous fixez vous-mêmes")}
-  ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe")}
+  ${repOption("salaire","Proportionnel aux revenus","Basé sur les salaires bruts",null,true)}
+  ${repOption("custom","Personnalisé aux revenus","% choisi librement",`
+    <div class="rep-inline" onclick="event.stopPropagation()">
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" max="100" id="prepHim" value="${S.settings.custom.lui}"></div>
+      <span class="rep-inline-sep">/</span>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" max="100" id="prepHer" value="${S.settings.custom.elle}"></div>
+      <span class="rep-inline-unit">%</span>
+    </div>`)}
+  ${repOption("net","Proportionnel aux revenus nets","Après charges perso")}
+  ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
+    <div class="rep-inline" onclick="event.stopPropagation()">
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" id="fixLui" value="${S.settings.fixed.lui}"></div>
+      <span class="rep-inline-sep">+</span>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" id="fixElle" value="${S.settings.fixed.elle}"></div>
+      <span class="rep-inline-unit">€/mois</span>
+    </div>`)}
 
   ${S.settings.mode!=='fixe'?`
   <div class="section-title">💑 Revenus mensuels</div>
@@ -1549,22 +1565,6 @@ function renderPilotage(){
       <input type="range" class="mini-slider" id="slSalElle" min="0" max="${sliderMax(S.settings.salaries.elle,3000)}" step="1" value="${S.settings.salaries.elle}" style="margin-top:8px">
     </div>
   </div>`:''}
-
-  <div class="card" style="margin-top:10px" id="repCard">
-    ${S.settings.mode==='custom'?`
-    <div class="between" style="margin-bottom:8px"><b class="small" id="repLuiLbl">${nameOf('lui')} : ${rep.lui}%</b><b class="small" id="repElleLbl">${nameOf('elle')} : ${rep.elle}%</b></div>
-    <input type="range" min="0" max="100" value="${S.settings.custom.lui}" id="repSlider" class="mini-slider">
-    <p class="small muted" style="text-align:center; margin-top:6px">Glissez pour ajuster manuellement</p>`
-    :S.settings.mode==='fixe'?`
-    <div class="grid2">
-      <div class="field" style="margin:0"><label>${nameOf('lui')} verse (€/mois)</label><input class="input" type="number" id="fixLui" value="${S.settings.fixed.lui}"></div>
-      <div class="field" style="margin:0"><label>${nameOf('elle')} verse (€/mois)</label><input class="input" type="number" id="fixElle" value="${S.settings.fixed.elle}"></div>
-    </div>
-    <p class="small muted" style="text-align:center; margin-top:8px" id="fixPctLbl">${nameOf('lui')} ${rep.lui}% · ${nameOf('elle')} ${rep.elle}%</p>`
-    :`
-    <div class="between"><b class="small" id="repLuiLbl">${nameOf('lui')} : ${rep.lui}%</b><b class="small" id="repElleLbl">${nameOf('elle')} : ${rep.elle}%</b></div>
-    <p class="small muted" style="text-align:center; margin-top:6px">Calculé automatiquement selon ce mode</p>`}
-  </div>
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
     <span class="section-title" style="margin:0">🧾 Charges fixes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
@@ -1648,12 +1648,15 @@ function renderPilotage(){
   <button class="btn btn-primary" id="validBudget" style="margin-top:16px">Valider le budget du mois ✓</button>
   `;
 }
-function repOption(id,title,sub,first){
+function repOption(id,title,sub,extra,first){
   const on=S.settings.mode===id;
-  return `<button class="rep-opt ${on?'on':''}" data-mode="${id}" ${first?'style="margin-top:0"':''}>
-    <div class="txt"><b>${title}</b><span>${sub}</span></div>
-    <div class="radio">${on?'<i></i>':''}</div>
-  </button>`;
+  return `<div class="rep-opt ${on?'on':''}" data-mode="${id}" ${first?'style="margin-top:0"':''}>
+    <div class="rep-opt-hdr">
+      <div class="txt"><b>${title}</b><span>${sub}</span></div>
+      <div class="radio">${on?'<i></i>':''}</div>
+    </div>
+    ${on&&extra?extra:''}
+  </div>`;
 }
 
 /* ============================================================
@@ -1975,11 +1978,6 @@ function recalcPilotage(){
   const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=`(${fmt0(chargesCommunes())})`;
   const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=`(${fmt0(totalBudget())})`;
 
-  const rl=$('#repLuiLbl'), rre=$('#repElleLbl');
-  if(rl) rl.textContent=`${nameOf('lui')} : ${rep.lui}%`;
-  if(rre) rre.textContent=`${nameOf('elle')} : ${rep.elle}%`;
-  const fixLbl=$('#fixPctLbl'); if(fixLbl) fixLbl.textContent=`${nameOf('lui')} ${rep.lui}% · ${nameOf('elle')} ${rep.elle}%`;
-
   const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'var(--danger)':'var(--terra)'; }
   const pd=$('#pilDeficit'); if(pd) pd.style.display=reste<0?'block':'none';
   const pa=$('#pilAlloc'); if(pa) pa.textContent=`${fmt0(allocProjets)} / ${fmt0(reste)}`;
@@ -2048,7 +2046,16 @@ function bindPilotage(){
 
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{S.settings.mode=b.dataset.mode; save(); go('pilotage');}));
 
-  const rs=$('#repSlider'); if(rs) rs.oninput=()=>{S.settings.custom={lui:+rs.value,elle:100-(+rs.value)}; save(); recalcPilotage();};
+  // Mode "Personnalisé aux revenus" : les 2 % sont complémentaires (toujours 100 au total).
+  const ph=$('#prepHim'), pr=$('#prepHer');
+  const syncCustomPct=(who,val)=>{
+    val=Math.max(0, Math.min(100, Math.round(val)||0));
+    if(who==='lui'){ S.settings.custom={lui:val, elle:100-val}; if(pr) pr.value=100-val; }
+    else { S.settings.custom={lui:100-val, elle:val}; if(ph) ph.value=100-val; }
+    save(); recalcPilotage();
+  };
+  if(ph) ph.oninput=()=>syncCustomPct('lui',+ph.value);
+  if(pr) pr.oninput=()=>syncCustomPct('elle',+pr.value);
   const fl=$('#fixLui'), fe=$('#fixElle');
   if(fl) fl.oninput=()=>{S.settings.fixed.lui=Math.max(0,+fl.value||0); save(); recalcPilotage();};
   if(fe) fe.oninput=()=>{S.settings.fixed.elle=Math.max(0,+fe.value||0); save(); recalcPilotage();};
