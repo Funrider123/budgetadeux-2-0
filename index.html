@@ -106,6 +106,21 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .icon-circle.wa{background:#25D366;}
 .icon-circle.sms{background:var(--terra);}
 
+/* pilotage — sliders compacts de simulation */
+.mini-slider{-webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:99px; outline:none; cursor:pointer; background:var(--line);}
+.mini-slider::-webkit-slider-thumb{-webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:var(--terra); cursor:pointer; box-shadow:0 1px 4px rgba(80,40,20,.35);}
+.mini-slider::-moz-range-thumb{width:15px; height:15px; border-radius:50%; background:var(--terra); border:none; cursor:pointer; box-shadow:0 1px 4px rgba(80,40,20,.35);}
+.pilot-row{display:flex; align-items:center; gap:10px; padding:9px 0;}
+.pilot-row+.pilot-row{border-top:1px solid var(--line);}
+.pilot-row .pdel{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:2px 4px; flex-shrink:0;}
+.pilot-row .pmain{flex:1; min-width:0;}
+.pilot-row .pnm-row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px;}
+.pilot-row .pnm{font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.pilot-row .pamt-input{width:66px; flex-shrink:0; border:1px solid var(--line); border-radius:8px; padding:4px 6px; font-size:12.5px; font-weight:700; color:var(--terra); text-align:right; background:var(--card); font-family:inherit;}
+.pilot-collapse-hdr{display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:4px 2px;}
+.pilot-collapse-hdr .chev{transition:transform .2s; color:var(--muted); font-size:12px;}
+.pilot-collapse-hdr.open .chev{transform:rotate(180deg);}
+
 /* sync chip */
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
 .sync .dot{width:7px;height:7px;border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
@@ -386,7 +401,7 @@ const DEFAULT = {
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, sync:true },
   settings:{
     salaries:{lui:0, elle:0},
-    mode:"5050", custom:{lui:50, elle:50}
+    mode:"5050", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0}
   },
   categories:[
     {id:"courses", emoji:"🛒", name:"Courses", budget:300, cls:"besoin"},
@@ -409,8 +424,14 @@ function iso(daysAgo){ const d=new Date(); d.setDate(d.getDate()-daysAgo); retur
 
 let S = load();
 function load(){
-  try{ const r = localStorage.getItem("bad2"); if(r) return JSON.parse(r); }catch(_){}
+  try{ const r = localStorage.getItem("bad2"); if(r) return migrate(JSON.parse(r)); }catch(_){}
   return JSON.parse(JSON.stringify(DEFAULT));
+}
+// Rétrocompatibilité : load() ne fusionne pas avec DEFAULT, donc les comptes
+// existants n'ont pas les nouveaux champs ajoutés après leur création.
+function migrate(s){
+  if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
+  return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
   document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
@@ -516,16 +537,27 @@ function clsTotalsReality(offset=0){
 }
 
 /* repartition */
+function chargesPerso(who){ return S.charges.filter(c=>c.scope===who).reduce((s,c)=>s+c.amount,0); }
+function pctPair(a,b){ const tot=a+b; if(tot<=0) return {lui:50, elle:50}; return {lui:Math.round(a/tot*100), elle:Math.round(b/tot*100)}; }
 function repartition(){
-  const sLui=S.settings.salaries.lui, sElle=S.settings.salaries.elle, tot=sLui+sElle;
+  const sLui=S.settings.salaries.lui, sElle=S.settings.salaries.elle;
   if(S.settings.mode==="5050") return {lui:50, elle:50};
-  if(S.settings.mode==="fixe") return {lui:50, elle:50};
-  if(S.settings.mode==="net") return {lui:Math.round(sLui/tot*100), elle:Math.round(sElle/tot*100)};
+  if(S.settings.mode==="fixe") return pctPair(S.settings.fixed.lui||0, S.settings.fixed.elle||0);
+  if(S.settings.mode==="net") return pctPair(Math.max(0,sLui-chargesPerso('lui')), Math.max(0,sElle-chargesPerso('elle')));
   if(S.settings.mode==="custom") return S.settings.custom;
-  return {lui:Math.round(sLui/tot*100), elle:Math.round(sElle/tot*100)};
+  return pctPair(sLui, sElle);
 }
+// Revenu qui alimente le foyer : salaires en mode revenus, contributions déclarées en mode fixe.
+function totalRevenuFoyer(){ return S.settings.mode==="fixe" ? (S.settings.fixed.lui||0)+(S.settings.fixed.elle||0) : S.settings.salaries.lui+S.settings.salaries.elle; }
 function chargesCommunes(){ return S.charges.filter(c=>c.scope==="commune").reduce((s,c)=>s+c.amount,0); }
 function epargneProjetsMensuelle(){ return S.projects.filter(p=>p.status==="actif").reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
+// Ce qu'il reste chaque mois une fois charges perso (si mode revenus), charges communes et
+// catégories couvertes — base de l'allocation projets. En mode "fixe", les contributions
+// déclarées sont déjà nettes des charges perso de chacun, donc on ne les redéduit pas.
+function disponiblePourProjets(){
+  const perso = S.settings.mode==="fixe" ? 0 : chargesPerso('lui')+chargesPerso('elle');
+  return totalRevenuFoyer() - perso - chargesCommunes() - totalBudget();
+}
 
 /* ============================================================
    TOASTS
@@ -1432,10 +1464,51 @@ function renderReglages(){
   `;
 }
 
+/* ── Simulation Pilotage : état de session (non persisté tant que non validé) ── */
+let pilotSim = {};        // id projet -> mensualité simulée
+let pilotOpen = {charges:false}; // charges fixes repliées par défaut (plus compact)
+function sliderMax(val, floor){ return val>0 ? Math.ceil(val*2/50)*50 : floor; }
+function initPilotSim(){
+  S.projects.filter(p=>p.status==="actif").forEach(p=>{
+    if(pilotSim[p.id]===undefined){
+      const remaining=Math.max(0,p.target-p.saved);
+      pilotSim[p.id] = p.months>0 ? Math.round(remaining/p.months) : 0;
+    }
+  });
+}
+function totalAllocProjects(){ return S.projects.filter(p=>p.status==="actif").reduce((s,p)=>s+(pilotSim[p.id]||0),0); }
+function projectEta(p, mensuel){
+  const remaining=Math.max(0,p.target-p.saved);
+  if(remaining<=0) return {label:'✓ Atteint', color:'var(--ok)'};
+  if(mensuel<=0) return {label:'∞ — aucun versement', color:'var(--danger)'};
+  const days=Math.ceil(remaining/mensuel*30.4368);
+  const d=new Date(); d.setDate(d.getDate()+days);
+  return {label:'→ '+d.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}), color:'var(--terra)'};
+}
+function pilotRow(opts){
+  // Ligne compacte réutilisée pour charges fixes / catégories : emoji, nom, tag optionnel, input€ + slider.
+  const {id,emoji,name,sub,amount,max,onInputAttr,delAttr,editAttr}=opts;
+  return `<div class="pilot-row">
+    ${delAttr?`<button class="pdel" ${delAttr}>✕</button>`:''}
+    <div class="emoji-badge" style="flex-shrink:0">${emoji}</div>
+    <div class="pmain">
+      <div class="pnm-row">
+        <span class="pnm">${name}${sub?` <span class="small muted" style="font-weight:500">· ${sub}</span>`:''}</span>
+        <input class="pamt-input" type="number" value="${Math.round(amount)}" data-id="${id}" ${onInputAttr}>
+      </div>
+      <input type="range" class="mini-slider" min="0" max="${max}" step="10" value="${amount}" data-id="${id}" ${onInputAttr}>
+    </div>
+    ${editAttr?`<button class="pdel" ${editAttr}>✎</button>`:''}
+  </div>`;
+}
 function renderPilotage(){
+  initPilotSim();
   const rep=repartition();
-  const totVerser = chargesCommunes() + epargneProjetsMensuelle();
+  const reste=disponiblePourProjets();
+  const allocProjets=totalAllocProjects();
+  const totVerser = chargesCommunes() + allocProjets;
   const luiV = totVerser*rep.lui/100, elleV = totVerser*rep.elle/100;
+  const activeProjects=S.projects.filter(p=>p.status==="actif");
   return `
   <div class="between" style="padding-top:10px">
     <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
@@ -1446,49 +1519,111 @@ function renderPilotage(){
 
   <div class="section-title">💑 Revenus mensuels</div>
   <div class="card grid2">
-    <div class="field" style="margin:0"><label>Salaire ${nameOf('lui')}</label><input class="input" type="number" id="salLui" value="${S.settings.salaries.lui}"></div>
-    <div class="field" style="margin:0"><label>Salaire ${nameOf('elle')}</label><input class="input" type="number" id="salElle" value="${S.settings.salaries.elle}"></div>
+    <div class="field" style="margin:0">
+      <label>Salaire ${nameOf('lui')}</label>
+      <input class="input" type="number" id="salLui" value="${S.settings.salaries.lui}">
+      <input type="range" class="mini-slider" id="slSalLui" min="0" max="${sliderMax(S.settings.salaries.lui,3000)}" step="50" value="${S.settings.salaries.lui}" style="margin-top:8px">
+    </div>
+    <div class="field" style="margin:0">
+      <label>Salaire ${nameOf('elle')}</label>
+      <input class="input" type="number" id="salElle" value="${S.settings.salaries.elle}">
+      <input type="range" class="mini-slider" id="slSalElle" min="0" max="${sliderMax(S.settings.salaries.elle,3000)}" step="50" value="${S.settings.salaries.elle}" style="margin-top:8px">
+    </div>
   </div>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
   ${repOption("salaire","Proportionnel au salaire","Chacun paie selon ses moyens","")}
   ${repOption("5050","50 / 50","Partage égalitaire strict","")}
-  ${repOption("net","Proportionnel au net restant","Équilibre le reste à vivre","")}
+  ${repOption("net","Proportionnel au net restant","Équilibre le reste à vivre (déduit les charges perso)","")}
   ${repOption("custom","Pourcentage personnalisé","Vous fixez vous-mêmes","")}
-  <div class="card" style="margin-top:10px">
-    <div class="between" style="margin-bottom:8px"><b class="small">${nameOf('lui')} : ${rep.lui}%</b><b class="small">${nameOf('elle')} : ${rep.elle}%</b></div>
-    <input type="range" min="0" max="100" value="${rep.lui}" id="repSlider" style="width:100%; accent-color:var(--terra)" ${S.settings.mode!=='custom'?'disabled':''}>
-    <p class="small muted" style="text-align:center; margin-top:6px">${S.settings.mode==='custom'?'Glissez pour ajuster manuellement':'Passez en « Pourcentage personnalisé » pour ajuster'}</p>
+  ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe","")}
+  <div class="card" style="margin-top:10px" id="repCard">
+    ${S.settings.mode==='custom'?`
+    <div class="between" style="margin-bottom:8px"><b class="small" id="repLuiLbl">${nameOf('lui')} : ${rep.lui}%</b><b class="small" id="repElleLbl">${nameOf('elle')} : ${rep.elle}%</b></div>
+    <input type="range" min="0" max="100" value="${S.settings.custom.lui}" id="repSlider" class="mini-slider">
+    <p class="small muted" style="text-align:center; margin-top:6px">Glissez pour ajuster manuellement</p>`
+    :S.settings.mode==='fixe'?`
+    <div class="grid2">
+      <div class="field" style="margin:0"><label>${nameOf('lui')} verse (€/mois)</label><input class="input" type="number" id="fixLui" value="${S.settings.fixed.lui}"></div>
+      <div class="field" style="margin:0"><label>${nameOf('elle')} verse (€/mois)</label><input class="input" type="number" id="fixElle" value="${S.settings.fixed.elle}"></div>
+    </div>
+    <p class="small muted" style="text-align:center; margin-top:8px" id="fixPctLbl">${nameOf('lui')} ${rep.lui}% · ${nameOf('elle')} ${rep.elle}%</p>`
+    :`
+    <div class="between"><b class="small" id="repLuiLbl">${nameOf('lui')} : ${rep.lui}%</b><b class="small" id="repElleLbl">${nameOf('elle')} : ${rep.elle}%</b></div>
+    <p class="small muted" style="text-align:center; margin-top:6px">Calculé automatiquement selon ce mode</p>`}
   </div>
 
-  <div class="section-title">🧾 Charges fixes <span class="link" id="addCharge">+ Ajouter</span></div>
-  <div class="card">
-    ${S.charges.map(c=>`<div class="lrow">
-      <div class="emoji-badge">${c.emoji}</div>
-      <div class="grow"><div class="name">${c.name}</div><div class="sub">${c.scope==='commune'?'Commune':c.scope==='lui'?nameOf('lui'):nameOf('elle')}${c.locked?' · 🔒 verrouillée':''}</div></div>
-      <b class="amt">${fmt0(c.amount)}</b>
-    </div>`).join('')}
+  <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
+    <span class="section-title" style="margin:0">🧾 Charges fixes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
+    <span class="chev">▼</span>
+  </div>
+  <div class="card" id="chgList" style="display:${pilotOpen.charges?'block':'none'}">
+    ${S.charges.length?S.charges.map(c=>pilotRow({
+      id:c.id, emoji:c.emoji, name:c.name,
+      sub:(c.scope==='commune'?'Commune':nameOf(c.scope))+(c.locked?' · 🔒':''),
+      amount:c.amount, max:sliderMax(c.amount,500),
+      onInputAttr:`data-charge oninput="onChargeInput(this)"`,
+      delAttr:`data-delcharge="${c.id}"`
+    })).join(''):'<p class="small muted" style="padding:10px 4px">Aucune charge fixe pour le moment.</p>'}
+    <div style="padding:8px 4px 2px"><span class="link" id="addCharge">+ Ajouter une charge fixe</span></div>
   </div>
 
-  <div class="section-title">📦 Catégories & enveloppes <span class="link" id="addCat">+ Ajouter</span></div>
+  <div class="section-title" style="margin-top:18px">📦 Catégories & enveloppes <span class="small muted" style="font-weight:500" id="catTotalLbl">(${fmt0(totalBudget())})</span></div>
   <div class="card">
-    ${S.categories.map(c=>`<button class="lrow" style="width:100%; text-align:left" data-editcat="${c.id}">
-      <div class="emoji-badge">${c.emoji}</div>
-      <div class="grow"><div class="name">${c.name} <span class="tag ${c.cls}">${clsLabel(c.cls)}</span></div><div class="sub">${fmt0(c.budget)} / mois · ${fmt0(c.budget/4)} / semaine <span style="opacity:.6">(auto)</span></div></div>
-      <span class="chev" style="color:var(--muted)">✎</span>
-    </button>`).join('')}
+    ${S.categories.map(c=>pilotRow({
+      id:c.id, emoji:c.emoji, name:c.name, sub:clsLabel(c.cls),
+      amount:c.budget, max:sliderMax(c.budget,500),
+      onInputAttr:`data-cat oninput="onCatInput(this)"`,
+      editAttr:`data-editcat="${c.id}"`
+    })).join('')}
+    <div style="padding:8px 4px 2px"><span class="link" id="addCat">+ Ajouter une catégorie</span></div>
+  </div>
+
+  <div class="section-title" style="margin-top:18px">
+    🎯 Disponible pour nos projets
+    <span class="small muted" style="font-weight:500; cursor:pointer" onclick="const t=document.getElementById('pilTip'); t.style.display=t.style.display==='none'?'block':'none';">ⓘ</span>
+  </div>
+  <div class="card" id="pilTip" style="display:none; background:var(--cream-2); font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:8px">
+    Revenu du foyer<br>− Charges fixes communes<br>− Catégories de dépenses<br>= Ce qui reste pour vos projets
+  </div>
+  <div class="card">
+    <div class="between"><b class="small">Reste disponible</b><b style="color:${reste<0?'var(--danger)':'var(--terra)'}" id="pilReste">${fmt0(reste)}</b></div>
+    ${reste<0?`<p class="small" style="color:var(--danger); margin-top:8px" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
+    ${activeProjects.length?`
+    <div style="margin-top:12px">
+      <div class="between small muted"><span>Alloué aux projets</span><span id="pilAlloc">${fmt0(allocProjets)} / ${fmt0(reste)}</span></div>
+      <div style="height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:4px"><div id="pilBar" style="height:100%; border-radius:99px; background:${allocProjets<=reste?'var(--ok)':'var(--danger)'}; width:${reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0)}%; transition:width .1s"></div></div>
+    </div>
+    <div style="margin-top:10px">
+    ${activeProjects.map(p=>{
+      const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
+      return `<div class="pilot-row" data-project="${p.id}">
+        <div class="emoji-badge" style="flex-shrink:0">${p.emoji}</div>
+        <div class="pmain">
+          <div class="pnm-row">
+            <span class="pnm">${escapeHtml(p.name)}</span>
+            <span class="small" style="font-weight:800; color:${eta.color}; flex-shrink:0; white-space:nowrap" data-eta="${p.id}">${eta.label}</span>
+          </div>
+          <div class="row" style="gap:8px; align-items:center">
+            <input type="range" class="mini-slider" min="0" max="${sliderMax(mensuel,Math.max(reste,100))}" step="10" value="${mensuel}" data-project="${p.id}" oninput="onProjectInput(this)">
+            <b class="small" style="width:56px; text-align:right; flex-shrink:0" data-mensuel="${p.id}">${fmt0(mensuel)}</b>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>`:`<p class="small muted" style="margin-top:10px">Aucun projet actif — <span class="link" onclick="go('projets')">ajoutez-en un</span> pour simuler son épargne ici.</p>`}
   </div>
 
   <div class="panel-terra" style="margin-top:18px">
     <div style="text-align:center">
       <div class="lbl">Total à verser chaque mois</div>
-      <div class="big">${fmt(totVerser)}</div>
-      <div class="small" style="opacity:.85">Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(epargneProjetsMensuelle())})</div>
+      <div class="big" id="totVerserBig">${fmt(totVerser)}</div>
+      <div class="small" style="opacity:.85" id="totVerserSub">Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})</div>
     </div>
     <div style="height:1px; background:rgba(255,255,255,.2); margin:16px 0"></div>
     <div class="grid2" style="text-align:center">
-      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:22px">${fmt(luiV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('lui')} copié','📋')">Copier RIB</button></div>
-      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:22px">${fmt(elleV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('elle')} copié','📋')">Copier RIB</button></div>
+      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:22px" id="luiVerseAmt">${fmt(luiV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('lui')} copié','📋')">Copier RIB</button></div>
+      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:22px" id="elleVerseAmt">${fmt(elleV)}</div><button class="btn btn-sm" style="background:rgba(255,255,255,.18); color:#fff; margin:8px auto 0" onclick="toast('RIB de ${nameOf('elle')} copié','📋')">Copier RIB</button></div>
     </div>
   </div>
 
@@ -1817,20 +1952,119 @@ function openConfirm(title,msg,onYes){
   $('#cfYes').onclick=()=>{closeModal(); onYes();}; $('#cfNo').onclick=closeModal;
 }
 
+/* ── Recalcul léger (sans reconstruire le DOM) pendant qu'on glisse un slider ── */
+function recalcPilotage(){
+  const rep=repartition();
+  const reste=disponiblePourProjets();
+  const allocProjets=totalAllocProjects();
+  const totVerser=chargesCommunes()+allocProjets;
+  const luiV=totVerser*rep.lui/100, elleV=totVerser*rep.elle/100;
+
+  const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=`(${fmt0(chargesCommunes())})`;
+  const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=`(${fmt0(totalBudget())})`;
+
+  const rl=$('#repLuiLbl'), rre=$('#repElleLbl');
+  if(rl) rl.textContent=`${nameOf('lui')} : ${rep.lui}%`;
+  if(rre) rre.textContent=`${nameOf('elle')} : ${rep.elle}%`;
+  const fixLbl=$('#fixPctLbl'); if(fixLbl) fixLbl.textContent=`${nameOf('lui')} ${rep.lui}% · ${nameOf('elle')} ${rep.elle}%`;
+
+  const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'var(--danger)':'var(--terra)'; }
+  const pd=$('#pilDeficit'); if(pd) pd.style.display=reste<0?'block':'none';
+  const pa=$('#pilAlloc'); if(pa) pa.textContent=`${fmt0(allocProjets)} / ${fmt0(reste)}`;
+  const pb=$('#pilBar'); if(pb){
+    pb.style.width=(reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0))+'%';
+    pb.style.background=allocProjets<=reste?'var(--ok)':'var(--danger)';
+  }
+  S.projects.filter(p=>p.status==='actif').forEach(p=>{
+    const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
+    const etaEl=document.querySelector(`[data-eta="${p.id}"]`);
+    if(etaEl){ etaEl.textContent=eta.label; etaEl.style.color=eta.color; }
+    const mEl=document.querySelector(`[data-mensuel="${p.id}"]`);
+    if(mEl) mEl.textContent=fmt0(mensuel);
+  });
+
+  const tb=$('#totVerserBig'); if(tb) tb.textContent=fmt(totVerser);
+  const ts=$('#totVerserSub'); if(ts) ts.textContent=`Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})`;
+  const lv=$('#luiVerseAmt'); if(lv) lv.textContent=fmt(luiV);
+  const ev=$('#elleVerseAmt'); if(ev) ev.textContent=fmt(elleV);
+}
+// Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
+function onChargeInput(el){
+  const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
+  const row=el.closest('.pilot-row');
+  const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
+  if(numEl) numEl.value=val;
+  if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; }
+  const c=S.charges.find(x=>x.id===id); if(c){ c.amount=val; save(); }
+  recalcPilotage();
+}
+function onCatInput(el){
+  const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
+  const row=el.closest('.pilot-row');
+  const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
+  if(numEl) numEl.value=val;
+  if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; }
+  const c=S.categories.find(x=>x.id===id); if(c){ c.budget=val; save(); }
+  recalcPilotage();
+}
+// Simulation projet : session uniquement, appliquée aux données réelles seulement au clic sur Valider.
+function onProjectInput(el){
+  pilotSim[el.dataset.project]=Math.max(0, Math.round(+el.value)||0);
+  recalcPilotage();
+}
 function bindPilotage(){
   const br=$('#backReg'); if(br) br.onclick=()=>go('reglages');
-  const sl=$('#salLui'), se=$('#salElle');
-  if(sl) sl.onchange=ev=>{S.settings.salaries.lui=+ev.target.value||0; save(); go('pilotage');};
-  if(se) se.onchange=ev=>{S.settings.salaries.elle=+ev.target.value||0; save(); go('pilotage');};
+
+  const sl=$('#salLui'), se=$('#salElle'), slSl=$('#slSalLui'), slSe=$('#slSalElle');
+  const syncSalary=(who,val)=>{
+    val=Math.max(0, Math.round(val)||0);
+    S.settings.salaries[who]=val; save();
+    const numEl=who==='lui'?sl:se, rangeEl=who==='lui'?slSl:slSe;
+    if(numEl) numEl.value=val;
+    if(rangeEl){ rangeEl.max=sliderMax(val,3000); rangeEl.value=val; }
+    recalcPilotage();
+  };
+  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value);
+  if(se) se.oninput=()=>syncSalary('elle',+se.value);
+  if(slSl) slSl.oninput=()=>syncSalary('lui',+slSl.value);
+  if(slSe) slSe.oninput=()=>syncSalary('elle',+slSe.value);
+
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{S.settings.mode=b.dataset.mode; save(); go('pilotage');}));
-  const rs=$('#repSlider'); if(rs) rs.oninput=ev=>{S.settings.custom={lui:+ev.target.value,elle:100-(+ev.target.value)}; save(); }; if(rs) rs.onchange=()=>go('pilotage');
+
+  const rs=$('#repSlider'); if(rs) rs.oninput=()=>{S.settings.custom={lui:+rs.value,elle:100-(+rs.value)}; save(); recalcPilotage();};
+  const fl=$('#fixLui'), fe=$('#fixElle');
+  if(fl) fl.oninput=()=>{S.settings.fixed.lui=Math.max(0,+fl.value||0); save(); recalcPilotage();};
+  if(fe) fe.oninput=()=>{S.settings.fixed.elle=Math.max(0,+fe.value||0); save(); recalcPilotage();};
+
+  const chgHdr=$('#chgHdr'); if(chgHdr) chgHdr.onclick=()=>{
+    pilotOpen.charges=!pilotOpen.charges;
+    chgHdr.classList.toggle('open',pilotOpen.charges);
+    const list=$('#chgList'); if(list) list.style.display=pilotOpen.charges?'block':'none';
+  };
+
   const ac=$('#addCharge'); if(ac) ac.onclick=openAddCharge;
   const acat=$('#addCat'); if(acat) acat.onclick=()=>openEditCat(null);
   document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat)));
+  document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
+    S.charges=S.charges.filter(x=>x.id!==b.dataset.delcharge); save(); go('pilotage'); toast("Charge supprimée 🗑");
+  }));
+
   const en=$('#effNow'), enx=$('#effNext');
   if(en) en.onclick=()=>{en.classList.add('on'); enx.classList.remove('on');};
   if(enx) enx.onclick=()=>{enx.classList.add('on'); en.classList.remove('on');};
-  const vb=$('#validBudget'); if(vb) vb.onclick=()=>{ const eff=$('#effNext').classList.contains('on')?'futur':'immediate'; S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff}); save(); toast("Budget validé ✓ — vous êtes prêts !","❤️"); go('vue'); };
+
+  const vb=$('#validBudget'); if(vb) vb.onclick=()=>{
+    // Applique la simulation des projets (mensualité choisie → nombre de mois) aux données réelles.
+    S.projects.filter(p=>p.status==='actif').forEach(p=>{
+      const mensuel=pilotSim[p.id]; if(mensuel===undefined) return;
+      const remaining=Math.max(0,p.target-p.saved);
+      if(remaining<=0 || mensuel<=0) return;
+      p.months=Math.max(1,Math.ceil(remaining/mensuel));
+    });
+    const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
+    S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
+    save(); toast("Budget validé ✓ — vous êtes prêts !","❤️"); go('vue');
+  };
 }
 function openAddCharge(){
   openModal(`<h3>Nouvelle charge fixe</h3>
