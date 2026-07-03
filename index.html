@@ -1554,7 +1554,7 @@ function personCard(who){
   // aucun calcul, donc pas la peine de les afficher ici.
   const showPerso=S.settings.mode==='net';
   const open=pilotOpen['perso_'+who];
-  const idSal=who==='lui'?'salLui':'salElle', idSlSal=who==='lui'?'slSalLui':'slSalElle';
+  const idSal=who==='lui'?'salLui':'salElle';
   return `<div class="pers-card">
     <div class="pers-hdr">
       <div class="who">👤 ${escapeHtml(name)} <span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
@@ -1564,7 +1564,6 @@ function personCard(who){
       <label>Salaire</label>
       <div class="inwrap">
         <input class="input" type="number" id="${idSal}" value="${sal}">
-        <input type="range" class="mini-slider" id="${idSlSal}" min="0" max="${sliderMax(sal,3000)}" step="1" value="${sal}" style="margin-top:8px">
       </div>
     </div>
     ${showPerso?`
@@ -2093,21 +2092,11 @@ function onProjectInput(el){
 function bindPilotage(){
   const br=$('#backReg'); if(br) br.onclick=()=>go('reglages');
 
-  const sl=$('#salLui'), se=$('#salElle'), slSl=$('#slSalLui'), slSe=$('#slSalElle');
-  // Même règle que les charges/catégories : on ne réajuste l'échelle du slider que
-  // lorsque c'est le champ € qui a changé, jamais pendant qu'on glisse le slider.
-  const syncSalary=(who,val,fromSlider)=>{
-    val=Math.max(0, Math.round(val)||0);
-    S.settings.salaries[who]=val; save();
-    const numEl=who==='lui'?sl:se, rangeEl=who==='lui'?slSl:slSe;
-    if(fromSlider){ if(numEl) numEl.value=val; }
-    else if(rangeEl){ rangeEl.max=sliderMax(val,3000); rangeEl.value=val; }
-    recalcPilotage();
-  };
-  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value,false);
-  if(se) se.oninput=()=>syncSalary('elle',+se.value,false);
-  if(slSl) slSl.oninput=()=>syncSalary('lui',+slSl.value,true);
-  if(slSe) slSe.oninput=()=>syncSalary('elle',+slSe.value,true);
+  // Le salaire est une donnée connue (pas un curseur à explorer) : simple champ €, sans slider.
+  const sl=$('#salLui'), se=$('#salElle');
+  const syncSalary=(who,val)=>{ S.settings.salaries[who]=Math.max(0, Math.round(val)||0); save(); recalcPilotage(); };
+  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value);
+  if(se) se.oninput=()=>syncSalary('elle',+se.value);
 
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{S.settings.mode=b.dataset.mode; save(); go('pilotage');}));
 
