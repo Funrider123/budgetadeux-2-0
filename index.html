@@ -1584,9 +1584,14 @@ function personCard(who){
     </div>`:''}
   </div>`;
 }
-// Mode "Contribution fixe" : pas de carte salaire/charges perso, juste le total déclaré.
-function fixedTotalCard(){
-  return `<div class="pers-card"><div class="pers-hdr" style="background:var(--card)"><span class="who" style="text-transform:none">💰 Montant total mensuel alimentant le compte commun</span><span class="tot" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span></div></div>`;
+// Bloc distinct (même famille visuelle que "Total à verser chaque mois" plus bas) pour
+// bien détacher ce montant du reste — affiché pour tous les modes, quelle que soit la
+// façon dont les revenus sont saisis (salaires, % perso ou contributions fixes).
+function totalMensuelCard(){
+  return `<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
+    <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em">💰 Montant total mensuel alimentant le compte commun</span>
+    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span>
+  </div>`;
 }
 function renderPilotage(){
   initPilotSim();
@@ -1622,7 +1627,8 @@ function renderPilotage(){
       <span class="rep-inline-unit">€/mois</span>
     </div>`)}
 
-  ${S.settings.mode==='fixe'?fixedTotalCard():`<div class="section-title" style="margin-top:18px">👥 Détail par personne</div>${personCard('lui')}${personCard('elle')}`}
+  ${S.settings.mode==='fixe'?'':`<div class="section-title" style="margin-top:18px">👥 Détail par personne</div>${personCard('lui')}${personCard('elle')}`}
+  ${totalMensuelCard()}
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px">
     <span class="section-title" style="margin:0">🧾 Charges fixes communes <span class="small muted" style="font-weight:500" id="chgTotalLbl">(${fmt0(chargesCommunes())})</span></span>
@@ -2144,6 +2150,12 @@ function bindPilotage(){
       if(remaining<=0 || mensuel<=0) return;
       p.months=Math.max(1,Math.ceil(remaining/mensuel));
     });
+    // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
+    // pour permettre de comparer librement. À la validation finale, on ne garde que ce qui
+    // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
+    if(S.settings.mode!=='custom') S.settings.custom={lui:50, elle:50};
+    if(S.settings.mode!=='fixe') S.settings.fixed={lui:0, elle:0};
+    if(S.settings.mode!=='net') S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle');
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️"); go('vue');
