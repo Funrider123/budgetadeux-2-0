@@ -1642,7 +1642,7 @@ function renderPilotage(){
   const rep=repartition();
   const reste=disponiblePourProjets();
   const allocProjets=totalAllocProjects();
-  const totVerser = chargesCommunes() + allocProjets;
+  const totVerser = chargesCommunes() + totalBudget();
   const luiV = totVerser*rep.lui/100, elleV = totVerser*rep.elle/100;
   const activeProjects=S.projects.filter(p=>p.status==="actif");
   return `
@@ -1736,7 +1736,7 @@ function renderPilotage(){
     <div style="text-align:center">
       <div class="lbl" style="font-size:10px">Total à verser chaque mois</div>
       <div class="big" id="totVerserBig" style="font-size:27px; margin:2px 0">${fmt(totVerser)}</div>
-      <div class="small" style="opacity:.85" id="totVerserSub">Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})</div>
+      <div class="small" style="opacity:.85" id="totVerserSub">Charges fixes communes (${fmt0(chargesCommunes())}) + Catégories (${fmt0(totalBudget())})</div>
     </div>
     <div style="height:1px; background:rgba(255,255,255,.2); margin:12px 0"></div>
     <div class="grid2" style="text-align:center">
@@ -2078,7 +2078,7 @@ function recalcPilotage(){
   const rep=repartition();
   const reste=disponiblePourProjets();
   const allocProjets=totalAllocProjects();
-  const totVerser=chargesCommunes()+allocProjets;
+  const totVerser=chargesCommunes()+totalBudget();
   const luiV=totVerser*rep.lui/100, elleV=totVerser*rep.elle/100;
 
   const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=fmt0(chargesCommunes());
@@ -2100,7 +2100,7 @@ function recalcPilotage(){
   });
 
   const tb=$('#totVerserBig'); if(tb) tb.textContent=fmt(totVerser);
-  const ts=$('#totVerserSub'); if(ts) ts.textContent=`Compte commun (${fmt0(chargesCommunes())}) + épargne projets (${fmt0(allocProjets)})`;
+  const ts=$('#totVerserSub'); if(ts) ts.textContent=`Charges fixes communes (${fmt0(chargesCommunes())}) + Catégories (${fmt0(totalBudget())})`;
   const lv=$('#luiVerseAmt'); if(lv) lv.textContent=fmt(luiV);
   const ev=$('#elleVerseAmt'); if(ev) ev.textContent=fmt(elleV);
 
