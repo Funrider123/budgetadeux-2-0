@@ -1654,16 +1654,16 @@ function renderPilotage(){
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
-  ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires",null,true)}
-  ${repOption("custom","Personnalisé aux revenus","% choisi librement")}
-  ${repOption("net","Proportionnel aux revenus nets","Après charges perso")}
   ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
     <div class="rep-inline" onclick="event.stopPropagation()">
       <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" id="fixLui" value="${S.settings.fixed.lui}"></div>
       <span class="rep-inline-sep">+</span>
       <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" id="fixElle" value="${S.settings.fixed.elle}"></div>
       <span class="rep-inline-unit">€/mois</span>
-    </div>`)}
+    </div>`,true)}
+  ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires")}
+  ${repOption("custom","Personnalisé aux revenus","% choisi librement")}
+  ${repOption("net","Proportionnel aux revenus nets","Après charges perso")}
 
   ${S.settings.mode==='fixe'?'':`<div class="section-title" style="margin-top:18px">👥 Détail par personne</div>${personCard('lui')}${personCard('elle')}`}
   ${totalMensuelCard()}
@@ -1993,18 +1993,18 @@ function openCagnotteHistory(){
 function openNewProject(returnTo){
   returnTo = returnTo || 'projets';
   openModal(`<h3>Un nouveau rêve 🌟</h3><p class="small muted" style="margin-bottom:14px">Donnez-lui un nom, un montant, une échéance.</p>
-    <div class="grid2"><div class="field"><label>Emoji</label><input class="input" id="npEmoji" value="🌟" maxlength="2"></div><div class="field"><label>Nom du projet</label><input class="input" id="npName" placeholder="Ex : Cabane en bord de mer"></div></div>
-    <div class="grid2"><div class="field"><label>Montant cible</label><input class="input" type="number" id="npTarget" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="0"></div></div>
-    <div class="grid2"><div class="field"><label>Durée (mois)</label><input class="input" type="number" id="npMonths" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="5" min="1" max="28"></div></div>
+    <div class="field"><label>Nom du projet</label><input class="input" id="npName" placeholder="Ex : Cabane en bord de mer"></div>
+    <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="number" id="npTarget" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="0"></div></div>
+    <div class="grid2"><div class="field"><label>Nombre de mois pour atteindre l'objectif</label><input class="input" type="number" id="npMonths" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="5" min="1" max="28"></div></div>
     <div class="field"><label>Classification</label><select class="select" id="npCls"><option value="besoin">Besoin</option><option value="envie" selected>Envie</option><option value="invest">Investissement</option><option value="protection">Protection</option></select></div>
     <div class="field"><label>Répartition entre vous deux</label><input type="range" min="0" max="100" value="50" id="npSplit" style="width:100%; accent-color:var(--terra)"><div class="between small muted"><span id="npSL">${nameOf('lui')} 50%</span><span id="npSE">${nameOf('elle')} 50%</span></div></div>
     <div class="card-soft" style="margin-bottom:12px; text-align:center"><span class="small muted">Épargne mensuelle nécessaire</span><div id="npCalc" style="font-family:var(--serif); font-size:22px; color:var(--terra)">— €</div></div>
-    <button class="btn btn-primary" id="npSave">Créer ce projet</button>`);
+    <button class="btn btn-primary" id="npSave">Créer ce projet</button>`, true);
   const calc=()=>{ const t=+$('#npTarget').value||0, s=+$('#npSaved').value||0, m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
   ['npTarget','npSaved','npMonths'].forEach(id=>$('#'+id).oninput=calc);
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
-    const sp=+$('#npSplit').value; S.projects.push({id:e(),name:nm,emoji:$('#npEmoji').value||'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif'});
+    const sp=+$('#npSplit').value; S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif'});
     save(); closeModal(); go(returnTo); toast("Nouveau rêve créé 🌟","✓"); };
 }
 function openRealloc(p){
