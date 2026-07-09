@@ -1622,7 +1622,7 @@ function personCard(who){
     </div>
   </div>`;
 }
-// Bloc distinct (même famille visuelle que "Total à verser chaque mois" plus bas) pour
+// Bloc distinct (même famille visuelle panel-terra que les autres cartes de synthèse) pour
 // bien détacher ce montant du reste — affiché pour tous les modes, quelle que soit la
 // façon dont les revenus sont saisis (salaires, % perso ou contributions fixes).
 function totalMensuelCard(){
@@ -1643,26 +1643,49 @@ function disponibleProjetsCard(reste){
 // catégories − épargne projets) : à 0 budget équilibré, négatif déficit (clignote),
 // positif excédent.
 function budgetSoldeInfo(solde){
-  if(solde===0) return {label:'⚖️ Budget équilibré', color:'var(--ok)', blink:false};
-  if(solde<0) return {label:'⚠️ Budget en déficit', color:'var(--danger)', blink:true};
-  return {label:'✅ Budget en excédent', color:'var(--ok)', blink:false};
+  if(solde===0) return {label:'⚖️ Budget équilibré', color:'#fff', blink:false};
+  if(solde<0) return {label:'⚠️ Budget en déficit', color:'#FFD6C9', blink:true};
+  return {label:'✅ Budget en excédent', color:'#fff', blink:false};
 }
 // Récapitulatif des grosses rubriques du mois, pour rendre immédiatement visible
 // un déséquilibre (notamment quand l'épargne allouée aux projets dépasse le disponible,
 // ce que l'ancienne barre "Alloué aux projets" ne signalait pas assez clairement).
+// Même famille visuelle (panel-terra) que les autres blocs de synthèse de l'écran.
 function budgetRecapCard(){
   const totalMensuel=totalRevenuFoyer(), chg=chargesCommunes(), cat=totalBudget(), proj=totalAllocProjects();
   const solde=totalMensuel-chg-cat-proj;
   const info=budgetSoldeInfo(solde);
-  return `<div class="card" style="margin-top:14px" id="budgetRecap">
-    <b class="small" style="display:block; margin-bottom:8px">📊 Vue d'ensemble du mois</b>
-    <div class="between small" style="padding:5px 0"><span class="muted">Montant total mensuel</span><span style="font-weight:700" id="recapMontant">${fmt0(totalMensuel)}</span></div>
-    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Charges fixes communes</span><span style="font-weight:700" id="recapChg">${fmt0(chg)}</span></div>
-    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Catégories</span><span style="font-weight:700" id="recapCat">${fmt0(cat)}</span></div>
-    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt0(proj)}</span></div>
-    <div class="between ${info.blink?'blink-danger':''}" style="padding:10px 0 2px; border-top:2px solid var(--line); margin-top:4px" id="recapRow">
+  return `<div class="panel-terra" style="margin-top:14px; padding:18px 20px" id="budgetRecap">
+    <div class="lbl" style="font-size:10px; text-align:center">📊 Vue d'ensemble du mois</div>
+    <div class="between small" style="padding:8px 0 4px; opacity:.92"><span>Montant total mensuel</span><span style="font-weight:700" id="recapMontant">${fmt0(totalMensuel)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Charges fixes communes</span><span style="font-weight:700" id="recapChg">${fmt0(chg)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Catégories</span><span style="font-weight:700" id="recapCat">${fmt0(cat)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt0(proj)}</span></div>
+    <div class="between ${info.blink?'blink-danger':''}" style="padding:12px 0 2px; border-top:2px solid rgba(255,255,255,.35); margin-top:4px" id="recapRow">
       <b class="small" id="recapLabel" style="color:${info.color}">${info.label}</b>
-      <b id="recapSolde" style="color:${info.color}">${solde>0?'+':''}${fmt0(solde)}</b>
+      <b id="recapSolde" style="font-family:var(--serif); font-size:20px; color:${info.color}">${solde>0?'+':''}${fmt0(solde)}</b>
+    </div>
+  </div>`;
+}
+// Récap des virements : ce que chacun verse sur le compte commun (charges + catégories,
+// réparti selon le mode choisi) et sur le "compte projets" (réparti selon la répartition
+// propre à chaque projet, qui peut différer de celle du compte commun).
+function recapVirementsCard(rep, totVerser, activeProjects){
+  const luiCommun=totVerser*rep.lui/100, elleCommun=totVerser*rep.elle/100;
+  const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
+  const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
+  return `<div class="panel-terra" style="margin-top:18px; padding:18px 20px">
+    <div class="lbl" style="font-size:10px; text-align:center">💸 Récap virements</div>
+    <div style="height:1px; background:rgba(255,255,255,.2); margin:10px 0 14px"></div>
+    <div class="small" style="font-weight:800; opacity:.9; margin-bottom:8px">🏠 Compte commun (charges + catégories)</div>
+    <div class="grid2" style="text-align:center; margin-bottom:16px">
+      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px" id="recapCommunLui">${fmt(luiCommun)}</div></div>
+      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px" id="recapCommunElle">${fmt(elleCommun)}</div></div>
+    </div>
+    <div class="small" style="font-weight:800; opacity:.9; margin-bottom:8px">🎯 Compte projets</div>
+    <div class="grid2" style="text-align:center">
+      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px" id="recapProjetLui">${fmt(luiProjet)}</div></div>
+      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px" id="recapProjetElle">${fmt(elleProjet)}</div></div>
     </div>
   </div>`;
 }
@@ -1672,7 +1695,6 @@ function renderPilotage(){
   const reste=disponiblePourProjets();
   const allocProjets=totalAllocProjects();
   const totVerser = chargesCommunes() + totalBudget();
-  const luiV = totVerser*rep.lui/100, elleV = totVerser*rep.elle/100;
   const fixedTotal = S.settings.fixed.lui + S.settings.fixed.elle;
   const fixedShortfall = S.settings.mode==='fixe' ? Math.max(0, totVerser - fixedTotal) : 0;
   const activeProjects=S.projects.filter(p=>p.status==="actif");
@@ -1764,18 +1786,7 @@ function renderPilotage(){
 
   ${budgetRecapCard()}
 
-  <div class="panel-terra" style="margin-top:18px; padding:16px 20px">
-    <div style="text-align:center">
-      <div class="lbl" style="font-size:10px">Total à verser chaque mois</div>
-      <div class="big" id="totVerserBig" style="font-size:27px; margin:2px 0">${fmt(totVerser)}</div>
-      <div class="small" style="opacity:.85" id="totVerserSub">Charges fixes communes (${fmt0(chargesCommunes())}) + Catégories (${fmt0(totalBudget())})</div>
-    </div>
-    <div style="height:1px; background:rgba(255,255,255,.2); margin:12px 0"></div>
-    <div class="grid2" style="text-align:center">
-      <div><div class="small" style="opacity:.85">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px" id="luiVerseAmt">${fmt(luiV)}</div></div>
-      <div><div class="small" style="opacity:.85">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px" id="elleVerseAmt">${fmt(elleV)}</div></div>
-    </div>
-  </div>
+  ${recapVirementsCard(rep, totVerser, activeProjects)}
   <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.</p>
 
   <div class="card-soft" style="margin-top:14px">
@@ -2121,7 +2132,6 @@ function recalcPilotage(){
   const reste=disponiblePourProjets();
   const allocProjets=totalAllocProjects();
   const totVerser=chargesCommunes()+totalBudget();
-  const luiV=totVerser*rep.lui/100, elleV=totVerser*rep.elle/100;
   const fixedTotal=S.settings.fixed.lui+S.settings.fixed.elle;
   const fixedShortfall=S.settings.mode==='fixe' ? Math.max(0, totVerser-fixedTotal) : 0;
 
@@ -2140,10 +2150,14 @@ function recalcPilotage(){
     if(etaEl){ etaEl.textContent=eta.label; etaEl.style.color=eta.color; }
   });
 
-  const tb=$('#totVerserBig'); if(tb) tb.textContent=fmt(totVerser);
-  const ts=$('#totVerserSub'); if(ts) ts.textContent=`Charges fixes communes (${fmt0(chargesCommunes())}) + Catégories (${fmt0(totalBudget())})`;
-  const lv=$('#luiVerseAmt'); if(lv) lv.textContent=fmt(luiV);
-  const ev=$('#elleVerseAmt'); if(ev) ev.textContent=fmt(elleV);
+  const activeProjects=S.projects.filter(p=>p.status==='actif');
+  const luiCommun=totVerser*rep.lui/100, elleCommun=totVerser*rep.elle/100;
+  const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
+  const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
+  const rcl=$('#recapCommunLui'); if(rcl) rcl.textContent=fmt(luiCommun);
+  const rce=$('#recapCommunElle'); if(rce) rce.textContent=fmt(elleCommun);
+  const rpl=$('#recapProjetLui'); if(rpl) rpl.textContent=fmt(luiProjet);
+  const rpe=$('#recapProjetElle'); if(rpe) rpe.textContent=fmt(elleProjet);
   const fw=$('#fixedWarn'); if(fw){
     fw.style.display=fixedShortfall>0?'block':'none';
     fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
