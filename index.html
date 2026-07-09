@@ -1679,8 +1679,8 @@ function recapVirementsCard(rep, totVerser, activeProjects){
   const luiCommun=totVerser*rep.lui/100, elleCommun=totVerser*rep.elle/100;
   const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
   const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
-  const personBlock=(name, communId, projetId, communVal, projetVal)=>`
-    <div class="small muted" style="font-weight:800; margin-bottom:8px">👤 ${escapeHtml(name)}</div>
+  const personBlock=(name, communId, projetId, totalId, communVal, projetVal)=>`
+    <div class="small muted" style="font-weight:800; margin-bottom:8px">👤 ${escapeHtml(name)} <span id="${totalId}">(${fmt0(communVal+projetVal)})</span></div>
     <div class="row" style="justify-content:center; gap:12px; margin-bottom:6px">
       <div style="text-align:center"><div class="small muted">🏠 Compte commun</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="${communId}">${fmt(communVal)}</div></div>
       <div style="align-self:center; font-size:16px; color:var(--muted); font-weight:700">+</div>
@@ -1688,9 +1688,9 @@ function recapVirementsCard(rep, totVerser, activeProjects){
     </div>`;
   return `<div class="card" style="margin-top:18px">
     <b class="small" style="display:block; margin-bottom:12px">💸 Récap virements</b>
-    ${personBlock(nameOf('lui'), 'recapLuiCommun', 'recapLuiProjet', luiCommun, luiProjet)}
+    ${personBlock(nameOf('lui'), 'recapLuiCommun', 'recapLuiProjet', 'recapLuiTotal', luiCommun, luiProjet)}
     <div style="height:1px; background:var(--line); margin:10px 0 14px"></div>
-    ${personBlock(nameOf('elle'), 'recapElleCommun', 'recapElleProjet', elleCommun, elleProjet)}
+    ${personBlock(nameOf('elle'), 'recapElleCommun', 'recapElleProjet', 'recapElleTotal', elleCommun, elleProjet)}
   </div>`;
 }
 function renderPilotage(){
@@ -2162,6 +2162,8 @@ function recalcPilotage(){
   const rce=$('#recapElleCommun'); if(rce) rce.textContent=fmt(elleCommun);
   const rpl=$('#recapLuiProjet'); if(rpl) rpl.textContent=fmt(luiProjet);
   const rpe=$('#recapElleProjet'); if(rpe) rpe.textContent=fmt(elleProjet);
+  const rlt=$('#recapLuiTotal'); if(rlt) rlt.textContent=`(${fmt0(luiCommun+luiProjet)})`;
+  const ret=$('#recapElleTotal'); if(ret) ret.textContent=`(${fmt0(elleCommun+elleProjet)})`;
   const fw=$('#fixedWarn'); if(fw){
     fw.style.display=fixedShortfall>0?'block':'none';
     fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
