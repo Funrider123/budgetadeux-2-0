@@ -1498,7 +1498,7 @@ function renderReglages(){
 
   <div class="card" style="margin-top:14px; display:flex; align-items:center; gap:14px; cursor:pointer" id="goPilotage">
     <div class="emoji-badge" style="background:var(--terra); color:#fff; font-size:20px">🎛️</div>
-    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Pilotage du budget</div><div class="sub">Revenus, répartition, charges, catégories & virements</div></div>
+    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Définition budgétaire</div></div>
     <span class="chev" style="font-size:20px; color:var(--muted)">→</span>
   </div>
 
@@ -1776,7 +1776,7 @@ function openMenu(){
       <button class="menu-row" data-menu="moneydate"><div class="mi" style="background:var(--blush)">❤️</div><div class="grow"><div class="nm">Money Date</div><div class="sub">Votre bilan mensuel à deux</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="reglages"><div class="mi">⚙️</div><div class="grow"><div class="nm">Réglages</div><div class="sub">Préférences, synchro, données</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Pilotage du budget</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
-    </div>`);
+    </div>`, true);
   document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>{ closeModal(); if(b.dataset.menu==='moneydate'){mdStep=0;} go(b.dataset.menu); }));
 }
 function openProfile(){
