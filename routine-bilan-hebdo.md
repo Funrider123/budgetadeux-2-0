@@ -2,126 +2,142 @@
 
 ## Déclenchement
 - Cron : `0 18 * * 5` (vendredi 18h, heure Paris)
-- En cas d'échec : notification push + retry samedi 8h
+- En cas d'échec : retry samedi 8h (CronCreate one-shot)
 
 ---
 
 ## Règles fondamentales
 
-- **Fuseau horaire** : toujours Europe/Paris (UTC+2 en été, UTC+1 en hiver)
+- **Fuseau horaire** : toujours Europe/Paris
 - **Semaine = lundi 00h00 → vendredi 18h00** (Paris). Le week-end est du bonus pour la semaine suivante.
-- **Seules les tâches taguées "SXX :"** en début de titre comptent dans le bilan. Les tâches sans tag = en attente, ignorées.
-- **Pondération** : 1 tâche Bloc projet = 2 pts · 1 tâche Tâches annexes = 1 pt
-- **Score pondéré** = pts réalisés / pts possibles (arrondi à l'entier le plus proche)
-- **Tâches imprévues** = tâches taguées SXX faites pendant la semaine mais absentes de la liste planifiée du vendredi précédent
+- **Seules les tâches taguées "SXX :"** en début de titre comptent dans le bilan. Ignore tout le reste.
+- **Pondération** : Bloc projet = ×2 pts · Tâches annexes = ×1 pt
 - **Grade** : ≥90% → A · ≥80% → B · ≥70% → C · ≥60% → D · <60% → F
+- **Tâches imprévues** = taguées SXX, faites pendant la semaine, absentes de la liste planifiée initiale
 
 ---
 
-## Étape 1 — Identifier la semaine courante
+## Étape 1 — Calculer la semaine
 
-Calculer le numéro de semaine ISO (SXX) et les dates en Paris timezone :
-- Début de semaine = lundi de la semaine courante
-- Fin de semaine = vendredi de la semaine courante (aujourd'hui, 18h)
-- Semaine suivante = S(XX+1), lundi → vendredi
-
----
-
-## Étape 2 — Lire Superlist
-
-Charger les 3 listes : "Bloc projet", "Tâches annexes" (+ toute autre liste pertinente)
-
-**Tâches SXX faites** (onglet Done/Marked as done) :
-- Filtrer toutes les tâches dont le titre commence par "SXX :" ou "SXX ;"
-- Répartir par catégorie : Bloc projet / Tâches annexes
-
-**Tâches SXX non faites** (onglet Tasks for me, non cochées) :
-- Même filtre
-- Répartir par catégorie
-
-**Tâches S(XX+1)** (onglet Tasks for me, non cochées) :
-- Filtrer "S(XX+1) :"
-- Répartir par catégorie : Bloc projet / Tâches annexes
-- Identifier lesquelles sont déjà faites (Done) → badge "✓ fait"
-- Identifier les reports depuis SXX (tâches non faites de SXX replanifiées en S(XX+1)) → badge "↻ report"
-- Toutes les autres → badge "nouveau"
-
-**Tâches imprévues** :
-- Tâches taguées SXX présentes dans Done mais absentes de la liste planifiée initiale
-
----
-
-## Étape 3 — Calculs
-
-```
-pts_projet   = nb_projet_faits × 2
-max_projet   = nb_projet_total × 2
-pts_annexes  = nb_annexes_faits × 1
-max_annexes  = nb_annexes_total × 1
-score_pondere = round((pts_projet + pts_annexes) / (max_projet + max_annexes) × 100)
-score_brut    = round((nb_projet_faits + nb_annexes_faits) / (nb_projet_total + nb_annexes_total) × 100)
+```bash
+python3 -c "
+from datetime import datetime, timedelta
+import pytz
+tz = pytz.timezone('Europe/Paris')
+now = datetime.now(tz)
+cal = now.isocalendar()
+week, year = cal.week, cal.year
+monday = now - timedelta(days=now.weekday())
+friday = monday + timedelta(days=4)
+print(f'WEEK={week}')
+print(f'YEAR={year}')
+print(f'NEXT_WEEK={week+1 if week < 52 else 1}')
+print(f'DATE_RANGE={monday.strftime(\"%d %B\")} - {friday.strftime(\"%d %B %Y\")}')
+"
 ```
 
-Grade : ≥90→A · ≥80→B · ≥70→C · ≥60→D · <60→F
+---
 
-Donut SVG (r=38, circumference=238.76) :
-- dasharray_fill = round(238.76 × score_pondere / 100, 2)
-- dasharray_gap  = round(238.76 - dasharray_fill, 2)
+## Étape 2 — Lire Todoist
+
+Rechercher dans Todoist toutes les tâches dont le titre commence par `S{week} :` :
+
+1. **Tâches complétées** cette semaine (lundi 00h → vendredi 18h Paris) → état = **done**
+2. **Tâches actives** (non complétées) avec préfixe `S{week} :` → état = **fail**
+
+Classer chaque tâche :
+- Tâches dans le projet principal (Budget à Deux, dev, sprint) → **type = "projet"** (×2 pts)
+- Toutes les autres → **type = "annexe"** (×1 pt)
 
 ---
 
-## Étape 4 — Générer l'analyse
+## Étape 3 — Calculer le score
 
-**Partie Performance** (2-3 phrases) :
-- Commenter le score pondéré vs brut
-- Mentionner ce qui tire vers le haut / vers le bas
-- Si le bloc projet est en retrait ≥2 semaines consécutives : suggérer de bloquer du temps projet en début de semaine
-
-**Partie Qualité des tâches** (uniquement si des tâches non faites ont une formulation floue) :
-- Signaler les verbes trop vagues : "finaliser", "stabiliser", "faire", "gérer", "s'occuper de"
-- Proposer une reformulation actionnable et vérifiable
-- Ne pas commenter les tâches bien formulées
-
----
-
-## Étape 5 — Générer le bilan HTML (format Carnet)
-
-Publier un Artifact HTML avec le template ci-dessous, en remplaçant toutes les données dynamiques.
-
-Le template de référence est l'Artifact publié à l'URL :
-https://claude.ai/code/artifact/c7073614-cc00-4911-adb3-a30dce61238a
-
-Données à injecter :
-- Numéro de semaine (SXX)
-- Dates lundi–vendredi (Paris)
-- Score pondéré + grade + donut SVG (dasharray calculé)
-- Score brut (N faites / M totales)
-- Formule pondération (pts projet / pts annexes)
-- Liste tâches Bloc projet (done/fail/report badges)
-- Liste tâches Tâches annexes (done)
-- Liste tâches Imprévues (violet, 0 si vide)
-- Texte analyse (performance + qualité)
-- Graphe double courbe (mettre à jour les points existants + ajouter le nouveau)
-- Section Objectifs S(XX+1) : Bloc projet + Tâches annexes séparés, badges report/nouveau/fait
-
-Footer : "généré automatiquement le [jour] [date] à 18h" ou "[jour] [date] (routine du [vendredi précédent] en échec)" si retry
+```
+pts_projet   = nb_done_projet × 2
+max_projet   = nb_total_projet × 2
+pts_annexes  = nb_done_annexes × 1
+max_annexes  = nb_total_annexes × 1
+score        = round((pts_projet + pts_annexes) / (max_projet + max_annexes) × 100)
+grade        = A si ≥90% · B si ≥80% · C si ≥70% · D si ≥60% · F sinon
+```
 
 ---
 
-## Étape 6 — Créer le Google Drive
+## Étape 4 — Construire le JSON bilan
 
-Créer un nouveau fichier Google Doc nommé "Semaine XX - Bilan" avec le contenu structuré en texte brut (même données que le HTML, format lisible).
+```json
+{
+  "week": {week},
+  "year": {year},
+  "date_range": "{date_range}",
+  "next_week": {next_week},
+  "tasks": [
+    {"label": "S{week} : ...", "type": "projet", "state": "done"},
+    {"label": "S{week} : ...", "type": "annexe", "state": "fail"},
+    ...
+  ],
+  "history": [
+    {"week": "S{week-3}", "projet_pct": {val}, "annexe_pct": {val}},
+    {"week": "S{week-2}", "projet_pct": {val}, "annexe_pct": {val}},
+    {"week": "S{week-1}", "projet_pct": {val}, "annexe_pct": {val}},
+    {"week": "S{week}",   "projet_pct": {val}, "annexe_pct": {val}}
+  ]
+}
+```
+
+Pour "history" : lire le fichier `/home/user/budgetadeux-2-0/data/bilan-history.json` s'il existe. Sinon utiliser uniquement la semaine courante.
 
 ---
 
-## Étape 7 — Notifications push
+## Étape 5 — Générer le PDF
+
+```bash
+B64=$(python3 /home/user/budgetadeux-2-0/scripts/generate_bilan_pdf.py '{json_data}')
+echo "Base64 length: ${#B64}"
+```
+
+Le script génère un PDF ~3-5KB (Helvetica built-in, pas d'embed de police).
+La sortie est la chaîne base64 pure (~4500-6000 caractères).
+
+---
+
+## Étape 6 — Uploader dans Google Drive
+
+Appeler l'outil MCP `mcp__Google_Drive__create_file` avec :
+- `title` : `"S{week}-{year} / {score}% — Bilan hebdomadaire"`
+- `contentMimeType` : `"application/pdf"`
+- `disableConversionToGoogleType` : `true`
+- `base64Content` : la chaîne base64 produite à l'étape 5
+
+---
+
+## Étape 7 — Mettre à jour l'historique
+
+Écrire/mettre à jour `/home/user/budgetadeux-2-0/data/bilan-history.json` :
+- Ajouter `{"week": "S{week}", "projet_pct": {proj_pct}, "annexe_pct": {ann_pct}}`
+- Conserver les 8 dernières entrées maximum
+- Commit + push sur `claude/todoist-google-drive-setup-scjm3r`
+
+---
+
+## Étape 8 — Notification push (si disponible)
 
 **Succès** :
-> Bilan S{XX} généré ✅ — Score {score}% ({grade}) · {n}/{m} tâches · [lien Artifact]
+> Bilan S{week} generé ✅ — Score {score}% ({grade}) · lien Drive : {viewUrl}
 
-**Échec** (Superlist non disponible ou erreur) :
-> Bilan S{XX} ❌ — Raison : {erreur}. Retry programmé samedi à 8h.
-> → Créer un CronCreate one-shot pour samedi 8h avec le même prompt.
+**Échec** :
+> Bilan S{week} ❌ — Erreur : {raison}. Retry programmé samedi 8h.
+> Créer un CronCreate one-shot : samedi 8h, même prompt.
 
-**Retry samedi** (succès ou échec) :
-> Bilan S{XX} — retry samedi : {succès ✅ score% / échec ❌ raison}
+---
+
+## Paramètres techniques
+
+| Élément | Valeur |
+|---|---|
+| Script PDF | `/home/user/budgetadeux-2-0/scripts/generate_bilan_pdf.py` |
+| Historique | `/home/user/budgetadeux-2-0/data/bilan-history.json` |
+| Artifact web | https://claude.ai/code/artifact/c7073614-cc00-4911-adb3-a30dce61238a |
+| Branch Git | `claude/todoist-google-drive-setup-scjm3r` |
+| PDF taille typ. | ~3-5 KB · ~4500-6000 chars base64 |
