@@ -1643,9 +1643,12 @@ function disponibleProjetsCard(reste){
 // catégories − épargne projets) : à 0 budget équilibré, négatif déficit (clignote),
 // positif excédent.
 function budgetSoldeInfo(solde){
-  if(solde===0) return {label:'⚖️ Budget équilibré', color:'#fff', bg:'transparent', blink:false};
-  if(solde<0) return {label:'⚠️ Budget en déficit', color:'var(--danger)', bg:'#fff', blink:true};
-  return {label:'✅ Budget en excédent', color:'#fff', bg:'transparent', blink:false};
+  if(solde===0) return {label:'⚖️ Budget équilibré', color:'#fff', bg:'var(--ok)', blink:false,
+    tip:''};
+  if(solde<0) return {label:'⚠️ Budget en déficit', color:'var(--danger)', bg:'#fff', blink:true,
+    tip:''};
+  return {label:'✅ Budget en excédent', color:'#fff', bg:'transparent', blink:false,
+    tip:'💡 Vous pouvez augmenter une catégorie, ajouter à un projet, ou verser moins pour revenir à l\'équilibre.'};
 }
 // Récapitulatif des grosses rubriques du mois, pour rendre immédiatement visible
 // un déséquilibre (notamment quand l'épargne allouée aux projets dépasse le disponible,
@@ -1665,28 +1668,29 @@ function budgetRecapCard(){
       <b class="small" id="recapLabel" style="color:${info.color}">${info.label}</b>
       <b id="recapSolde" style="font-family:var(--serif); font-size:22px; color:${info.color}">${solde>0?'+':''}${fmt0(solde)}</b>
     </div>
+    <p class="small" style="opacity:.85; text-align:center; margin-top:10px; display:${info.tip?'block':'none'}" id="recapTip">${info.tip}</p>
   </div>`;
 }
-// Récap des virements : ce que chacun verse sur le compte commun (charges + catégories,
-// réparti selon le mode choisi) et sur le "compte projets" (réparti selon la répartition
-// propre à chaque projet, qui peut différer de celle du compte commun).
+// Récap des virements, organisé par personne (plutôt que par compte) : ce que chacun verse
+// au total, décomposé en compte commun (charges + catégories, réparti selon le mode choisi)
+// + compte projets (réparti selon la répartition propre à CHAQUE projet, qui peut différer
+// de celle du compte commun).
 function recapVirementsCard(rep, totVerser, activeProjects){
   const luiCommun=totVerser*rep.lui/100, elleCommun=totVerser*rep.elle/100;
   const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
   const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
+  const personBlock=(name, communId, projetId, communVal, projetVal)=>`
+    <div class="small muted" style="font-weight:800; margin-bottom:8px">👤 ${escapeHtml(name)}</div>
+    <div class="row" style="justify-content:center; gap:12px; margin-bottom:6px">
+      <div style="text-align:center"><div class="small muted">🏠 Compte commun</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="${communId}">${fmt(communVal)}</div></div>
+      <div style="align-self:center; font-size:16px; color:var(--muted); font-weight:700">+</div>
+      <div style="text-align:center"><div class="small muted">🎯 Compte projets</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="${projetId}">${fmt(projetVal)}</div></div>
+    </div>`;
   return `<div class="card" style="margin-top:18px">
     <b class="small" style="display:block; margin-bottom:12px">💸 Récap virements</b>
-    <div class="small muted" style="font-weight:800; margin-bottom:8px">🏠 Compte commun (charges + catégories)</div>
-    <div class="grid2" style="text-align:center; margin-bottom:16px">
-      <div><div class="small muted">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="recapCommunLui">${fmt(luiCommun)}</div></div>
-      <div><div class="small muted">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="recapCommunElle">${fmt(elleCommun)}</div></div>
-    </div>
-    <div style="height:1px; background:var(--line); margin:0 0 14px"></div>
-    <div class="small muted" style="font-weight:800; margin-bottom:8px">🎯 Compte projets</div>
-    <div class="grid2" style="text-align:center">
-      <div><div class="small muted">${nameOf('lui')} verse</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="recapProjetLui">${fmt(luiProjet)}</div></div>
-      <div><div class="small muted">${nameOf('elle')} verse</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="recapProjetElle">${fmt(elleProjet)}</div></div>
-    </div>
+    ${personBlock(nameOf('lui'), 'recapLuiCommun', 'recapLuiProjet', luiCommun, luiProjet)}
+    <div style="height:1px; background:var(--line); margin:10px 0 14px"></div>
+    ${personBlock(nameOf('elle'), 'recapElleCommun', 'recapElleProjet', elleCommun, elleProjet)}
   </div>`;
 }
 function renderPilotage(){
@@ -2154,10 +2158,10 @@ function recalcPilotage(){
   const luiCommun=totVerser*rep.lui/100, elleCommun=totVerser*rep.elle/100;
   const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
   const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
-  const rcl=$('#recapCommunLui'); if(rcl) rcl.textContent=fmt(luiCommun);
-  const rce=$('#recapCommunElle'); if(rce) rce.textContent=fmt(elleCommun);
-  const rpl=$('#recapProjetLui'); if(rpl) rpl.textContent=fmt(luiProjet);
-  const rpe=$('#recapProjetElle'); if(rpe) rpe.textContent=fmt(elleProjet);
+  const rcl=$('#recapLuiCommun'); if(rcl) rcl.textContent=fmt(luiCommun);
+  const rce=$('#recapElleCommun'); if(rce) rce.textContent=fmt(elleCommun);
+  const rpl=$('#recapLuiProjet'); if(rpl) rpl.textContent=fmt(luiProjet);
+  const rpe=$('#recapElleProjet'); if(rpe) rpe.textContent=fmt(elleProjet);
   const fw=$('#fixedWarn'); if(fw){
     fw.style.display=fixedShortfall>0?'block':'none';
     fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
@@ -2179,6 +2183,7 @@ function recalcPilotage(){
   }
   const rLabel=$('#recapLabel'); if(rLabel){ rLabel.textContent=info.label; rLabel.style.color=info.color; }
   const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${solde>0?'+':''}${fmt0(solde)}`; rSolde.style.color=info.color; }
+  const rTip=$('#recapTip'); if(rTip){ rTip.style.display=info.tip?'block':'none'; rTip.textContent=info.tip; }
 
   // Cartes personne (salaire + charges perso + contribution)
   ['lui','elle'].forEach(who=>{
