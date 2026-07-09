@@ -38,7 +38,9 @@ print(f'DATE_RANGE={monday.strftime(\"%d %B\")} - {friday.strftime(\"%d %B %Y\")
 
 ---
 
-## Étape 2 — Lire Todoist
+## Étape 2 — Lire Todoist (semaine courante + semaine suivante)
+
+### 2A — Tâches de la semaine `S{week}`
 
 Rechercher dans Todoist toutes les tâches dont le titre commence par `S{week} :` :
 
@@ -48,6 +50,17 @@ Rechercher dans Todoist toutes les tâches dont le titre commence par `S{week} :
 Classer chaque tâche :
 - Tâches dans le projet principal (Budget à Deux, dev, sprint) → **type = "projet"** (×2 pts)
 - Toutes les autres → **type = "annexe"** (×1 pt)
+
+### 2B — Objectifs `S{next_week}` (pour la section "Objectifs semaine suivante")
+
+Rechercher dans Todoist toutes les tâches actives dont le titre commence par `S{next_week} :` :
+
+- Chaque tâche trouvée → état = **new**
+- Les tâches **fail** de S{week} sont automatiquement ajoutées avec état = **report** (le script le fait si `next_tasks` est vide, mais il vaut mieux les inclure explicitement)
+- Classer par type (projet / annexe) de la même façon qu'en 2A
+
+Calculer aussi :
+- `next_week_dates` : lundi de S{next_week} → vendredi de S{next_week} (format "DD mois - DD mois YYYY")
 
 ---
 
@@ -72,6 +85,7 @@ grade        = A si ≥90% · B si ≥80% · C si ≥70% · D si ≥60% · F sin
   "year": {year},
   "date_range": "{date_range}",
   "next_week": {next_week},
+  "next_week_dates": "{lundi S{next_week}} - {vendredi S{next_week}}",
   "tasks": [
     {"label": "S{week} : ...", "type": "projet", "state": "done"},
     {"label": "S{week} : ...", "type": "annexe", "state": "fail"},
@@ -82,11 +96,22 @@ grade        = A si ≥90% · B si ≥80% · C si ≥70% · D si ≥60% · F sin
     {"week": "S{week-2}", "projet_pct": {val}, "annexe_pct": {val}},
     {"week": "S{week-1}", "projet_pct": {val}, "annexe_pct": {val}},
     {"week": "S{week}",   "projet_pct": {val}, "annexe_pct": {val}}
+  ],
+  "analyse": "{texte_analyse_libre}",
+  "next_tasks": [
+    {"label": "S{week} : ...",      "type": "projet", "state": "report"},
+    {"label": "S{next_week} : ...", "type": "projet", "state": "new"},
+    {"label": "S{next_week} : ...", "type": "annexe", "state": "new"},
+    ...
   ]
 }
 ```
 
 Pour "history" : lire le fichier `/home/user/budgetadeux-2-0/data/bilan-history.json` s'il existe. Sinon utiliser uniquement la semaine courante.
+
+Pour "analyse" : rédiger 1-3 phrases synthétisant la semaine — performance du bloc projet vs annexes, tâches reportées, recommandation pour S{next_week}. Ton factuel et direct.
+
+Pour "next_tasks" : combiner les tâches fail de S{week} (state="report") + les tâches actives S{next_week} trouvées en étape 2B (state="new").
 
 ---
 
