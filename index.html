@@ -1786,11 +1786,9 @@ function openProfile(){
     </div>
     <p class="small muted" style="margin:12px 0 16px">Votre profil et votre session.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
-      <button class="menu-row" id="pmCouple"><div class="mi" style="background:var(--blush)">💑</div><div class="grow"><div class="nm">Notre couple</div><div class="sub">Partenaire, code, invitation</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`, true);
-  $('#pmCouple').onclick=()=>{ closeModal(); go('reglages'); };
   $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
   $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
 }
