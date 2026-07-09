@@ -166,6 +166,8 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
 .sync .dot{width:7px;height:7px;border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+@keyframes blinkDeficit{0%,100%{opacity:1}50%{opacity:.4}}
+.blink-danger{animation:blinkDeficit 1.1s ease-in-out infinite;}
 
 /* ---------- Generic ---------- */
 .pill{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--terra); background:var(--blush); padding:6px 13px; border-radius:20px;}
@@ -1498,7 +1500,7 @@ function renderReglages(){
 
   <div class="card" style="margin-top:14px; display:flex; align-items:center; gap:14px; cursor:pointer" id="goPilotage">
     <div class="emoji-badge" style="background:var(--terra); color:#fff; font-size:20px">🎛️</div>
-    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Définition budgétaire</div></div>
+    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Simulation et validation budgétaire</div></div>
     <span class="chev" style="font-size:20px; color:var(--muted)">→</span>
   </div>
 
@@ -1637,6 +1639,33 @@ function disponibleProjetsCard(reste){
     <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0; color:${reste<0?'#FFD6C9':'#fff'}" id="pilReste">${fmt0(reste)}</span>
   </div>`;
 }
+// Détermine le libellé/couleur/clignotement du solde final (montant total − charges −
+// catégories − épargne projets) : à 0 budget équilibré, négatif déficit (clignote),
+// positif excédent.
+function budgetSoldeInfo(solde){
+  if(solde===0) return {label:'⚖️ Budget équilibré', color:'var(--ok)', blink:false};
+  if(solde<0) return {label:'⚠️ Budget en déficit', color:'var(--danger)', blink:true};
+  return {label:'✅ Budget en excédent', color:'var(--ok)', blink:false};
+}
+// Récapitulatif des grosses rubriques du mois, pour rendre immédiatement visible
+// un déséquilibre (notamment quand l'épargne allouée aux projets dépasse le disponible,
+// ce que l'ancienne barre "Alloué aux projets" ne signalait pas assez clairement).
+function budgetRecapCard(){
+  const totalMensuel=totalRevenuFoyer(), chg=chargesCommunes(), cat=totalBudget(), proj=totalAllocProjects();
+  const solde=totalMensuel-chg-cat-proj;
+  const info=budgetSoldeInfo(solde);
+  return `<div class="card" style="margin-top:14px" id="budgetRecap">
+    <b class="small" style="display:block; margin-bottom:8px">📊 Vue d'ensemble du mois</b>
+    <div class="between small" style="padding:5px 0"><span class="muted">Montant total mensuel</span><span style="font-weight:700" id="recapMontant">${fmt0(totalMensuel)}</span></div>
+    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Charges fixes communes</span><span style="font-weight:700" id="recapChg">${fmt0(chg)}</span></div>
+    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Catégories</span><span style="font-weight:700" id="recapCat">${fmt0(cat)}</span></div>
+    <div class="between small" style="padding:5px 0; border-top:1px solid var(--line)"><span class="muted">− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt0(proj)}</span></div>
+    <div class="between ${info.blink?'blink-danger':''}" style="padding:10px 0 2px; border-top:2px solid var(--line); margin-top:4px" id="recapRow">
+      <b class="small" id="recapLabel" style="color:${info.color}">${info.label}</b>
+      <b id="recapSolde" style="color:${info.color}">${solde>0?'+':''}${fmt0(solde)}</b>
+    </div>
+  </div>`;
+}
 function renderPilotage(){
   initPilotSim();
   const rep=repartition();
@@ -1652,7 +1681,7 @@ function renderPilotage(){
     <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
     <span class="pill">Pilotage</span>
   </div>
-  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Définition budgétaire</h1>
+  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
@@ -1734,6 +1763,8 @@ function renderPilotage(){
     `:`<p class="small muted" style="margin-top:10px">Aucun projet actif — <span class="link" id="addProjPilot">ajoutez-en un</span> pour simuler son épargne ici.</p>`}
   </div>
 
+  ${budgetRecapCard()}
+
   <div class="panel-terra" style="margin-top:18px; padding:16px 20px">
     <div style="text-align:center">
       <div class="lbl" style="font-size:10px">Total à verser chaque mois</div>
@@ -1775,7 +1806,7 @@ function openMenu(){
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" data-menu="moneydate"><div class="mi" style="background:var(--blush)">❤️</div><div class="grow"><div class="nm">Money Date</div><div class="sub">Votre bilan mensuel à deux</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="reglages"><div class="mi">⚙️</div><div class="grow"><div class="nm">Réglages</div><div class="sub">Préférences, synchro, données</div></div><span class="chev">→</span></button>
-      <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Définition budgétaire</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
+      <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Simulation et validation budgétaire</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
     </div>`, true);
   document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>{ closeModal(); if(b.dataset.menu==='moneydate'){mdStep=0;} go(b.dataset.menu); }));
 }
@@ -2110,6 +2141,18 @@ function recalcPilotage(){
     fw.style.display=fixedShortfall>0?'block':'none';
     fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
   }
+
+  // Récapitulatif "Vue d'ensemble du mois"
+  const totalMensuel=totalRevenuFoyer(), chgRecap=chargesCommunes(), catRecap=totalBudget();
+  const solde=totalMensuel-chgRecap-catRecap-allocProjets;
+  const info=budgetSoldeInfo(solde);
+  const rm=$('#recapMontant'); if(rm) rm.textContent=fmt0(totalMensuel);
+  const rc=$('#recapChg'); if(rc) rc.textContent=fmt0(chgRecap);
+  const rcat=$('#recapCat'); if(rcat) rcat.textContent=fmt0(catRecap);
+  const rp=$('#recapProj'); if(rp) rp.textContent=fmt0(allocProjets);
+  const rRow=$('#recapRow'); if(rRow) rRow.classList.toggle('blink-danger', info.blink);
+  const rLabel=$('#recapLabel'); if(rLabel){ rLabel.textContent=info.label; rLabel.style.color=info.color; }
+  const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${solde>0?'+':''}${fmt0(solde)}`; rSolde.style.color=info.color; }
 
   // Cartes personne (salaire + charges perso + contribution)
   ['lui','elle'].forEach(who=>{
