@@ -1738,17 +1738,16 @@ function renderPilotage(){
     ${reste<0?`<p class="small" style="color:var(--danger)" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
     ${activeProjects.length?`
     <div style="margin-top:12px">
-      <div class="between small muted"><span>Alloué aux projets</span><span id="pilAlloc">${fmt0(allocProjets)} / ${fmt0(reste)}</span></div>
+      <div class="small muted">Alloué aux projets</div>
       <div style="height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:4px"><div id="pilBar" style="height:100%; border-radius:99px; background:${allocProjets<=reste?'var(--ok)':'var(--danger)'}; width:${reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0)}%; transition:width .1s"></div></div>
     </div>
     <div style="margin-top:10px">
     ${activeProjects.map(p=>{
       const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
       return `<div class="pilot-row" data-project="${p.id}">
-        <button class="pdel" data-delproject="${p.id}">✕</button>
         <div class="pmain">
           <div class="pnm-row">
-            <span class="pnm">${escapeHtml(p.name)}</span>
+            <span class="pnm">${escapeHtml(p.name)} <button class="pdel" data-editproject="${p.id}" style="padding:0 2px">✎</button></span>
             <span class="small" style="font-weight:800; color:${eta.color}; flex-shrink:0; white-space:nowrap" data-eta="${p.id}">${eta.label}</span>
           </div>
           <div class="row" style="gap:8px; align-items:center">
@@ -1756,7 +1755,6 @@ function renderPilotage(){
             <input type="number" class="pamt-input" value="${Math.round(mensuel)}" data-project="${p.id}" oninput="onProjectInput(this)">
           </div>
         </div>
-        <button class="pdel" data-editproject="${p.id}">✎</button>
       </div>`;
     }).join('')}
     </div>
@@ -2132,7 +2130,6 @@ function recalcPilotage(){
 
   const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'#FFD6C9':'#fff'; }
   const pd=$('#pilDeficit'); if(pd) pd.style.display=reste<0?'block':'none';
-  const pa=$('#pilAlloc'); if(pa) pa.textContent=`${fmt0(allocProjets)} / ${fmt0(reste)}`;
   const pb=$('#pilBar'); if(pb){
     pb.style.width=(reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0))+'%';
     pb.style.background=allocProjets<=reste?'var(--ok)':'var(--danger)';
@@ -2250,11 +2247,7 @@ function bindPilotage(){
   document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
     S.charges=S.charges.filter(x=>x.id!==b.dataset.delcharge); save(); go('pilotage'); toast("Charge supprimée 🗑");
   }));
-  document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',()=>openEditProject(b.dataset.editproject,'pilotage')));
-  document.querySelectorAll('[data-delproject]').forEach(b=>b.addEventListener('click',()=>{
-    const id=b.dataset.delproject, p=S.projects.find(x=>x.id===id); if(!p) return;
-    openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go('pilotage'); toast("Projet supprimé 🗑"); });
-  }));
+  document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
 
   const en=$('#effNow'), enx=$('#effNext');
   if(en) en.onclick=()=>{en.classList.add('on'); enx.classList.remove('on');};
