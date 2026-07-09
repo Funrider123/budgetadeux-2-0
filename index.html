@@ -1745,7 +1745,7 @@ function renderPilotage(){
     ${activeProjects.map(p=>{
       const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
       return `<div class="pilot-row" data-project="${p.id}">
-        <div class="emoji-badge" style="flex-shrink:0">${p.emoji}</div>
+        <button class="pdel" data-delproject="${p.id}">✕</button>
         <div class="pmain">
           <div class="pnm-row">
             <span class="pnm">${escapeHtml(p.name)}</span>
@@ -1753,9 +1753,10 @@ function renderPilotage(){
           </div>
           <div class="row" style="gap:8px; align-items:center">
             <input type="range" class="mini-slider" min="0" max="${sliderMax(mensuel,Math.max(reste,100))}" step="1" value="${mensuel}" data-project="${p.id}" oninput="onProjectInput(this)">
-            <b class="small" style="width:56px; text-align:right; flex-shrink:0" data-mensuel="${p.id}">${fmt0(mensuel)}</b>
+            <input type="number" class="pamt-input" value="${Math.round(mensuel)}" data-project="${p.id}" oninput="onProjectInput(this)">
           </div>
         </div>
+        <button class="pdel" data-editproject="${p.id}">✎</button>
       </div>`;
     }).join('')}
     </div>
@@ -2010,7 +2011,7 @@ function openExpenseSheet(id){
 }
 
 function bindProjets(){
-  const np=$('#newProj'); if(np) np.onclick=openNewProject;
+  const np=$('#newProj'); if(np) np.onclick=()=>openEditProject(null,'projets');
   const ch=$('#cagHist'); if(ch) ch.onclick=openCagnotteHistory;
   document.querySelectorAll('[data-paction]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.id);
     if(b.dataset.paction==='pause'){ p.status=p.status==='pause'?'actif':'pause'; save(); go('projets'); toast(p.status==='pause'?"Projet mis en pause ⏸":"Projet relancé ▶"); }
@@ -2022,22 +2023,33 @@ function openCagnotteHistory(){
   openModal(`<h3>👛 Cagnotte commune</h3><p class="small muted" style="margin-bottom:8px">Solde actuel : <b style="color:var(--terra)">${fmt(S.cagnotte.balance)}</b></p>
     <div class="card" style="box-shadow:none; border:1px solid var(--line)">${S.cagnotte.history.map(h=>`<div class="between" style="padding:11px 0; border-top:1px solid var(--line)"><div><div class="small" style="font-weight:700">${escapeHtml(h.label)}</div><div class="small muted">${new Date(h.date).toLocaleDateString('fr-FR')}</div></div><b style="color:${h.amount>=0?'var(--ok)':'var(--danger)'}; font-family:var(--serif)">${h.amount>=0?'+':''}${fmt(h.amount)}</b></div>`).join('')}</div>`);
 }
-function openNewProject(returnTo){
+function openEditProject(id, returnTo){
   returnTo = returnTo || 'projets';
-  openModal(`<h3>Un nouveau rêve 🌟</h3><p class="small muted" style="margin-bottom:14px">Donnez-lui un nom, un montant, une échéance.</p>
-    <div class="field"><label>Nom du projet</label><input class="input" id="npName" placeholder="Ex : Cabane en bord de mer"></div>
-    <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="number" id="npTarget" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="0"></div></div>
-    <div class="grid2"><div class="field"><label>Nombre de mois pour atteindre l'objectif</label><input class="input" type="number" id="npMonths" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="5" min="1" max="28"></div></div>
-    <div class="field"><label>Classification</label><select class="select" id="npCls"><option value="besoin">Besoin</option><option value="envie" selected>Envie</option><option value="invest">Investissement</option><option value="protection">Protection</option></select></div>
-    <div class="field"><label>Répartition entre vous deux</label><input type="range" min="0" max="100" value="50" id="npSplit" style="width:100%; accent-color:var(--terra)"><div class="between small muted"><span id="npSL">${nameOf('lui')} 50%</span><span id="npSE">${nameOf('elle')} 50%</span></div></div>
+  const p = id ? S.projects.find(x=>x.id===id) : null;
+  openModal(`<h3>${id?'Modifier le projet':'Un nouveau rêve 🌟'}</h3><p class="small muted" style="margin-bottom:14px">${id?'Ajustez les détails de ce projet.':'Donnez-lui un nom, un montant, une échéance.'}</p>
+    <div class="field"><label>Nom du projet</label><input class="input" id="npName" value="${p?escapeHtml(p.name):''}" placeholder="Ex : Cabane en bord de mer"></div>
+    <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="number" id="npTarget" value="${p?p.target:''}" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="${p?p.saved:0}"></div></div>
+    <div class="grid2"><div class="field"><label>Nombre de mois pour atteindre l'objectif</label><input class="input" type="number" id="npMonths" value="${p?p.months:''}" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="${p?p.day:5}" min="1" max="28"></div></div>
+    <div class="field"><label>Classification</label><select class="select" id="npCls">
+      <option value="besoin" ${p&&p.cls==='besoin'?'selected':''}>Besoin</option>
+      <option value="envie" ${!p||p.cls==='envie'?'selected':''}>Envie</option>
+      <option value="invest" ${p&&p.cls==='invest'?'selected':''}>Investissement</option>
+      <option value="protection" ${p&&p.cls==='protection'?'selected':''}>Protection</option>
+    </select></div>
+    <div class="field"><label>Répartition entre vous deux</label><input type="range" min="0" max="100" value="${p?p.split.lui:50}" id="npSplit" style="width:100%; accent-color:var(--terra)"><div class="between small muted"><span id="npSL">${nameOf('lui')} ${p?p.split.lui:50}%</span><span id="npSE">${nameOf('elle')} ${p?p.split.elle:50}%</span></div></div>
     <div class="card-soft" style="margin-bottom:12px; text-align:center"><span class="small muted">Épargne mensuelle nécessaire</span><div id="npCalc" style="font-family:var(--serif); font-size:22px; color:var(--terra)">— €</div></div>
-    <button class="btn btn-primary" id="npSave">Créer ce projet</button>`, true);
+    <div class="row" style="gap:10px"><button class="btn btn-primary" id="npSave" style="flex:1">${id?'Enregistrer':'Créer ce projet'}</button>
+    ${id?`<button class="btn btn-ghost btn-sm" id="npDel" style="color:var(--danger)">🗑</button>`:''}</div>`, true);
   const calc=()=>{ const t=+$('#npTarget').value||0, s=+$('#npSaved').value||0, m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
-  ['npTarget','npSaved','npMonths'].forEach(id=>$('#'+id).oninput=calc);
+  ['npTarget','npSaved','npMonths'].forEach(fid=>$('#'+fid).oninput=calc);
+  calc();
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
-    const sp=+$('#npSplit').value; S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif'});
-    save(); closeModal(); go(returnTo); toast("Nouveau rêve créé 🌟","✓"); };
+    const sp=+$('#npSplit').value;
+    if(id){ p.name=nm; p.target=t; p.saved=+$('#npSaved').value||0; p.months=+$('#npMonths').value||12; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; }
+    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif'}); }
+    save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
+  const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
 function openRealloc(p){
   const others=S.projects.filter(x=>x.id!==p.id);
@@ -2129,8 +2141,6 @@ function recalcPilotage(){
     const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
     const etaEl=document.querySelector(`[data-eta="${p.id}"]`);
     if(etaEl){ etaEl.textContent=eta.label; etaEl.style.color=eta.color; }
-    const mEl=document.querySelector(`[data-mensuel="${p.id}"]`);
-    if(mEl) mEl.textContent=fmt0(mensuel);
   });
 
   const tb=$('#totVerserBig'); if(tb) tb.textContent=fmt(totVerser);
@@ -2187,7 +2197,12 @@ function onCatInput(el){
 }
 // Simulation projet : session uniquement, appliquée aux données réelles seulement au clic sur Valider.
 function onProjectInput(el){
-  pilotSim[el.dataset.project]=Math.max(0, Math.round(+el.value)||0);
+  const id=el.dataset.project, val=Math.max(0, Math.round(+el.value)||0);
+  const row=el.closest('.pilot-row');
+  const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
+  if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,Math.max(disponiblePourProjets(),100)); slEl.value=val; } }
+  else if(numEl) numEl.value=val;
+  pilotSim[id]=val;
   recalcPilotage();
 }
 function bindPilotage(){
@@ -2231,9 +2246,14 @@ function bindPilotage(){
   document.querySelectorAll('[data-addpersocharge]').forEach(b=>b.addEventListener('click',()=>openAddCharge(b.dataset.addpersocharge)));
   const acat=$('#addCat'); if(acat) acat.onclick=()=>openEditCat(null);
   document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat)));
-  const apr=$('#addProjPilot'); if(apr) apr.onclick=()=>openNewProject('pilotage');
+  const apr=$('#addProjPilot'); if(apr) apr.onclick=()=>openEditProject(null,'pilotage');
   document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
     S.charges=S.charges.filter(x=>x.id!==b.dataset.delcharge); save(); go('pilotage'); toast("Charge supprimée 🗑");
+  }));
+  document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',()=>openEditProject(b.dataset.editproject,'pilotage')));
+  document.querySelectorAll('[data-delproject]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.delproject, p=S.projects.find(x=>x.id===id); if(!p) return;
+    openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go('pilotage'); toast("Projet supprimé 🗑"); });
   }));
 
   const en=$('#effNow'), enx=$('#effNext');
