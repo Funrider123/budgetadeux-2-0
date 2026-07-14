@@ -115,25 +115,81 @@ Pour "next_tasks" : combiner les tâches fail de S{week} (state="report") + les 
 
 ---
 
-## Étape 5 — Générer le PDF
+## Étape 5 — Générer le HTML carnet + le PDF
+
+### 5A — Générer le HTML
 
 ```bash
-B64=$(python3 /home/user/budgetadeux-2-0/scripts/generate_bilan_pdf.py '{json_data}')
-echo "Base64 length: ${#B64}"
+HTML_FILE="/tmp/bilan-S{week}-{year}.html"
+python3 /home/user/budgetadeux-2-0/scripts/generate_bilan_html.py '{json_data}' > "$HTML_FILE"
+echo "HTML généré : $HTML_FILE"
 ```
 
-Le script génère un PDF ~3-5KB (Helvetica built-in, pas d'embed de police).
-La sortie est la chaîne base64 pure (~4500-6000 caractères).
+Le script `generate_bilan_html.py` prend le JSON en argument (ou stdin) et sort le HTML complet du carnet (design Fraunces + Nunito, fond crème, donut SVG, barres blocs, graphe évolution).
+
+### 5B — Générer le PDF via Playwright
+
+```python
+# gen_pdf_routine.py — à exécuter dans le scratchpad
+import http.server, socketserver, threading, time
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+HTML_PATH = Path("/tmp/bilan-S{week}-{year}.html")
+PDF_PATH  = Path("/tmp/bilan-S{week}-{year}.pdf")
+PORT = 8765
+
+class Utf8Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(HTML_PATH.parent), **kwargs)
+    def guess_type(self, path):
+        ctype = super().guess_type(path)
+        if isinstance(ctype, str) and 'text/html' in ctype:
+            return 'text/html; charset=utf-8'
+        return ctype
+    def log_message(self, fmt, *args): pass
+
+socketserver.TCPServer.allow_reuse_address = True
+server = socketserver.TCPServer(("127.0.0.1", PORT), Utf8Handler)
+t = threading.Thread(target=server.serve_forever); t.daemon = True; t.start()
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(
+        executable_path='/opt/pw-browsers/chromium',
+        args=['--no-sandbox', '--disable-setuid-sandbox']
+    )
+    page = browser.new_page(viewport={'width': 780, 'height': 1200})
+    page.goto(f'http://127.0.0.1:{PORT}/{HTML_PATH.name}', wait_until='networkidle', timeout=30000)
+    page.wait_for_function("document.fonts.ready")
+    time.sleep(4)
+    h = page.evaluate("document.documentElement.scrollHeight")
+    page.pdf(path=str(PDF_PATH), width='780px', height=f'{h+20}px',
+             print_background=True, margin={'top':'0px','right':'0px','bottom':'0px','left':'0px'})
+    browser.close()
+server.shutdown()
+print(f"PDF : {PDF_PATH} ({PDF_PATH.stat().st_size/1024:.1f} Ko)")
+```
+
+Le PDF résultant pèse ~240KB — **trop grand pour l'upload Drive automatique**. L'envoyer à l'utilisateur via `SendUserFile`.
 
 ---
 
-## Étape 6 — Uploader dans Google Drive
+## Étape 6 — Uploader dans Google Drive (HTML) + envoyer le PDF en chat
 
-Appeler l'outil MCP `mcp__Google_Drive__create_file` avec :
-- `title` : `"S{week}-{year} / {score}% — Bilan hebdomadaire"`
-- `contentMimeType` : `"application/pdf"`
+### 6A — Upload HTML dans Drive
+
+Lire le HTML généré et appeler `mcp__Google_Drive__create_file` avec :
+- `title` : `"bilan-S{week}-{year}.html"`
+- `contentMimeType` : `"text/html"`
 - `disableConversionToGoogleType` : `true`
-- `base64Content` : la chaîne base64 produite à l'étape 5
+- `textContent` : contenu brut du fichier HTML (pas de base64 — le HTML fait ~24KB, compatible avec le paramètre)
+
+### 6B — Envoyer le PDF en chat
+
+```python
+SendUserFile(files=["/tmp/bilan-S{week}-{year}.pdf"], status="normal",
+             caption=f"Bilan S{week}-{year} — {score}% ({grade})")
+```
 
 ---
 
@@ -161,8 +217,9 @@ Appeler l'outil MCP `mcp__Google_Drive__create_file` avec :
 
 | Élément | Valeur |
 |---|---|
-| Script PDF | `/home/user/budgetadeux-2-0/scripts/generate_bilan_pdf.py` |
+| Script HTML carnet | `/home/user/budgetadeux-2-0/scripts/generate_bilan_html.py` |
+| Chromium | `/opt/pw-browsers/chromium` (Playwright, `--no-sandbox`) |
 | Historique | `/home/user/budgetadeux-2-0/data/bilan-history.json` |
-| Artifact web | https://claude.ai/code/artifact/c7073614-cc00-4911-adb3-a30dce61238a |
 | Branch Git | `claude/todoist-google-drive-setup-scjm3r` |
-| PDF taille typ. | ~3-5 KB · ~4500-6000 chars base64 |
+| HTML taille typ. | ~24 KB — uploadable Drive via `textContent` |
+| PDF taille typ. | ~240 KB — envoi chat via `SendUserFile` |
