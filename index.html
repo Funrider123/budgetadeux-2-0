@@ -1050,7 +1050,8 @@ function renderVue(){
     mdSub = "Indiquez à deux quand faire votre premier point";
     mdIcon = '🔔';
   } else {
-    const days = Math.ceil((new Date(S.moneyDate.nextDate)-new Date(new Date().toDateString()))/86400000);
+    const [ny,nm,nd]=S.moneyDate.nextDate.split('-').map(Number);
+    const days = Math.ceil((new Date(ny,nm-1,nd)-new Date(new Date().toDateString()))/86400000);
     if(days>1){ mdTitle = `Encore ${days} jours avant votre prochain Money Date`; mdSub = "Votre rendez-vous financier à deux"; }
     else if(days===1){ mdTitle = "Votre Money Date, c'est demain !"; mdSub = "Préparez-vous à deux"; }
     else if(days===0){ mdTitle = "C'est aujourd'hui votre Money Date !"; mdSub = "Votre rendez-vous financier à deux, en 6 étapes"; }
