@@ -1138,6 +1138,7 @@ function renderVue(){
     <div class="grow">
       <div class="name" style="font-family:var(--serif); font-size:16px">${mdTitle}</div>
       <div class="sub">${mdSub}</div>
+      ${S.moneyDate.nextDate?`<span class="small link" id="mdEditDate" style="margin-top:3px; display:inline-block">Modifier la date →</span>`:''}
     </div>
     <span class="chev" style="color:var(--terra); font-size:20px">→</span>
   </div>
@@ -2050,6 +2051,7 @@ function bindScreen(screen){
       if(S.moneyDate.doneSteps.length===0 && !S.moneyDate.nextDate){ openMoneyDateSchedule(); return; }
       mdStep=S.moneyDate.doneSteps.length>=6?0:S.moneyDate.doneSteps.length; go('moneydate');
     };
+    const mde=$('#mdEditDate'); if(mde) mde.onclick=ev=>{ ev.stopPropagation(); openMoneyDateSchedule(); };
     document.querySelectorAll('[data-exp]').forEach(r=>r.addEventListener('click',()=>openExpenseSheet(r.dataset.exp)));
   }
 
@@ -2128,15 +2130,16 @@ function openExpenseSheet(id){
 }
 
 function openMoneyDateSchedule(){
-  const d=new Date(); d.setMonth(d.getMonth()+1);
-  openModal(`<h3>📅 Votre premier Money Date</h3>
-    <p class="small muted" style="margin-bottom:14px">Choisissez ensemble la date de votre premier rendez-vous financier.</p>
+  const cur=S.moneyDate.nextDate;
+  const d = cur ? new Date(cur) : (()=>{ const n=new Date(); n.setMonth(n.getMonth()+1); return n; })();
+  openModal(`<h3>📅 ${cur?'Modifier votre Money Date':'Votre premier Money Date'}</h3>
+    <p class="small muted" style="margin-bottom:14px">Choisissez ensemble la date de votre ${cur?'prochain':'premier'} rendez-vous financier.</p>
     <div class="field"><label>Date</label><input class="input" type="date" id="mdScheduleDate" value="${d.toISOString().slice(0,10)}"></div>
     <button class="btn btn-primary" id="mdScheduleSave" style="width:100%">Confirmer cette date</button>`, true);
   $('#mdScheduleSave').onclick=()=>{
     const val=$('#mdScheduleDate').value;
     if(!val){ toast("Choisissez une date","📅"); return; }
-    S.moneyDate.nextDate=val; save(); closeModal(); go('vue'); toast("Rendez-vous programmé ✓","📅");
+    S.moneyDate.nextDate=val; save(); closeModal(); go('vue'); toast(cur?"Date mise à jour ✓":"Rendez-vous programmé ✓","📅");
   };
 }
 function bindProjets(){
@@ -2409,6 +2412,7 @@ function bindPilotage(){
     if(S.settings.mode!=='net') S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle');
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
+    if(!S.moneyDate.nextDate){ const nd=new Date(); nd.setMonth(nd.getMonth()+1); S.moneyDate.nextDate=nd.toISOString().slice(0,10); }
     S.pilotFrozen=true;
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️");
     go('pilotage');
