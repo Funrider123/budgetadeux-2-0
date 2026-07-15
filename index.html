@@ -1467,7 +1467,7 @@ function verdictText(b,e,s){
    6 · MONEY DATE (Bilan 6 étapes)
    ============================================================ */
 const MD_STEPS=[
-  {t:"Situation Globale", q:"Toutes les dépenses ont-elles bien été enregistrées ? Les budgets ont-ils été tenus ? Y a-t-il eu du surplus ou du dépassement ? Faut-il réajuster ?", e:"🧭"},
+  {t:"Situation Globale", q:"", e:"🧭"},
   {t:"Dépenses imprévues", q:"Ce mois-ci : y a-t-il eu des surprises à digérer ?", e:"🌦️"},
   {t:"Transfert de surplus", q:"On répartit ce qui reste, sereinement.", e:"💸"},
   {t:"Point sur les projets", q:"Sommes-nous toujours alignés sur nos rêves ?", e:"🎯"},
@@ -1508,7 +1508,7 @@ function renderMoneyDate(){
 
   <div class="card" style="margin-top:18px">
     <div class="row" style="gap:11px; margin-bottom:14px"><div class="emoji-badge" style="background:var(--blush)">${st.e}</div>
-      <div><h3 style="font-size:19px">${st.t}</h3><p class="small muted">${st.q}</p></div></div>
+      <div><h3 style="font-size:19px">${st.t}</h3>${st.q?`<p class="small muted">${st.q}</p>`:''}</div></div>
     ${mdContent(mdStep)}
   </div>
 
@@ -1535,7 +1535,8 @@ const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?"},
   {key:'revenus', label:"Nos revenus ont-ils changé ?", link:'pilotage'},
   {key:'repartition', label:"Voulons-nous changer notre répartition budgétaire ?", link:'pilotage'},
-  {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", link:'pilotage'}
+  {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", link:'pilotage'},
+  {key:'categories', label:"Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?", link:'pilotage'}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdContent(step){
