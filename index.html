@@ -1488,7 +1488,7 @@ function renderMoneyDate(){
   const pct=Math.round((mdStep)/6*100);
   if(mdStep>=6) return moneyDateDone();
   const st=MD_STEPS[mdStep];
-  const canContinue = mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth);
+  const canContinue = (mdStep!==0 || mdChecklistAllDone(S.ui.mdMonth)) && (mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth));
   return `
   <div class="steps-head">
     <div class="between" style="padding-top:4px">
@@ -1519,7 +1519,7 @@ function renderMoneyDate(){
     ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
     <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===5?'Terminer notre bilan ✓':'Continuer →'}</button>
   </div>
-  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">Décidez pour chaque catégorie avant de continuer</p>`:''}
+  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':'Décidez pour chaque catégorie avant de continuer'}</p>`:''}
   `;
 }
 function projectEtaLabel(p){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(p.months||0)); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`; }
@@ -1539,6 +1539,10 @@ const MD_CHECKLIST_ITEMS=[
   {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
+function mdChecklistAllDone(offset){
+  const check=mdChecklist(offset);
+  return MD_CHECKLIST_ITEMS.every(item=>!!check[item.key]);
+}
 function mdContent(step){
   const offset=S.ui.mdMonth;
   if(step===0){
