@@ -1108,8 +1108,8 @@ function renderVue(){
       </div>
       <div style="width:1px; align-self:stretch; background:var(--line)"></div>
       <div style="text-align:center; width:100px">
-        <div class="small muted" style="line-height:1.3">À ce rythme, projection fin de ${weekly?'semaine':'mois'}</div>
-        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}; margin-top:4px">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
+        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
+        <div class="small muted" style="line-height:1.3; margin-top:4px">À ce rythme, projection fin de ${weekly?'semaine':'mois'}</div>
       </div>
     </div>
   </div>
