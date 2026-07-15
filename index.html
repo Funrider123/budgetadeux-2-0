@@ -450,6 +450,7 @@ const DEFAULT = {
   auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
   partner:{ name:"Marc", profile:"lui" },
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, sync:true },
+  pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   settings:{
     salaries:{lui:0, elle:0},
     mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0}
@@ -482,6 +483,7 @@ function load(){
 // existants n'ont pas les nouveaux champs ajoutés après leur création.
 function migrate(s){
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
+  if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
@@ -494,7 +496,7 @@ function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_)
    couple dans la table `couple_state`, avec mise à jour temps réel.
    ============================================================ */
 // Champs partagés entre partenaires ; le reste (auth/partner/ui) reste local à l'appareil.
-const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory'];
+const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','pilotFrozen'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
 function syncActive(){ return !!(S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
@@ -1536,7 +1538,6 @@ function renderReglages(){
 /* ── Simulation Pilotage : état de session (non persisté tant que non validé) ── */
 let pilotSim = {};        // id projet -> mensualité simulée
 let pilotOpen = {charges:false, categories:false, perso_lui:false, perso_elle:false}; // repliées par défaut (plus compact)
-let pilotFrozen = false; // true une fois "Valider le budget du mois" cliqué : gèle l'écran sans en sortir
 function sliderMax(val, floor){ return val>0 ? Math.ceil(val*2/50)*50 : floor; }
 function initPilotSim(){
   S.projects.filter(p=>p.status==="actif").forEach(p=>{
@@ -1710,11 +1711,11 @@ function renderPilotage(){
   <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
-  ${pilotFrozen?`<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
+  ${S.pilotFrozen?`<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
     <span style="font-weight:800; font-size:13px; position:relative; z-index:1">✓ Budget validé</span>
     <span class="link" id="unfreezeBudget" style="color:#fff; text-decoration:underline; font-weight:700; position:relative; z-index:1">Modifier</span>
   </div>`:''}
-  <div style="${pilotFrozen?'pointer-events:none; opacity:.5; filter:grayscale(.4); transition:opacity .2s':''}">
+  <div style="${S.pilotFrozen?'pointer-events:none; opacity:.5; filter:grayscale(.4); transition:opacity .2s':''}">
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
   ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
     <div class="rep-inline" onclick="event.stopPropagation()">
@@ -2299,10 +2300,11 @@ function bindPilotage(){
     if(S.settings.mode!=='net') S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle');
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
+    S.pilotFrozen=true;
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️");
-    pilotFrozen=true; go('pilotage');
+    go('pilotage');
   };
-  const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ pilotFrozen=false; go('pilotage'); };
+  const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; save(); go('pilotage'); };
 }
 function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
