@@ -1092,9 +1092,8 @@ function renderVue(){
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="between" style="margin-bottom:12px">
+    <div style="margin-bottom:12px">
       <b style="font-family:var(--serif); font-size:15px">Rythme du ${weekly?'semaine':'mois'}</b>
-      <span class="pill" style="background:color-mix(in srgb, ${onTrack?'var(--ok)':'var(--terra-d)'} 15%, transparent); color:${onTrack?'var(--ok)':'var(--terra-d)'}">${onTrack?'✅ En avance':'⚠️ En retard'}</span>
     </div>
     <div style="display:flex; gap:14px; align-items:center">
       <div style="flex:1">
@@ -1109,8 +1108,8 @@ function renderVue(){
       </div>
       <div style="width:1px; align-self:stretch; background:var(--line)"></div>
       <div style="text-align:center; width:100px">
-        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
-        <div class="small muted" style="line-height:1.3; margin-top:2px">${diffAmount>=0?`économisés en fin de ${weekly?'semaine':'mois'}`:`de dépassement prévu en fin de ${weekly?'semaine':'mois'}`}</div>
+        <div class="small muted" style="line-height:1.3">À ce rythme, projection fin de ${weekly?'semaine':'mois'}</div>
+        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}; margin-top:4px">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
       </div>
     </div>
   </div>
