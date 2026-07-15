@@ -2132,7 +2132,7 @@ function openMoneyDateSchedule(){
   openModal(`<h3>📅 Votre premier Money Date</h3>
     <p class="small muted" style="margin-bottom:14px">Choisissez ensemble la date de votre premier rendez-vous financier.</p>
     <div class="field"><label>Date</label><input class="input" type="date" id="mdScheduleDate" value="${d.toISOString().slice(0,10)}"></div>
-    <button class="btn btn-primary" id="mdScheduleSave" style="width:100%">Confirmer cette date</button>`);
+    <button class="btn btn-primary" id="mdScheduleSave" style="width:100%">Confirmer cette date</button>`, true);
   $('#mdScheduleSave').onclick=()=>{
     const val=$('#mdScheduleDate').value;
     if(!val){ toast("Choisissez une date","📅"); return; }
