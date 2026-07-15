@@ -467,7 +467,7 @@ const DEFAULT = {
     {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3000, saved:0, months:10, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif"},
     {id:"p2", name:"Apport maison", emoji:"🏡", target:20000, saved:0, months:36, day:2, split:{lui:50,elle:50}, cls:"invest", status:"actif"}
   ],
-  moneyDate:{ doneSteps:[], nextDate:"" },
+  moneyDate:{ doneSteps:[], nextDate:"", notes:[] },
   budgetHistory:[]
 };
 
@@ -484,6 +484,7 @@ function load(){
 function migrate(s){
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
+  if(!s.moneyDate.notes) s.moneyDate.notes = [];
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
@@ -1167,6 +1168,7 @@ function renderVue(){
    2 · AJOUTER
    ============================================================ */
 let draft={amount:"", date:iso(0), desc:"", cat:"courses", prevision:false, cagnotte:false};
+let ajouterReturnTo='vue';
 function renderAjouter(){
   const c=catById(draft.cat);
   const sp=spentByCat(draft.cat), rem=c.budget-sp, remWeek=(c.budget/4)-(sp/4);
@@ -1463,13 +1465,14 @@ function verdictText(b,e,s){
    ============================================================ */
 const MD_STEPS=[
   {t:"Situation Globale", q:"Où en sommes-nous ce mois-ci ?", e:"🧭"},
-  {t:"Dépenses imprévues", q:"Y a-t-il eu des surprises à digérer ?", e:"🌦️"},
+  {t:"Dépenses imprévues", q:"Ce mois-ci : y a-t-il eu des surprises à digérer ?", e:"🌦️"},
   {t:"Transfert de surplus", q:"On répartit ce qui reste, sereinement.", e:"💸"},
-  {t:"Point sur les projets", q:"Nos rêves avancent-ils comme prévu ?", e:"🎯"},
-  {t:"Anticiper le mois prochain", q:"Quelles prévisions pour mieux dormir ?", e:"🔮"},
+  {t:"Point sur les projets", q:"Sommes-nous toujours alignés sur nos rêves ?", e:"🎯"},
+  {t:"Anticiper le mois prochain", q:"Le mois prochain : quelles dépenses prévoir déjà ?", e:"🔮"},
   {t:"Prochain Money Date", q:"On se redonne rendez-vous quand ?", e:"📅"}
 ];
 let mdStep=0;
+let mdSurplusDecisions={};
 function renderMoneyDate(){
   const done=S.moneyDate.doneSteps.length;
   const pct=Math.round((mdStep)/6*100);
@@ -1503,39 +1506,89 @@ function renderMoneyDate(){
 }
 function mdContent(step){
   if(step===0){
-    return `<div class="card-soft">
+    return `<div class="card-soft" style="margin-bottom:12px">
       ${miniStat("Solde Commun", fmt(S.cagnotte.balance))}
       ${miniStat("Épargne Projets", fmt(S.projects.reduce((s,p)=>s+p.saved,0)))}
-      ${miniStat("Dépenses du mois", fmt(totalSpent()))}
-      ${miniStat("Prévisions à venir", fmt(S.expenses.filter(x=>x.prevision).reduce((s,x)=>s+x.amount,0)))}
-    </div>`;
+    </div>
+    <p class="small muted" style="margin-bottom:6px">Détail par catégorie — ajustez si besoin :</p>
+    ${S.categories.filter(c=>c.budget>0).map(c=>{
+      const sp=spentByCat(c.id); const pct=c.budget>0?Math.round(sp/c.budget*100):0;
+      const cls=pct>100?'over':pct>=85?'warn':'';
+      return `<div style="padding:10px 0; border-top:1px solid var(--line)">
+        <div class="between" style="margin-bottom:7px">
+          <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${escapeHtml(c.name)}</b></div>
+          <div class="row" style="gap:10px">
+            <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(c.budget)}</span></span>
+            <span class="link" data-editcat="${c.id}" style="font-size:14px">✎</span>
+          </div>
+        </div>
+        <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
+      </div>`;
+    }).join('')}`;
   }
   if(step===1){
     const imp=realExpenses().filter(x=>x.amount>=80);
-    return `<p class="small muted" style="margin-bottom:10px">Les dépenses notables de ${MOIS[new Date().getMonth()]} :</p>
+    const notes=S.moneyDate.notes||[];
+    return `<p class="small muted" style="margin-bottom:10px">Les dépenses notables déjà survenues ce mois-ci :</p>
     ${imp.length?imp.map(x=>`<div class="lrow"><div class="emoji-badge">${catById(x.cat).emoji}</div><div class="grow"><div class="name">${escapeHtml(x.desc)}</div><div class="sub">${nameOf(x.who)} · ${catById(x.cat).name}</div></div><div class="amt">${fmt(x.amount)}</div></div>`).join(''):'<p class="empty">Aucune grosse surprise ce mois-ci 🌤️</p>'}
-    <textarea class="input" placeholder="Une note à se laisser ? (ex : prévoir le contrôle technique)" style="margin-top:10px; min-height:64px"></textarea>`;
+    <button class="btn btn-soft" id="mdQuickExpense" style="margin-top:10px; width:100%">+ Ajouter une dépense imprévue</button>
+    ${notes.length?`<div class="card-soft" style="margin-top:14px; text-align:left">
+      <div class="small muted" style="font-weight:800; margin-bottom:6px">Notes laissées précédemment</div>
+      ${notes.slice(0,5).map(n=>`<div style="padding:6px 0; border-top:1px solid var(--line)"><div class="small">${escapeHtml(n.text)}</div><div class="small muted">${n.month}</div></div>`).join('')}
+    </div>`:''}
+    <textarea class="input" id="mdNote" placeholder="Une note à se laisser ? (ex : prévoir le contrôle technique)" style="margin-top:10px; min-height:64px"></textarea>
+    <button class="btn btn-ghost btn-sm" id="mdNoteSave" style="margin-top:8px; width:100%">Enregistrer la note</button>`;
   }
   if(step===2){
-    const surplus=Math.max(0,totalBudget()-totalSpent());
-    return `<div class="card-soft" style="text-align:center; margin-bottom:12px"><div class="small muted" style="font-weight:800">Surplus disponible</div><div style="font-family:var(--serif); font-size:28px; color:var(--terra)">${fmt(surplus)}</div></div>
-    <p class="small muted" style="margin-bottom:8px">Où envoyer ce surplus ?</p>
-    <div class="cat-grid">
-      <button class="cat-opt"><span class="e">👛</span><div><div class="nm">Cagnotte</div><div class="bd">Commune</div></div></button>
-      <button class="cat-opt"><span class="e">🗾</span><div><div class="nm">Voyage Japon</div><div class="bd">+ rapide</div></div></button>
-      <button class="cat-opt"><span class="e">🛟</span><div><div class="nm">Secours</div><div class="bd">Sécurité</div></div></button>
-      <button class="cat-opt"><span class="e">🎉</span><div><div class="nm">Loisirs</div><div class="bd">Plaisir</div></div></button>
-    </div>`;
+    const rows=S.categories.filter(c=>c.budget>0).map(c=>{
+      const sp=spentByCat(c.id); const surplus=Math.max(0,c.budget-sp);
+      return {c, surplus};
+    }).filter(x=>x.surplus>0);
+    if(!rows.length) return `<p class="empty">Aucun surplus ce mois-ci, tout a été utilisé 💪</p>`;
+    return rows.map(({c,surplus})=>{
+      const decision=mdSurplusDecisions[c.id];
+      return `<div style="padding:11px 0; border-top:1px solid var(--line)">
+        <div class="between" style="margin-bottom:8px">
+          <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${c.name}</b></div>
+          <b class="small" style="color:var(--terra)">+${fmt0(surplus)}</b>
+        </div>
+        ${decision?`<div class="small" style="color:var(--ok); font-weight:700">${decision==='kept'?'✓ Gardé pour le mois prochain':'✓ Transféré'}</div>`
+        :`<div class="row" style="gap:6px">
+            <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}">Transférer</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" data-surplus-keep="${c.id}">Garder pour le mois prochain</button>
+          </div>`}
+      </div>`;
+    }).join('');
   }
   if(step===3){
-    return S.projects.filter(p=>p.status!=="abandonne").map(p=>{const pct=Math.round(p.saved/p.target*100);return `<div style="padding:10px 0; border-top:1px solid var(--line)"><div class="between" style="margin-bottom:7px"><b class="small">${p.emoji} ${p.name}</b><b class="small" style="color:var(--terra)">${pct}%</b></div><div class="bar thin"><i style="width:${pct}%"></i></div></div>`;}).join('');
+    const active=S.projects.filter(p=>p.status!=="abandonne");
+    return `${active.length?active.map(p=>{
+      const pct=Math.round(p.saved/p.target*100);
+      return `<div style="padding:10px 0; border-top:1px solid var(--line)">
+        <div class="between" style="margin-bottom:7px">
+          <b class="small">${p.emoji} ${p.name}${p.status==='pause'?' <span class="tag" style="color:var(--muted)">En pause</span>':''}</b>
+          <b class="small" style="color:var(--terra)">${pct}%</b>
+        </div>
+        <div class="bar thin" style="margin-bottom:8px"><i style="width:${Math.min(100,pct)}%"></i></div>
+        <div class="row" style="gap:6px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" data-paction="pause" data-id="${p.id}">${p.status==='pause'?'▶ Relancer':'⏸ Pause'}</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" data-editproj="${p.id}">✎ Modifier</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1; color:var(--danger)" data-paction="abandon" data-id="${p.id}">🗑</button>
+        </div>
+      </div>`;
+    }).join(''):'<p class="empty">Aucun projet actif pour l\'instant.</p>'}
+    <button class="btn btn-soft" id="mdAddProject" style="margin-top:12px; width:100%">+ Ajouter un projet</button>`;
   }
   if(step===4){
-    return `<p class="small muted" style="margin-bottom:10px">Anticipez les dépenses du mois prochain pour éviter les surprises.</p>
-    <div class="field"><label>Dépense prévue</label><input class="input" placeholder="Ex : Cadeau anniversaire"></div>
-    <div class="grid2"><div class="field"><label>Montant</label><input class="input" placeholder="0,00 €"></div>
-    <div class="field"><label>Catégorie</label><select class="select">${S.categories.map(c=>`<option>${c.emoji} ${c.name}</option>`).join('')}</select></div></div>
-    <button class="btn btn-soft" onclick="toast('Prévision ajoutée 🔮','✓')">Ajouter cette prévision 🔮</button>`;
+    const nextPrevisions=S.expenses.filter(x=>x.type==="depense" && x.prevision && inMonth(x.date,1));
+    const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(1);
+    return `<p class="small muted" style="margin-bottom:10px">Anticipez ce qui est déjà prévu pour ${monthLabel(1)}, pour réserver le budget dès maintenant.</p>
+    ${nextPrevisions.length?`<div class="card-soft" style="margin-bottom:12px; text-align:left">${nextPrevisions.map(x=>`<div class="between" style="padding:6px 0"><span class="small">${catById(x.cat).emoji} ${escapeHtml(x.desc)}</span><span class="row" style="gap:8px"><b class="small">${fmt(x.amount)}</b><span class="link" data-delprev="${x.id}">✕</span></span></div>`).join('')}</div>`:''}
+    <div class="field"><label>Dépense prévue</label><input class="input" id="mdPrevDesc" placeholder="Ex : Cadeau anniversaire"></div>
+    <div class="grid2"><div class="field"><label>Montant</label><input class="input" type="number" id="mdPrevAmount" placeholder="0,00 €"></div>
+    <div class="field"><label>Catégorie</label><select class="select" id="mdPrevCat">${S.categories.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('')}</select></div></div>
+    <div class="field"><label>Date prévue</label><input class="input" type="date" id="mdPrevDate" value="${d.toISOString().slice(0,10)}"></div>
+    <button class="btn btn-soft" id="mdPrevSave" style="width:100%">Ajouter cette prévision 🔮</button>`;
   }
   if(step===5){
     const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(1);
@@ -1562,8 +1615,8 @@ function moneyDateDone(){
 
   return `<div style="padding-top:30px; text-align:center" class="fade">
     <div class="emoji-badge" style="width:84px;height:84px;border-radius:50%;background:var(--terra);color:#fff;font-size:36px;margin:0 auto 18px">❤️</div>
-    <h1 class="hero-title" style="font-size:30px">Félicitations !</h1>
-    <p class="hero-sub" style="margin:0 auto 22px">Votre budget est bouclé. Vous êtes parfaitement alignés pour vos futurs projets.</p>
+    <h1 class="hero-title" style="font-size:30px">Money Date terminé !</h1>
+    <p class="hero-sub" style="margin:0 auto 22px">Bravo, vous faites partie des couples qui avancent ensemble.</p>
     <button class="btn btn-primary" id="mdHome" style="margin-bottom:10px">Retour au tableau de bord</button>
     <button class="btn btn-ghost" id="mdShare" data-summary="${escapeHtml(summaryText)}">📤 Partager notre résumé</button>
 
@@ -2121,10 +2174,11 @@ function saveExpense(){
   S.expenses.push(exp);
   if(draft.cagnotte && !isTransfer){ S.cagnotte.balance-=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:-amt}); }
   if(isTransfer){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:+amt}); }
+  const wasPrevision=draft.prevision;
   save();
   draft={amount:"", date:iso(0), desc:"", cat:draft.cat, prevision:false, cagnotte:false};
-  toast(isTransfer?"Transfert enregistré 🔁":draft.prevision?"Prévision ajoutée 🔮":"Dépense ajoutée — bien joué !","✓");
-  go('vue');
+  toast(isTransfer?"Transfert enregistré 🔁":wasPrevision?"Prévision ajoutée 🔮":"Dépense ajoutée — bien joué !","✓");
+  go(ajouterReturnTo); ajouterReturnTo='vue';
 }
 
 function bindHistorique(){
@@ -2205,7 +2259,8 @@ function openEditProject(id, returnTo){
     save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
   const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
-function openRealloc(p){
+function openRealloc(p, returnTo){
+  returnTo = returnTo || 'projets';
   const others=S.projects.filter(x=>x.id!==p.id);
   openModal(`<h3>↪ Réaffecter l'épargne</h3><p class="small muted" style="margin-bottom:14px">Déplacez l'épargne de « ${p.name} » (${fmt0(p.saved)}) vers une autre destination.</p>
     <div class="field"><label>Destination</label><select class="select" id="raDest"><option value="cagnotte">👛 Cagnotte commune</option>${others.map(o=>`<option value="${o.id}">${o.emoji} ${o.name}</option>`).join('')}${S.categories.map(c=>`<option value="cat:${c.id}">${c.emoji} Catégorie ${c.name}</option>`).join('')}</select></div>
@@ -2215,16 +2270,32 @@ function openRealloc(p){
     p.saved-=amt;
     if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt}); }
     else if(!dest.startsWith('cat:')){ const o=S.projects.find(x=>x.id===dest); if(o) o.saved+=amt; }
-    save(); closeModal(); go('projets'); toast("Épargne réaffectée ↪","✓"); };
+    save(); closeModal(); go(returnTo); toast("Épargne réaffectée ↪","✓"); };
 }
-function openAbandon(p){
+function openAbandon(p, returnTo){
+  returnTo = returnTo || 'projets';
   openModal(`<h3>Abandonner « ${p.name} » ?</h3><p class="small muted" style="margin-bottom:14px">Vous avez épargné ${fmt0(p.saved)}. Que souhaitez-vous en faire ?</p>
     <button class="btn btn-soft" id="abKeep" style="margin-bottom:10px">💛 Récupérer l'argent vers la cagnotte</button>
     <button class="btn btn-ghost" id="abDrop" style="margin-bottom:10px">Abandonner sans récupérer</button>
     <button class="btn btn-ghost btn-sm" id="abCancel" style="width:100%">Annuler</button>`);
-  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go('projets'); toast("Argent récupéré dans la cagnotte 💛"); };
-  $('#abDrop').onclick=()=>{ p.status='abandonne'; save(); closeModal(); go('projets'); toast("Projet abandonné"); };
+  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Argent récupéré dans la cagnotte 💛"); };
+  $('#abDrop').onclick=()=>{ p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Projet abandonné"); };
   $('#abCancel').onclick=closeModal;
+}
+function openSurplusTransfer(catId, surplus){
+  const c=catById(catId);
+  const dests=S.projects.filter(p=>p.status==='actif');
+  openModal(`<h3>💸 Transférer le surplus</h3><p class="small muted" style="margin-bottom:14px">Surplus de « ${c.name} » : ${fmt0(surplus)}</p>
+    <div class="field"><label>Destination</label><select class="select" id="stDest"><option value="cagnotte">👛 Cagnotte commune</option>${dests.map(p=>`<option value="${p.id}">${p.emoji} ${p.name}</option>`).join('')}</select></div>
+    <div class="field"><label>Montant à transférer</label><input class="input" type="number" id="stAmt" value="${Math.round(surplus)}"></div>
+    <button class="btn btn-primary" id="stSave">Transférer</button>`, true);
+  $('#stSave').onclick=()=>{
+    const amt=Math.min(surplus,+$('#stAmt').value||0); const dest=$('#stDest').value;
+    if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); }
+    else { const p=S.projects.find(x=>x.id===dest); if(p) p.saved+=amt; }
+    mdSurplusDecisions[catId]='transferred';
+    save(); closeModal(); go('moneydate'); toast("Surplus transféré 💸","✓");
+  };
 }
 
 function bindAnalyse(){
@@ -2245,7 +2316,47 @@ function bindMoneyDate(){
     if(navigator.share){ try{ await navigator.share({text}); }catch(e){} }
     else { navigator.clipboard?.writeText(text); toast("Résumé copié — collez-le pour l'envoyer 💌","📋"); }
   };
-  document.querySelectorAll('.cat-opt').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.cat-opt').forEach(x=>x.classList.remove('on')); b.classList.add('on'); toast("Surplus affecté ✨");}));
+
+  // Étape 0 : ajuster une catégorie
+  document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat,'moneydate')));
+
+  // Étape 1 : dépense imprévue rapide + note
+  const qe=$('#mdQuickExpense'); if(qe) qe.onclick=()=>{ ajouterReturnTo='moneydate'; go('ajouter'); };
+  const ns=$('#mdNoteSave'); if(ns) ns.onclick=()=>{
+    const txt=$('#mdNote').value.trim();
+    if(!txt){ toast("Écrivez une note d'abord","✏️"); return; }
+    S.moneyDate.notes.unshift({date:iso(0), month:monthLabel(), text:txt});
+    save(); go('moneydate'); toast("Note enregistrée 📝","✓");
+  };
+
+  // Étape 2 : transfert de surplus par catégorie
+  document.querySelectorAll('[data-surplus-transfer]').forEach(b=>b.addEventListener('click',()=>{
+    const catId=b.dataset.surplusTransfer; const c=catById(catId);
+    const surplus=Math.max(0, c.budget-spentByCat(catId));
+    openSurplusTransfer(catId, surplus);
+  }));
+  document.querySelectorAll('[data-surplus-keep]').forEach(b=>b.addEventListener('click',()=>{
+    mdSurplusDecisions[b.dataset.surplusKeep]='kept'; go('moneydate'); toast("Gardé pour le mois prochain ✓");
+  }));
+
+  // Étape 3 : gestion des projets
+  const ap=$('#mdAddProject'); if(ap) ap.onclick=()=>openEditProject(null,'moneydate');
+  document.querySelectorAll('[data-editproj]').forEach(b=>b.addEventListener('click',()=>openEditProject(b.dataset.editproj,'moneydate')));
+  document.querySelectorAll('[data-paction]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.id);
+    if(b.dataset.paction==='pause'){ p.status=p.status==='pause'?'actif':'pause'; save(); go('moneydate'); toast(p.status==='pause'?"Projet mis en pause ⏸":"Projet relancé ▶"); }
+    if(b.dataset.paction==='abandon') openAbandon(p,'moneydate');
+  }));
+
+  // Étape 4 : prévisions pour le mois prochain
+  const ps=$('#mdPrevSave'); if(ps) ps.onclick=()=>{
+    const desc=$('#mdPrevDesc').value.trim(); const amt=+$('#mdPrevAmount').value||0; const cat=$('#mdPrevCat').value; const date=$('#mdPrevDate').value;
+    if(!desc||!amt){ toast("Description et montant requis","🔮"); return; }
+    S.expenses.push({id:e(), type:'depense', prevision:true, amount:amt, cat, who:me(), desc, date, note:""});
+    save(); go('moneydate'); toast("Prévision ajoutée 🔮","✓");
+  };
+  document.querySelectorAll('[data-delprev]').forEach(b=>b.addEventListener('click',()=>{
+    S.expenses=S.expenses.filter(x=>x.id!==b.dataset.delprev); save(); go('moneydate'); toast("Prévision supprimée","🗑");
+  }));
 }
 
 function bindReglages(){
@@ -2469,7 +2580,8 @@ function openAddCharge(defaultScope){
     save(); closeModal(); go('pilotage'); toast("Charge ajoutée");
   };
 }
-function openEditCat(id){
+function openEditCat(id, returnTo){
+  returnTo = returnTo || 'pilotage';
   const c=id?catById(id):{emoji:"📦",name:"",budget:0,cls:null};
   openModal(`<h3>${id?'Modifier la catégorie':'Nouvelle catégorie'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
@@ -2488,8 +2600,8 @@ function openEditCat(id){
     if(!cls){ toast("Choisissez une classification","🏷️"); return; }
     if(id){ c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls; }
     else { S.categories.push({id:e(),emoji:'📦',name:n,budget:+$('#ceB').value||0,cls:cls}); }
-    save(); closeModal(); go('pilotage'); toast("Catégorie enregistrée"); };
-  const del=$('#ceDel'); if(del) del.onclick=()=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go('pilotage'); toast("Catégorie supprimée 🗑"); };
+    save(); closeModal(); go(returnTo); toast("Catégorie enregistrée"); };
+  const del=$('#ceDel'); if(del) del.onclick=()=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast("Catégorie supprimée 🗑"); };
 }
 
 /* ============================================================
