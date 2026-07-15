@@ -468,7 +468,7 @@ const DEFAULT = {
     {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3000, saved:0, months:10, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif"},
     {id:"p2", name:"Apport maison", emoji:"🏡", target:20000, saved:0, months:36, day:2, split:{lui:50,elle:50}, cls:"invest", status:"actif"}
   ],
-  moneyDate:{ doneSteps:[], nextDate:"", notes:[] },
+  moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
   budgetHistory:[]
 };
 
@@ -486,6 +486,8 @@ function migrate(s){
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
+  if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
+  if(!s.moneyDate.checklist) s.moneyDate.checklist = {};
   if(s.ui.mdMonth===undefined) s.ui.mdMonth = 0;
   return s;
 }
@@ -1473,7 +1475,13 @@ const MD_STEPS=[
   {t:"Prochain Money Date", q:"On se redonne rendez-vous quand ?", e:"📅"}
 ];
 let mdStep=0;
-let mdSurplusDecisions={};
+function mdMonthKey(offset){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return `${d.getFullYear()}-${d.getMonth()}`; }
+function mdSurplusDecision(offset, catId){ return S.moneyDate.surplusDecisions[mdMonthKey(offset)+'_'+catId]; }
+function mdSetSurplusDecision(offset, catId, decision){
+  const k=mdMonthKey(offset)+'_'+catId;
+  if(decision===null) delete S.moneyDate.surplusDecisions[k];
+  else S.moneyDate.surplusDecisions[k]=decision;
+}
 function renderMoneyDate(){
   const done=S.moneyDate.doneSteps.length;
   const pct=Math.round((mdStep)/6*100);
@@ -1521,12 +1529,30 @@ function mdSurplusRows(offset){
   }).filter(x=>x.surplus>0);
 }
 function mdSurplusAllDecided(offset){
-  return mdSurplusRows(offset).every(x=>mdSurplusDecisions[x.c.id]);
+  return mdSurplusRows(offset).every(x=>mdSurplusDecision(offset, x.c.id));
 }
+const MD_CHECKLIST_ITEMS=[
+  {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?"},
+  {key:'revenus', label:"Nos revenus ont-ils changé ?", link:'pilotage'},
+  {key:'repartition', label:"Voulons-nous changer notre répartition budgétaire ?", link:'pilotage'},
+  {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", link:'pilotage'}
+];
+function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdContent(step){
   const offset=S.ui.mdMonth;
   if(step===0){
-    return `<div class="card-soft" style="margin-bottom:12px">
+    const check=mdChecklist(offset);
+    return `${MD_CHECKLIST_ITEMS.map(item=>{
+      const on=!!check[item.key];
+      return `<div class="between" style="padding:10px 0; border-top:1px solid var(--line)" data-mdcheck="${item.key}">
+        <div class="row" style="gap:10px; cursor:pointer">
+          <span style="width:22px; height:22px; border-radius:50%; border:2px solid ${on?'var(--ok)':'var(--line-2)'}; background:${on?'var(--ok)':'transparent'}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0">${on?'✓':''}</span>
+          <span class="small" style="${on?'text-decoration:line-through; color:var(--muted)':''}">${item.label}</span>
+        </div>
+        ${item.link?`<span class="link" data-go="${item.link}" style="font-size:12px; white-space:nowrap" onclick="event.stopPropagation()">→ Pilotage</span>`:''}
+      </div>`;
+    }).join('')}
+    <div class="card-soft" style="margin-top:14px; margin-bottom:12px">
       ${miniStat("Vos dépenses courantes", fmt(totalSpent(offset)))}
       ${miniStat("Épargne Projets", fmt(S.projects.reduce((s,p)=>s+p.saved,0)))}
     </div>
@@ -1553,7 +1579,10 @@ function mdContent(step){
     ${imp.length?imp.map(x=>`<div class="lrow"><div class="emoji-badge">${catById(x.cat).emoji}</div><div class="grow"><div class="name">${escapeHtml(x.desc)}</div><div class="sub">${nameOf(x.who)} · ${catById(x.cat).name}</div></div><div class="amt">${fmt(x.amount)}</div></div>`).join(''):'<p class="empty">Aucune grosse surprise ce mois-ci 🌤️</p>'}
     ${notes.length?`<div class="card-soft" style="margin-top:14px; text-align:left">
       <div class="small muted" style="font-weight:800; margin-bottom:6px">Notes laissées précédemment</div>
-      ${notes.slice(0,5).map(n=>`<div style="padding:6px 0; border-top:1px solid var(--line)"><div class="small">${escapeHtml(n.text)}</div><div class="small muted">${n.month}</div></div>`).join('')}
+      ${notes.slice(0,5).map(n=>`<div class="between" style="padding:6px 0; border-top:1px solid var(--line); align-items:flex-start">
+        <div><div class="small">${escapeHtml(n.text)}</div><div class="small muted">${n.who?nameOf(n.who)+' · ':''}${n.month}</div></div>
+        <span class="link" data-delnote="${n.id}" style="font-size:12px; flex-shrink:0">✕</span>
+      </div>`).join('')}
     </div>`:''}
     <textarea class="input" id="mdNote" placeholder="Une note pour expliquer un résultat de catégorie ou le bilan général ? (ex : prévoir le contrôle technique)" style="margin-top:10px; min-height:64px"></textarea>
     <button class="btn btn-ghost btn-sm" id="mdNoteSave" style="margin-top:8px; width:100%">Enregistrer la note</button>`;
@@ -1562,15 +1591,16 @@ function mdContent(step){
     const rows=mdSurplusRows(offset);
     if(!rows.length) return `<p class="empty">Aucun surplus ce mois-ci, tout a été utilisé 💪</p>`;
     return rows.map(({c,surplus})=>{
-      const decision=mdSurplusDecisions[c.id];
+      const decision=mdSurplusDecision(offset, c.id);
+      const canUndo = decision && (decision.type==='kept' || decision.dest==='cagnotte' || (S.projects.find(p=>p.id===decision.dest && p.status!=='abandonne')));
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:8px">
           <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${c.name}</b></div>
           <b class="small" style="color:var(--terra)">+${fmt0(surplus)}</b>
         </div>
         ${decision?`<div class="between">
-            <span class="small" style="color:var(--ok); font-weight:700">${decision.type==='kept'?'✓ Gardé pour le mois prochain':'✓ Transféré'}</span>
-            <span class="link" data-surplus-undo="${c.id}" style="font-size:12px">Modifier</span>
+            <span class="small" style="color:var(--ok); font-weight:700">${decision.type==='kept'?'✓ Gardé pour le mois prochain':'✓ Transféré (mouvement interne)'}</span>
+            ${canUndo?`<span class="link" data-surplus-undo="${c.id}" style="font-size:12px">Modifier</span>`:`<span class="small muted" style="font-size:11px">Définitif</span>`}
           </div>`
         :`<div class="row" style="gap:6px">
             <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}">Transférer</button>
@@ -1582,8 +1612,8 @@ function mdContent(step){
   if(step===3){
     const active=S.projects.filter(p=>p.status!=="abandonne");
     return `<div class="card-soft" style="margin-bottom:12px; text-align:center">
-      <div class="small muted" style="font-weight:800">Alloué aux projets ce mois-ci</div>
-      <div style="font-family:var(--serif); font-size:24px; color:var(--terra)">${fmt(epargneProjetsMensuelle())}</div>
+      <div class="small muted" style="font-weight:800">Disponible pour nos projets ce mois-ci</div>
+      <div style="font-family:var(--serif); font-size:24px; color:var(--terra)">${fmt(disponiblePourProjets())}</div>
     </div>
     ${active.length?active.map(p=>{
       const pct=Math.round(p.saved/p.target*100);
@@ -2317,14 +2347,17 @@ function openSurplusTransfer(catId, surplus){
     <button class="btn btn-primary" id="stSave">Transférer</button>`, true);
   $('#stSave').onclick=()=>{
     const amt=Math.min(surplus,+$('#stAmt').value||0); const dest=$('#stDest').value;
+    const destLabel = dest==='cagnotte' ? 'Cagnotte commune' : (S.projects.find(x=>x.id===dest)?.name || 'Projet');
+    const expId=e();
+    S.expenses.push({id:expId, type:'transfert', prevision:false, amount:amt, cat:catId, who:me(), desc:`Surplus ${c.name} → ${destLabel}`, date:iso(0), note:""});
     if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); }
     else { const p=S.projects.find(x=>x.id===dest); if(p) p.saved+=amt; }
-    mdSurplusDecisions[catId]={type:'transferred', amount:amt, dest};
-    save(); closeModal(); go('moneydate'); toast("Surplus transféré 💸","✓");
+    mdSetSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
+    save(); closeModal(); go('moneydate'); toast("Surplus transféré 💸 (mouvement interne)","✓");
   };
 }
-function undoSurplusDecision(catId){
-  const decision=mdSurplusDecisions[catId];
+function undoSurplusDecision(offset, catId){
+  const decision=mdSurplusDecision(offset, catId);
   if(decision && decision.type==='transferred'){
     const c=catById(catId);
     if(decision.dest==='cagnotte'){
@@ -2332,9 +2365,10 @@ function undoSurplusDecision(catId){
       const idx=S.cagnotte.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount);
       if(idx>-1) S.cagnotte.history.splice(idx,1);
     } else { const p=S.projects.find(x=>x.id===decision.dest); if(p) p.saved-=decision.amount; }
+    if(decision.expId) S.expenses=S.expenses.filter(x=>x.id!==decision.expId);
     save();
   }
-  delete mdSurplusDecisions[catId];
+  mdSetSurplusDecision(offset, catId, null);
 }
 
 function bindAnalyse(){
@@ -2365,9 +2399,20 @@ function bindMoneyDate(){
   const ns=$('#mdNoteSave'); if(ns) ns.onclick=()=>{
     const txt=$('#mdNote').value.trim();
     if(!txt){ toast("Écrivez une note d'abord","✏️"); return; }
-    S.moneyDate.notes.unshift({date:iso(0), month:monthLabel(S.ui.mdMonth), text:txt});
+    S.moneyDate.notes.unshift({id:e(), date:iso(0), month:monthLabel(S.ui.mdMonth), text:txt, who:me()});
     save(); go('moneydate'); toast("Note enregistrée 📝","✓");
   };
+  document.querySelectorAll('[data-delnote]').forEach(b=>b.addEventListener('click',()=>{
+    S.moneyDate.notes=S.moneyDate.notes.filter(n=>n.id!==b.dataset.delnote); save(); go('moneydate'); toast("Note supprimée","🗑");
+  }));
+
+  // Étape 0 : checklist de revue
+  document.querySelectorAll('[data-mdcheck]').forEach(b=>b.addEventListener('click',()=>{
+    const k=mdMonthKey(S.ui.mdMonth), item=b.dataset.mdcheck;
+    if(!S.moneyDate.checklist[k]) S.moneyDate.checklist[k]={};
+    S.moneyDate.checklist[k][item]=!S.moneyDate.checklist[k][item];
+    save(); go('moneydate');
+  }));
 
   // Étape 2 : transfert de surplus par catégorie
   document.querySelectorAll('[data-surplus-transfer]').forEach(b=>b.addEventListener('click',()=>{
@@ -2376,10 +2421,10 @@ function bindMoneyDate(){
     openSurplusTransfer(catId, surplus);
   }));
   document.querySelectorAll('[data-surplus-keep]').forEach(b=>b.addEventListener('click',()=>{
-    mdSurplusDecisions[b.dataset.surplusKeep]={type:'kept'}; go('moneydate'); toast("Gardé pour le mois prochain ✓");
+    mdSetSurplusDecision(S.ui.mdMonth, b.dataset.surplusKeep, {type:'kept'}); save(); go('moneydate'); toast("Gardé pour le mois prochain ✓");
   }));
   document.querySelectorAll('[data-surplus-undo]').forEach(b=>b.addEventListener('click',()=>{
-    undoSurplusDecision(b.dataset.surplusUndo); go('moneydate');
+    undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo); go('moneydate');
   }));
 
   // Étape 3 : gestion des projets
