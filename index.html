@@ -1136,16 +1136,15 @@ function renderVue(){
     })()}
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h3 style="font-family:var(--serif); font-size:18px; margin:0 0 4px">« Le bonheur se partage à deux »</h3>
-    <p class="small muted" style="margin:0 0 12px">${(() => {
+  <div class="photo-card" style="margin-top:16px">
+    <img src="${PHOTO}">
+    <div class="ov"><h3>${(() => {
       // Le projet actif le plus proche d'être atteint (le moins de mois restants), pas juste
       // le premier de la liste — pour que le message reste motivant et pertinent.
       const active = S.projects.filter(p=>p.status==="actif");
       const p = active.length ? active.reduce((a,b)=>(a.months??999)<=(b.months??999)?a:b) : null;
-      return p ? `Objectif épargne · ${p.name} dans ${p.months} mois` : `Ajoutez un projet pour suivre votre prochain objectif ici.`;
-    })()}</p>
-    <img src="${PHOTO}" style="width:100%; height:150px; object-fit:cover; border-radius:14px; display:block">
+      return p ? `${escapeHtml(p.name)} dans ${p.months} mois` : `Ajoutez un projet pour suivre votre prochain objectif ici.`;
+    })()}</h3><p style="text-align:right">« Le bonheur se partage à deux »</p></div>
   </div>
   `;
 }
