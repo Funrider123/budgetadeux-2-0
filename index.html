@@ -989,7 +989,6 @@ function go(screen){
    1 · VUE (Dashboard)
    ============================================================ */
 function renderVue(){
-  const off = S.ui.period==="hebdo" ? 0 : 0;
   const weekly = S.ui.period==="hebdo";
   const budget = weekly ? totalBudget()/4 : totalBudget();
   const spent = weekly ? totalSpent()/4*( /*approx*/1) : totalSpent();
