@@ -1704,9 +1704,8 @@ function renderPilotage(){
   const fixedShortfall = S.settings.mode==='fixe' ? Math.max(0, totVerser - fixedTotal) : 0;
   const activeProjects=S.projects.filter(p=>p.status==="actif");
   return `
-  <div class="between" style="padding-top:10px">
+  <div style="padding-top:10px">
     <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
-    <span class="pill">Pilotage</span>
   </div>
   <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
@@ -1770,7 +1769,7 @@ function renderPilotage(){
     ${reste<0?`<p class="small" style="color:var(--danger)" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
     ${activeProjects.length?`
     <div style="margin-top:12px">
-      <div class="small muted">Alloué aux projets</div>
+      <div class="small muted">Alloué aux projets <span id="pilAllocPct">(${reste>0?Math.round(allocProjets/reste*100):(allocProjets>0?100:0)}%)</span></div>
       <div style="height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:4px"><div id="pilBar" style="height:100%; border-radius:99px; background:${allocProjets<=reste?'var(--ok)':'var(--danger)'}; width:${reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0)}%; transition:width .1s"></div></div>
     </div>
     <div style="margin-top:10px">
@@ -2155,6 +2154,7 @@ function recalcPilotage(){
     pb.style.width=(reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0))+'%';
     pb.style.background=allocProjets<=reste?'var(--ok)':'var(--danger)';
   }
+  const pap=$('#pilAllocPct'); if(pap) pap.textContent=`(${reste>0?Math.round(allocProjets/reste*100):(allocProjets>0?100:0)}%)`;
   S.projects.filter(p=>p.status==='actif').forEach(p=>{
     const mensuel=pilotSim[p.id]||0, eta=projectEta(p,mensuel);
     const etaEl=document.querySelector(`[data-eta="${p.id}"]`);
@@ -2225,7 +2225,6 @@ function onCatInput(el){
   const c=S.categories.find(x=>x.id===id); if(c){ c.budget=val; save(); }
   recalcPilotage();
 }
-// Simulation projet : session uniquement, appliquée aux données réelles seulement au clic sur Valider.
 function onProjectInput(el){
   const id=el.dataset.project, val=Math.max(0, Math.round(+el.value)||0);
   const row=el.closest('.pilot-row');
@@ -2233,6 +2232,11 @@ function onProjectInput(el){
   if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,Math.max(disponiblePourProjets(),100)); slEl.value=val; } }
   else if(numEl) numEl.value=val;
   pilotSim[id]=val;
+  // Comme les charges/catégories/salaires, la mensualité choisie s'enregistre immédiatement
+  // (au lieu d'être une simulation en mémoire seulement validée plus tard) : on la traduit
+  // tout de suite en nombre de mois pour atteindre l'objectif, et on sauvegarde.
+  const p=S.projects.find(x=>x.id===id);
+  if(p){ const remaining=Math.max(0,p.target-p.saved); if(remaining>0 && val>0) p.months=Math.max(1,Math.ceil(remaining/val)); save(); }
   recalcPilotage();
 }
 function bindPilotage(){
@@ -2287,13 +2291,6 @@ function bindPilotage(){
   if(enx) enx.onclick=()=>{enx.classList.add('on'); en.classList.remove('on');};
 
   const vb=$('#validBudget'); if(vb) vb.onclick=()=>{
-    // Applique la simulation des projets (mensualité choisie → nombre de mois) aux données réelles.
-    S.projects.filter(p=>p.status==='actif').forEach(p=>{
-      const mensuel=pilotSim[p.id]; if(mensuel===undefined) return;
-      const remaining=Math.max(0,p.target-p.saved);
-      if(remaining<=0 || mensuel<=0) return;
-      p.months=Math.max(1,Math.ceil(remaining/mensuel));
-    });
     // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
     // pour permettre de comparer librement. À la validation finale, on ne garde que ce qui
     // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
