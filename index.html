@@ -486,6 +486,7 @@ function migrate(s){
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
+  s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
   if(!s.moneyDate.checklist) s.moneyDate.checklist = {};
   if(s.ui.mdMonth===undefined) s.ui.mdMonth = 0;
@@ -1620,15 +1621,12 @@ function mdContent(step){
           <b class="small" style="color:var(--terra)">${pct}%</b>
         </div>
         <div class="bar thin" style="margin-bottom:8px"><i style="width:${Math.min(100,pct)}%"></i></div>
-        <div class="small muted" style="margin-bottom:8px">${fmt0(monthly)} / mois · atteint en ${pct>=100?'—':projectEtaLabel(p)}</div>
-        <div class="row" style="gap:6px">
-          <button class="btn btn-ghost btn-sm" style="flex:1" data-paction="pause" data-id="${p.id}">${p.status==='pause'?'▶ Relancer':'⏸ Pause'}</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" data-editproj="${p.id}">✎ Modifier</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1; color:var(--danger)" data-paction="abandon" data-id="${p.id}">🗑</button>
-        </div>
+        <div class="small muted">${fmt0(monthly)} / mois · atteint en ${pct>=100?'—':projectEtaLabel(p)}</div>
       </div>`;
     }).join(''):'<p class="empty">Aucun projet actif pour l\'instant.</p>'}
-    <button class="btn btn-soft" id="mdAddProject" style="margin-top:12px; width:100%">+ Ajouter un projet</button>`;
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoPilotageProjects">Modifier dans Simulation et validation budgétaire →</span>
+    </div>`;
   }
   if(step===4){
     const nextPrevisions=S.expenses.filter(x=>x.type==="depense" && x.prevision && inMonth(x.date,offset+1));
@@ -2460,13 +2458,8 @@ function bindMoneyDate(){
     undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo); go('moneydate');
   }));
 
-  // Étape 3 : gestion des projets
-  const ap=$('#mdAddProject'); if(ap) ap.onclick=()=>openEditProject(null,'moneydate');
-  document.querySelectorAll('[data-editproj]').forEach(b=>b.addEventListener('click',()=>openEditProject(b.dataset.editproj,'moneydate')));
-  document.querySelectorAll('[data-paction]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.id);
-    if(b.dataset.paction==='pause'){ p.status=p.status==='pause'?'actif':'pause'; save(); go('moneydate'); toast(p.status==='pause'?"Projet mis en pause ⏸":"Projet relancé ▶"); }
-    if(b.dataset.paction==='abandon') openAbandon(p,'moneydate');
-  }));
+  // Étape 3 : consultation des projets (la modification passe par Pilotage)
+  const gp=$('#mdGoPilotageProjects'); if(gp) gp.onclick=()=>go('pilotage');
 
   // Étape 4 : prévisions pour le mois prochain
   const ps=$('#mdPrevSave'); if(ps) ps.onclick=()=>{
