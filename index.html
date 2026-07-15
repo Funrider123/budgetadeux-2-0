@@ -1177,11 +1177,6 @@ function renderVue(){
    2 · AJOUTER
    ============================================================ */
 let draft={amount:"", date:iso(0), desc:"", cat:"", merchant:"", prevision:false, cagnotte:false};
-function dateLabel(dateStr){
-  const d=new Date(dateStr+'T00:00:00');
-  const label=d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
-  return dateStr===iso(0) ? `Aujourd'hui, ${label}` : label;
-}
 function ajouterMissing(){
   const amt=parseFloat((draft.amount+"").replace(',','.'))||0;
   const missing=[];
@@ -1207,12 +1202,10 @@ function renderAjouter(){
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="field" style="margin-bottom:2px">
+    <div class="field" style="margin-bottom:18px">
       <label style="text-align:center">Montant</label>
       <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
     </div>
-    <div style="text-align:center; margin-bottom:16px"><span class="small link" id="dDateToggle">${dateLabel(draft.date)} ▾</span></div>
-    ${draft._showDate?`<div class="field"><input class="input" id="dDate" type="date" value="${draft.date}"></div>`:''}
 
     ${isTransfer?`<div class="card-soft" style="display:flex; gap:10px; align-items:center; margin-bottom:14px; background:color-mix(in srgb,var(--invest) 8%,transparent); border-color:color-mix(in srgb,var(--invest) 25%,transparent)">
       <span style="font-size:20px">🔁</span><div class="small" style="font-weight:700; color:var(--invest)">Mouvement interne détecté — sera classé en « Transfert » et non en dépense.</div></div>`:''}
@@ -1237,8 +1230,9 @@ function renderAjouter(){
 
     <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${missing.length?'block':'none'}">${missing.length?`Ajoutez ${missing.join(', ')}`:''}</p>
 
-    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (prévision, cagnotte) ▾"}</span></div>
+    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (date, prévision, cagnotte) ▾"}</span></div>
     ${draft._showMore?`
+    <div class="field"><label>Date</label><input class="input" id="dDate" type="date" value="${draft.date}"></div>
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
       <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
       <div class="switch ${draft.prevision?'on':''}" id="dPrev"></div>
@@ -2245,7 +2239,6 @@ function bindAjouter(){
     else updateAjouterValidity();
   };
   const dt=$('#dDate'); if(dt) dt.onchange=ev=>{draft.date=ev.target.value; go('ajouter');};
-  const dToggle=$('#dDateToggle'); if(dToggle) dToggle.onclick=()=>{draft._showDate=!draft._showDate; go('ajouter');};
   const mo=$('#dMoreToggle'); if(mo) mo.onclick=()=>{draft._showMore=!draft._showMore; go('ajouter');};
   const p=$('#dPrev'); if(p) p.onclick=()=>{draft.prevision=!draft.prevision; go('ajouter');};
   const cg=$('#dCag'); if(cg) cg.onclick=()=>{draft.cagnotte=!draft.cagnotte; go('ajouter');};
