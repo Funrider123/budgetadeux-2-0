@@ -1546,16 +1546,37 @@ function mdContent(step){
 function miniStat(k,v){ return `<div class="between" style="padding:11px 0; border-top:1px solid var(--line)"><span class="small muted" style="font-weight:700">${k}</span><b style="font-family:var(--serif)">${v}</b></div>`; }
 function mdQuote(s){ return ["« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »","« Les imprévus se traversent mieux à deux. »","« Partager, c'est déjà s'aimer un peu. »","« Nos rêves ont une trajectoire, et nous la traçons ensemble. »","« Prévoir, c'est s'offrir des nuits tranquilles. »","« À très vite, pour un nouveau pas vers nos rêves. »"][s]; }
 function moneyDateDone(){
+  const catChanges = S.categories.map(c=>{
+    const cur = spentByCat(c.id,0), prev = spentByCat(c.id,-1);
+    const delta = cur-prev;
+    const pct = prev>0 ? Math.round(delta/prev*100) : (cur>0?100:0);
+    return {c, delta, pct};
+  }).filter(x=>x.delta!==0 || x.pct!==0).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+
+  const activeProjects = S.projects.filter(p=>p.status==="actif");
+
+  const summaryText = `📊 Notre bilan du mois (${monthLabel()})\n\n`
+    + (catChanges.length ? catChanges.map(x=>`${x.c.emoji} ${x.c.name} : ${x.delta>=0?'+':''}${x.pct}% (${x.delta>=0?'+':''}${fmt0(x.delta)})`).join('\n') : "Pas encore assez d'historique pour comparer.")
+    + (activeProjects.length ? `\n\n🎯 Projets :\n`+activeProjects.map(p=>`${p.emoji} ${p.name} : ${Math.round(p.saved/p.target*100)}% atteint, encore ${p.months} mois`).join('\n') : '')
+    + `\n\n❤️ Budget à Deux`;
+
   return `<div style="padding-top:30px; text-align:center" class="fade">
     <div class="emoji-badge" style="width:84px;height:84px;border-radius:50%;background:var(--terra);color:#fff;font-size:36px;margin:0 auto 18px">❤️</div>
     <h1 class="hero-title" style="font-size:30px">Félicitations !</h1>
     <p class="hero-sub" style="margin:0 auto 22px">Votre budget est bouclé. Vous êtes parfaitement alignés pour vos futurs projets.</p>
     <button class="btn btn-primary" id="mdHome" style="margin-bottom:10px">Retour au tableau de bord</button>
-    <button class="btn btn-ghost" id="mdShare">Partager notre résumé</button>
-    <div class="section-title">Vos points forts</div>
+    <button class="btn btn-ghost" id="mdShare" data-summary="${escapeHtml(summaryText)}">📤 Partager notre résumé</button>
+
+    <div class="section-title" style="text-align:left">Vs le mois dernier</div>
     <div class="card" style="text-align:left">
-      ${[["📈","Investissement","+5% de croissance patrimoniale"],["🛟","Épargne de secours","Niveau de sécurité optimal (6 mois)"],["🎉","Budget Plaisir","150€ restants pour vous faire plaisir"]].map(r=>`<div class="lrow"><div class="emoji-badge">${r[0]}</div><div class="grow"><div class="name">${r[1]}</div><div class="sub" style="color:var(--terra)">${r[2]}</div></div></div>`).join('')}
+      ${catChanges.length ? catChanges.map(x=>`<div class="between" style="padding:10px 0; border-top:1px solid var(--line)"><div class="row" style="gap:9px"><span class="emoji-badge">${x.c.emoji}</span><b class="small">${escapeHtml(x.c.name)}</b></div><b class="small" style="color:${x.delta>=0?'var(--danger)':'var(--ok)'}">${x.delta>=0?'+':''}${x.pct}% <span class="muted" style="font-weight:500">(${x.delta>=0?'+':''}${fmt0(x.delta)})</span></b></div>`).join('') : `<p class="small muted" style="padding:6px 0">Pas encore assez d'historique pour comparer.</p>`}
     </div>
+
+    ${activeProjects.length ? `
+    <div class="section-title" style="text-align:left">Vos projets</div>
+    <div class="card" style="text-align:left">
+      ${activeProjects.map(p=>`<div class="between" style="padding:10px 0; border-top:1px solid var(--line)"><div class="row" style="gap:9px"><span class="emoji-badge">${p.emoji}</span><b class="small">${escapeHtml(p.name)}</b></div><b class="small" style="color:var(--terra)">${Math.round(p.saved/p.target*100)}% · encore ${p.months} mois</b></div>`).join('')}
+    </div>` : ''}
   </div>`;
 }
 
@@ -2219,7 +2240,11 @@ function bindMoneyDate(){
   const bk=$('#mdBack'); if(bk) bk.onclick=()=>{mdStep--; go('moneydate');};
   const nx=$('#mdNext'); if(nx) nx.onclick=()=>{ if(!S.moneyDate.doneSteps.includes(mdStep)) S.moneyDate.doneSteps.push(mdStep); if(mdStep===5){const dt=$('#mdDate'); if(dt) S.moneyDate.nextDate=dt.value;} mdStep++; save(); go('moneydate'); };
   const hm=$('#mdHome'); if(hm) hm.onclick=()=>{ S.moneyDate.doneSteps=[0,1,2,3,4,5]; save(); go('vue'); toast("Money Date terminé — bravo à vous deux ! 🤎","❤️"); };
-  const sh=$('#mdShare'); if(sh) sh.onclick=()=>toast("Résumé prêt à partager 💌");
+  const sh=$('#mdShare'); if(sh) sh.onclick=async()=>{
+    const text=sh.dataset.summary;
+    if(navigator.share){ try{ await navigator.share({text}); }catch(e){} }
+    else { navigator.clipboard?.writeText(text); toast("Résumé copié — collez-le pour l'envoyer 💌","📋"); }
+  };
   document.querySelectorAll('.cat-opt').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.cat-opt').forEach(x=>x.classList.remove('on')); b.classList.add('on'); toast("Surplus affecté ✨");}));
 }
 
