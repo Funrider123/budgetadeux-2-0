@@ -333,6 +333,10 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .chip:hover .ci, .chip.on .ci{border-color:var(--terra); background:var(--blush);}
 .chip .cn{font-size:10.5px; font-weight:700; color:var(--ink-2); text-align:center; line-height:1.2;}
 
+/* pilules texte (catégorie / commerce dans Ajouter) */
+.cat-pill{flex-shrink:0; display:inline-flex; align-items:center; gap:6px; border:1.5px solid var(--line-2); background:var(--card); border-radius:12px; padding:9px 14px; font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; transition:.15s;}
+.cat-pill.on{border-color:var(--terra); background:var(--blush); color:var(--terra-d);}
+
 /* toggle switch */
 .switch{position:relative; width:46px; height:27px; border-radius:20px; background:var(--line-2); transition:.2s; flex-shrink:0;}
 .switch.on{background:var(--terra);}
@@ -1172,11 +1176,30 @@ function renderVue(){
 /* ============================================================
    2 · AJOUTER
    ============================================================ */
-let draft={amount:"", date:iso(0), desc:"", cat:"courses", prevision:false, cagnotte:false};
+let draft={amount:"", date:iso(0), desc:"", cat:"", merchant:"", prevision:false, cagnotte:false};
+function dateLabel(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const label=d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return dateStr===iso(0) ? `Aujourd'hui, ${label}` : label;
+}
+function ajouterMissing(){
+  const amt=parseFloat((draft.amount+"").replace(',','.'))||0;
+  const missing=[];
+  if(!(amt>0)) missing.push('un montant');
+  if(!draft.cat) missing.push('une catégorie');
+  if(!draft.merchant && !draft.desc.trim()) missing.push('un commerce et/ou une description');
+  return missing;
+}
+function updateAjouterValidity(){
+  const missing=ajouterMissing();
+  const btn=$('#dSave'); if(btn) btn.disabled=missing.length>0;
+  const hint=$('#dMissingHint');
+  if(hint){ hint.textContent = missing.length ? `Ajoutez ${missing.join(', ')}` : ''; hint.style.display = missing.length ? 'block' : 'none'; }
+}
 function renderAjouter(){
-  const c=catById(draft.cat);
-  const sp=spentByCat(draft.cat), rem=c.budget-sp, remWeek=(c.budget/4)-(sp/4);
+  const c = draft.cat ? catById(draft.cat) : null;
   const isTransfer=/transfert|virement/i.test(draft.desc);
+  const missing=ajouterMissing();
   return `
   <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
     <h1 class="hero-title">Ajouter une dépense</h1>
@@ -1184,43 +1207,49 @@ function renderAjouter(){
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="field" style="margin-bottom:18px">
+    <div class="field" style="margin-bottom:2px">
       <label style="text-align:center">Montant</label>
       <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
     </div>
+    <div style="text-align:center; margin-bottom:16px"><span class="small link" id="dDateToggle">${dateLabel(draft.date)} ▾</span></div>
+    ${draft._showDate?`<div class="field"><input class="input" id="dDate" type="date" value="${draft.date}"></div>`:''}
 
     ${isTransfer?`<div class="card-soft" style="display:flex; gap:10px; align-items:center; margin-bottom:14px; background:color-mix(in srgb,var(--invest) 8%,transparent); border-color:color-mix(in srgb,var(--invest) 25%,transparent)">
       <span style="font-size:20px">🔁</span><div class="small" style="font-weight:700; color:var(--invest)">Mouvement interne détecté — sera classé en « Transfert » et non en dépense.</div></div>`:''}
 
-    <div class="field"><label>Description</label>
-      <input class="input" id="dDesc" placeholder="Ex : Essence weekend" value="${escapeHtml(draft.desc)}"></div>
+    <div class="field"><label>Catégorie</label>
+      <div class="merch">
+        ${S.categories.map(cc=>`<button class="cat-pill ${draft.cat===cc.id?'on':''}" data-catpick="${cc.id}">${escapeHtml(cc.name)}</button>`).join('')}
+      </div>
+      ${c?`<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${(c.budget-spentByCat(c.id))<0?'var(--danger)':'var(--terra)'}">${fmt0(c.budget-spentByCat(c.id))}</b> / mois</div>`:''}
+    </div>
 
-    <div class="grid2">
-      <div class="field"><label>Date</label><input class="input" id="dDate" type="date" value="${draft.date}"></div>
-      <div class="field"><label>Catégorie</label>
-        <button class="input" id="dCatBtn" style="text-align:left; display:flex; align-items:center; gap:8px"><span style="font-size:18px">${c.emoji}</span><span style="flex:1">${c.name}</span><span class="muted">▾</span></button>
+    <div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
+      <div class="merch">
+        ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
+        ${S.merchants.length<8?`<button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter</button>`:''}
       </div>
     </div>
-    <div class="small muted" style="margin:-6px 2px 12px">Reste sur « ${c.name} » : <b style="color:${rem<0?'var(--danger)':'var(--terra)'}">${fmt0(rem)}</b> / mois · ${fmt0(remWeek)} / semaine</div>
 
+    <div class="field"><label>Description <span class="muted" style="font-weight:600">(optionnel)</span></label>
+      <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
+    </div>
+
+    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${missing.length?'block':'none'}">${missing.length?`Ajoutez ${missing.join(', ')}`:''}</p>
+
+    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (prévision, cagnotte) ▾"}</span></div>
+    ${draft._showMore?`
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
-      <div class="row" style="gap:9px"><span style="font-size:18px">🔮</span><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
+      <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
       <div class="switch ${draft.prevision?'on':''}" id="dPrev"></div>
     </div>
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:16px">
-      <div class="row" style="gap:9px"><span style="font-size:18px">👛</span><div><div class="small" style="font-weight:800">Depuis la cagnotte commune</div><div class="small muted">Solde : ${fmt0(S.cagnotte.balance)}</div></div></div>
+      <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Depuis la cagnotte commune</div><div class="small muted">Solde : ${fmt0(S.cagnotte.balance)}</div></div></div>
       <div class="switch ${draft.cagnotte?'on':''}" id="dCag"></div>
-    </div>
+    </div>`:''}
 
-    <button class="btn btn-primary" id="dSave">${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
+    <button class="btn btn-primary" id="dSave" ${missing.length?'disabled':''}>${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
   </div>
-
-  <div class="section-title">Commerces habituels <span class="link" id="addMerch">+ Ajouter</span></div>
-  <div class="merch">
-    ${S.merchants.map(m=>`<button class="chip" data-merch="${m.id}"><span class="ci">${m.emoji}</span><span class="cn">${m.name}</span></button>`).join('')}
-    ${S.merchants.length<8?`<button class="chip" id="addMerch2"><span class="ci" style="color:var(--terra)">＋</span><span class="cn">Ajouter</span></button>`:''}
-  </div>
-  <p class="small muted" style="margin-top:4px">Un appui pré-remplit la catégorie. Jusqu'à 8 enseignes favorites.</p>
   `;
 }
 
@@ -2206,22 +2235,29 @@ function bindScreen(screen){
 }
 
 function bindAjouter(){
-  const a=$('#dAmount'); if(a) a.oninput=ev=>draft.amount=ev.target.value;
-  const d=$('#dDesc'); if(d) d.oninput=ev=>{draft.desc=ev.target.value; if(/transfert|virement/i.test(ev.target.value)!==/transfert|virement/i.test(draft._last||'')){draft._last=ev.target.value; go('ajouter'); $('#dDesc').focus();} draft._last=ev.target.value;};
-  const dt=$('#dDate'); if(dt) dt.onchange=ev=>draft.date=ev.target.value;
-  const cb=$('#dCatBtn'); if(cb) cb.onclick=openCatPicker;
+  const a=$('#dAmount'); if(a) a.oninput=ev=>{draft.amount=ev.target.value; updateAjouterValidity();};
+  const d=$('#dDesc'); if(d) d.oninput=ev=>{
+    draft.desc=ev.target.value;
+    const wasTransfer=/transfert|virement/i.test(draft._last||'');
+    const isTransferNow=/transfert|virement/i.test(ev.target.value);
+    draft._last=ev.target.value;
+    if(isTransferNow!==wasTransfer){ go('ajouter'); const el=$('#dDesc'); if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+    else updateAjouterValidity();
+  };
+  const dt=$('#dDate'); if(dt) dt.onchange=ev=>{draft.date=ev.target.value; go('ajouter');};
+  const dToggle=$('#dDateToggle'); if(dToggle) dToggle.onclick=()=>{draft._showDate=!draft._showDate; go('ajouter');};
+  const mo=$('#dMoreToggle'); if(mo) mo.onclick=()=>{draft._showMore=!draft._showMore; go('ajouter');};
   const p=$('#dPrev'); if(p) p.onclick=()=>{draft.prevision=!draft.prevision; go('ajouter');};
   const cg=$('#dCag'); if(cg) cg.onclick=()=>{draft.cagnotte=!draft.cagnotte; go('ajouter');};
-  document.querySelectorAll('[data-merch]').forEach(b=>b.addEventListener('click',()=>{ const m=S.merchants.find(x=>x.id===b.dataset.merch); draft.cat=m.cat; draft.desc=draft.desc||m.name; go('ajouter'); }));
-  const am=$('#addMerch'), am2=$('#addMerch2');
-  const addM=()=>openAddMerchant();
-  if(am) am.onclick=addM; if(am2) am2.onclick=addM;
+  document.querySelectorAll('[data-catpick]').forEach(b=>b.addEventListener('click',()=>{draft.cat=b.dataset.catpick; go('ajouter');}));
+  document.querySelectorAll('[data-merchpick]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.merchpick;
+    draft.merchant = draft.merchant===id ? "" : id;
+    if(draft.merchant){ const m=S.merchants.find(x=>x.id===id); if(m) draft.cat=m.cat; }
+    go('ajouter');
+  }));
+  const am2=$('#addMerch2'); if(am2) am2.onclick=()=>openAddMerchant();
   const s=$('#dSave'); if(s) s.onclick=saveExpense;
-}
-function openCatPicker(){
-  openModal(`<h3>Choisir une catégorie</h3><p class="small muted" style="margin-bottom:14px">Le budget restant s'affiche pour vous guider.</p>
-    <div class="cat-grid">${S.categories.map(c=>{const sp=spentByCat(c.id); const rem=c.budget-sp; return `<button class="cat-opt ${draft.cat===c.id?'on':''}" data-pick="${c.id}"><span class="e">${c.emoji}</span><div><div class="nm">${c.name}</div><div class="bd">Reste ${fmt0(rem)}</div></div></button>`;}).join('')}</div>`);
-  document.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>{draft.cat=b.dataset.pick; closeModal(); go('ajouter');}));
 }
 function openAddMerchant(){
   if(S.merchants.length>=8){ toast("Maximum 8 enseignes favorites","🛍️"); return; }
@@ -2235,14 +2271,19 @@ function openAddMerchant(){
 function saveExpense(){
   const amt=parseFloat((draft.amount+"").replace(',','.'));
   if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
+  if(!draft.cat){ toast("Choisissez une catégorie","🏷️"); return; }
+  if(!draft.merchant && !draft.desc.trim()){ toast("Ajoutez un commerce ou une description","✏️"); return; }
   const isTransfer=/transfert|virement/i.test(draft.desc);
-  const exp={id:e(), amount:amt, date:draft.date, desc:draft.desc||catById(draft.cat).name, cat:draft.cat, who:me(), type:isTransfer?'transfert':'depense', prevision:draft.prevision, cagnotte:draft.cagnotte, note:""};
+  const merchant = draft.merchant ? S.merchants.find(m=>m.id===draft.merchant) : null;
+  const descText = draft.desc.trim();
+  const finalDesc = merchant && descText ? `${merchant.name} — ${descText}` : (merchant ? merchant.name : (descText || catById(draft.cat).name));
+  const exp={id:e(), amount:amt, date:draft.date, desc:finalDesc, cat:draft.cat, who:me(), type:isTransfer?'transfert':'depense', prevision:draft.prevision, cagnotte:draft.cagnotte, note:""};
   S.expenses.push(exp);
   if(draft.cagnotte && !isTransfer){ S.cagnotte.balance-=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:-amt}); }
   if(isTransfer){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:+amt}); }
   const wasPrevision=draft.prevision;
   save();
-  draft={amount:"", date:iso(0), desc:"", cat:draft.cat, prevision:false, cagnotte:false};
+  draft={amount:"", date:iso(0), desc:"", cat:"", merchant:"", prevision:false, cagnotte:false};
   toast(isTransfer?"Transfert enregistré 🔁":wasPrevision?"Prévision ajoutée 🔮":"Dépense ajoutée — bien joué !","✓");
   go('vue');
 }
