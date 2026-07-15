@@ -582,22 +582,29 @@ function totalSpent(offset=0){ return realExpenses(offset).reduce((s,x)=>s+x.amo
 function spentByCat(catId, offset=0){ return realExpenses(offset).filter(x=>x.cat===catId).reduce((s,x)=>s+x.amount,0); }
 function spentByWho(who, offset=0){ return realExpenses(offset).filter(x=>x.who===who).reduce((s,x)=>s+x.amount,0); }
 
-// Découpage des semaines à l'INTÉRIEUR du mois en cours (jamais à cheval sur deux mois) :
-// le couple reprend un budget neuf le 1er de chaque mois, donc les semaines ne peuvent pas
-// déborder sur le mois suivant. Un mois de 28 jours donne 4 semaines pleines ; un mois de
-// 29 à 31 jours donne 4 semaines pleines + une 5e semaine partielle (1 à 3 jours), toujours
-// en fin de mois (jamais en début, puisqu'on compte à partir du jour 1).
+// Découpage en vraies semaines calendaires (lundi → dimanche) : une semaine se termine le
+// dimanche et une nouvelle démarre le lundi suivant, donc le mois peut très bien commencer
+// ET finir par une semaine incomplète (si le 1er n'est pas un lundi, ou si le dernier jour
+// du mois n'est pas un dimanche). Le budget hebdomadaire est proratisé au nombre de jours
+// de CE mois compris dans la semaine (plutôt qu'une division fixe par 4), pour rester exact
+// quel que soit le nombre de semaines que compte le mois (4, 5 ou 6).
+function weekDaysInMonthAt(weekIndex, dow1, daysInMonth){
+  const startDay=Math.max(1, (weekIndex-1)*7 - dow1 + 1);
+  const endDay=Math.min(daysInMonth, weekIndex*7 - dow1);
+  return Math.max(0, endDay-startDay+1);
+}
 function weekOfMonthInfo(){
   const now=new Date();
-  const daysInMonth=new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const fullWeeks=Math.floor(daysInMonth/7);
-  const totalWeeks=fullWeeks + (daysInMonth%7>0?1:0);
-  const today=now.getDate();
-  const weekIndex=Math.min(totalWeeks, Math.floor((today-1)/7)+1);
-  const startDay=(weekIndex-1)*7+1;
-  const endDay=Math.min(daysInMonth, startDay+6);
+  const y=now.getFullYear(), m=now.getMonth(), today=now.getDate();
+  const daysInMonth=new Date(y, m+1, 0).getDate();
+  const dow1=(new Date(y,m,1).getDay()+6)%7; // jour de semaine du 1er : lundi=0 … dimanche=6
+  const weekIndexForDay=day=>Math.floor((day-1+dow1)/7)+1;
+  const totalWeeks=weekIndexForDay(daysInMonth);
+  const weekIndex=weekIndexForDay(today);
+  const startDay=Math.max(1, (weekIndex-1)*7 - dow1 + 1);
+  const endDay=Math.min(daysInMonth, weekIndex*7 - dow1);
   return {
-    daysInMonth, totalWeeks, weekIndex, startDay, endDay,
+    daysInMonth, dow1, totalWeeks, weekIndex, startDay, endDay,
     weekDays: endDay-startDay+1,
     daysLeftInWeek: endDay-today,
     daysLeftInMonth: daysInMonth-today,
@@ -1018,7 +1025,7 @@ function go(screen){
 function renderVue(){
   const weekly = S.ui.period==="hebdo";
   const w = weekOfMonthInfo();
-  const budgetScoped = weekly ? totalBudget()/4*(w.weekDays/7) : totalBudget();
+  const budgetScoped = weekly ? totalBudget()*(w.weekDays/w.daysInMonth) : totalBudget();
   const spentScoped = weekly ? spentThisWeek() : totalSpent();
   const usedPct = budgetScoped>0 ? Math.min(100, Math.round(spentScoped/budgetScoped*100)) : 0;
   const remainingScoped = budgetScoped - spentScoped;
@@ -1042,7 +1049,7 @@ function renderVue(){
   }
   return `
   <div style="padding-top:6px">
-    <span class="pill">Période actuelle</span>
+    <span class="pill">Vos dépenses courantes</span>
     <div class="between" style="margin-top:10px">
       <h1 class="hero-title" style="font-size:27px">${monthLabel()}</h1>
       <div class="seg">
@@ -1050,16 +1057,15 @@ function renderVue(){
         <button data-period="hebdo" class="${weekly?'on':''}">Semaine</button>
       </div>
     </div>
-    <p class="small muted" style="margin:4px 0 0">Vos dépenses courantes et variables — hors charges fixes et projets.</p>
     <div style="margin-top:10px">
       <div style="display:flex; gap:5px">
         ${Array.from({length:w.totalWeeks}).map((_,i)=>{
           const idx=i+1;
-          const isPartial = idx===w.totalWeeks && w.daysInMonth%7>0;
+          const wd=weekDaysInMonthAt(idx, w.dow1, w.daysInMonth);
           const state = idx<w.weekIndex?'done':(idx===w.weekIndex?'now':'todo');
           const bg = state==='now'?'var(--terra)':state==='done'?'var(--terra)':'var(--line-2)';
           const op = state==='done'?'.45':'1';
-          return `<div style="flex:${isPartial?0.4:1}; height:5px; border-radius:3px; background:${bg}; opacity:${op}"></div>`;
+          return `<div style="flex:${wd/7}; height:5px; border-radius:3px; background:${bg}; opacity:${op}"></div>`;
         }).join('')}
       </div>
       <div class="between" style="margin-top:5px"><span class="small muted">Semaine ${w.weekIndex}/${w.totalWeeks}</span><span class="small muted">${weekly?`J-${w.daysLeftInWeek} avant la semaine prochaine`:`J-${w.daysLeftInMonth} avant le mois prochain`}</span></div>
@@ -1073,11 +1079,6 @@ function renderVue(){
     <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
       <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetScoped)} prévu</span>
     </div>
-  </div>
-
-  <div class="grid2" style="margin-top:14px">
-    <div class="stat"><div class="k">Total dépensé</div><div class="v">${fmt0(spentScoped)}</div><div class="d down">▾ sur ${weekly?expensesInWeek().length:realExpenses().length} dépenses</div></div>
-    <div class="stat"><div class="k">Budget restant</div><div class="v">${fmt0(remainingScoped)}</div><div class="d ${remainingScoped>=0?'up':'down'}">${remainingScoped>=0?'En bonne voie':'Dépassement'}</div></div>
   </div>
 
   <div class="section-title">Budgets par catégorie <span class="link" data-go="historique">Détail →</span></div>
