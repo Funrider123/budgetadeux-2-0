@@ -1030,6 +1030,10 @@ function renderVue(){
   const spentScoped = weekly ? spentThisWeek() : totalSpent();
   const usedPct = budgetScoped>0 ? Math.min(100, Math.round(spentScoped/budgetScoped*100)) : 0;
   const remainingScoped = budgetScoped - spentScoped;
+  const periodElapsedPct = weekly
+    ? Math.round((w.weekDays - w.daysLeftInWeek) / w.weekDays * 100)
+    : Math.round((w.daysInMonth - w.daysLeftInMonth) / w.daysInMonth * 100);
+  const onTrack = usedPct <= periodElapsedPct;
   const rep=repartition();
   // money date status
   const mdDone=S.moneyDate.doneSteps.length;
@@ -1074,7 +1078,10 @@ function renderVue(){
   </div>
 
   <div class="panel-terra" style="margin-top:14px">
-    <div class="lbl">Restant pour ${weekly?'cette semaine':'ce mois'}</div>
+    <div class="between">
+      <div class="lbl">Restant pour ${weekly?'cette semaine':'ce mois'}</div>
+      <span class="pill" style="background:rgba(255,255,255,.9); color:${onTrack?'var(--ok)':'var(--terra-d)'}">${onTrack?'✅ En avance':'⚠️ En retard'}</span>
+    </div>
     <div class="big">${fmt(remainingScoped)}</div>
     <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${usedPct}%; background:#fff"></i></div>
     <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
