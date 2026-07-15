@@ -1532,17 +1532,11 @@ function mdSurplusAllDecided(offset){
   return mdSurplusRows(offset).every(x=>mdSurplusDecision(offset, x.c.id));
 }
 const MD_CHECKLIST_ITEMS=[
-  {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?"},
-  {key:'revenus', label:"Nos revenus ont-ils changé ?", detail:'revenus'},
-  {key:'repartition', label:"Voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
+  {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
+  {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
   {key:'categories', label:"Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
 ];
-function mdCheckDone(key){
-  const k=mdMonthKey(S.ui.mdMonth);
-  if(!S.moneyDate.checklist[k]) S.moneyDate.checklist[k]={};
-  S.moneyDate.checklist[k][key]=true;
-}
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdContent(step){
   const offset=S.ui.mdMonth;
@@ -1559,20 +1553,16 @@ function mdContent(step){
       </div>`;
     }).join('')}
     <div class="card-soft" style="margin-top:14px; margin-bottom:12px">
-      ${miniStat("Vos dépenses courantes", fmt(totalSpent(offset)))}
-      ${miniStat("Épargne Projets", fmt(S.projects.reduce((s,p)=>s+p.saved,0)))}
+      ${miniStat("Total catégories", fmt(totalSpent(offset)))}
     </div>
-    <p class="small muted" style="margin-bottom:6px">Détail par catégorie — ajustez si besoin :</p>
+    <p class="small muted" style="margin-bottom:6px">Détail par catégorie :</p>
     ${S.categories.filter(c=>c.budget>0).map(c=>{
       const sp=spentByCat(c.id,offset); const pct=c.budget>0?Math.round(sp/c.budget*100):0;
       const cls=pct>100?'over':pct>=85?'warn':'';
       return `<div style="padding:10px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:7px">
           <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${escapeHtml(c.name)}</b></div>
-          <div class="row" style="gap:10px">
-            <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(c.budget)}</span></span>
-            <span class="link" data-editcat="${c.id}" style="font-size:14px">✎</span>
-          </div>
+          <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(c.budget)}</span></span>
         </div>
         <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
       </div>`;
@@ -2376,87 +2366,37 @@ function undoSurplusDecision(offset, catId){
   }
   mdSetSurplusDecision(offset, catId, null);
 }
-function openMdRevenus(){
-  openModal(`<h3>💰 Vos revenus</h3><p class="small muted" style="margin-bottom:14px">Indiquez vos salaires mensuels.</p>
-    <div class="field"><label>${escapeHtml(nameOf('lui'))}</label><input class="input" type="number" id="mdSalLui" value="${S.settings.salaries.lui}"></div>
-    <div class="field"><label>${escapeHtml(nameOf('elle'))}</label><input class="input" type="number" id="mdSalElle" value="${S.settings.salaries.elle}"></div>
-    <button class="btn btn-primary" id="mdRevenusOk">Valider ✓</button>`, true);
-  const sl=$('#mdSalLui'), se=$('#mdSalElle');
-  sl.oninput=()=>{ S.settings.salaries.lui=Math.max(0,+sl.value||0); save(); };
-  se.oninput=()=>{ S.settings.salaries.elle=Math.max(0,+se.value||0); save(); };
-  $('#mdRevenusOk').onclick=()=>{
-    S.pilotFrozen=false; mdCheckDone('revenus'); save(); closeModal(); go('moneydate'); toast("Revenus mis à jour ✓");
-  };
+const MD_MODE_LABELS={fixe:'Contribution fixe', salaire:'Proportionnel aux revenus bruts', custom:'Personnalisé', net:'Proportionnel aux revenus nets'};
+function mdRepartitionSummary(){
+  const mode=S.settings.mode, rep=repartition();
+  if(mode==='fixe') return `<p class="small">${escapeHtml(nameOf('lui'))} : ${fmt0(S.settings.fixed.lui||0)} · ${escapeHtml(nameOf('elle'))} : ${fmt0(S.settings.fixed.elle||0)}</p>`;
+  if(mode==='custom') return `<p class="small">${escapeHtml(nameOf('lui'))} : ${rep.lui}% · ${escapeHtml(nameOf('elle'))} : ${rep.elle}%</p>`;
+  return `<p class="small">${escapeHtml(nameOf('lui'))} : ${rep.lui}% · ${escapeHtml(nameOf('elle'))} : ${rep.elle}%</p>
+    <p class="small muted">Salaires : ${escapeHtml(nameOf('lui'))} ${fmt0(S.settings.salaries.lui)} · ${escapeHtml(nameOf('elle'))} ${fmt0(S.settings.salaries.elle)}</p>`;
 }
 function openMdRepartition(){
-  const modes=[
-    {id:'fixe', t:'Contribution fixe', d:'Chacun verse un montant fixe'},
-    {id:'salaire', t:'Prop. aux revenus bruts', d:'Basé sur les salaires'},
-    {id:'custom', t:'Personnalisé', d:'% choisi librement'},
-    {id:'net', t:'Prop. aux revenus nets', d:'Après charges perso'}
-  ];
-  const render=()=>{
-    const mode=S.settings.mode;
-    return `<h3>⚖️ Répartition budgétaire</h3><p class="small muted" style="margin-bottom:14px">Choisissez comment vous répartissez vos charges communes.</p>
-    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px">
-      ${modes.map(m=>`<button class="cat-opt mdModePick ${mode===m.id?'on':''}" data-mode="${m.id}" style="text-align:left; padding:12px"><b class="small">${m.t}</b><div class="small muted">${m.d}</div></button>`).join('')}
-    </div>
-    ${mode==='fixe'?`<div class="grid2" style="margin-bottom:14px">
-      <div class="field"><label>${escapeHtml(nameOf('lui'))}</label><input class="input" type="number" id="mdFixLui" value="${S.settings.fixed.lui||0}"></div>
-      <div class="field"><label>${escapeHtml(nameOf('elle'))}</label><input class="input" type="number" id="mdFixElle" value="${S.settings.fixed.elle||0}"></div>
-    </div>`:''}
-    <button class="btn btn-primary" id="mdRepartitionOk">Valider ✓</button>`;
-  };
-  const refresh=()=>{ openModal(render(), true); bind(); };
-  const bind=()=>{
-    document.querySelectorAll('.mdModePick').forEach(b=>b.addEventListener('click',()=>{ S.settings.mode=b.dataset.mode; save(); refresh(); }));
-    const fl=$('#mdFixLui'), fe=$('#mdFixElle');
-    if(fl) fl.oninput=()=>{ S.settings.fixed.lui=Math.max(0,+fl.value||0); save(); };
-    if(fe) fe.oninput=()=>{ S.settings.fixed.elle=Math.max(0,+fe.value||0); save(); };
-    $('#mdRepartitionOk').onclick=()=>{
-      S.pilotFrozen=false; mdCheckDone('repartition'); save(); closeModal(); go('moneydate'); toast("Répartition mise à jour ✓");
-    };
-  };
-  refresh();
+  openModal(`<h3>⚖️ Revenus & répartition</h3>
+    <p class="small muted" style="margin-bottom:10px">Mode actuel : <b>${MD_MODE_LABELS[S.settings.mode]}</b></p>
+    ${mdRepartitionSummary()}
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoPilotageRep">Modifier dans Simulation et validation budgétaire →</span>
+    </div>`);
+  $('#mdGoPilotageRep').onclick=()=>{ closeModal(); go('pilotage'); };
 }
 function openMdCharges(){
-  let showAdd=false;
-  const render=()=>{
-    const communes=S.charges.filter(c=>c.scope==='commune');
-    return `<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:14px">Total : ${fmt0(chargesCommunes())}</p>
-    ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)">
-      <b class="small">${escapeHtml(c.name)}</b>
-      <div class="row" style="gap:8px">
-        <input class="input" type="number" value="${c.amount}" data-mdcharge="${c.id}" style="width:90px; padding:8px">
-        <span class="link" data-mddelcharge="${c.id}" style="color:var(--danger)">✕</span>
-      </div>
-    </div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
-    ${showAdd?`<div class="field" style="margin-top:10px"><label>Nom</label><input class="input" id="mdNewChargeName" placeholder="Ex : Netflix"></div>
-    <div class="field"><label>Montant /mois</label><input class="input" type="number" id="mdNewChargeAmt" placeholder="15"></div>
-    <button class="btn btn-soft btn-sm" id="mdNewChargeAdd" style="width:100%">Ajouter</button>`
-    :`<div style="padding:10px 0 4px"><span class="link" id="mdAddCharge">+ Ajouter une charge fixe</span></div>`}
-    <button class="btn btn-primary" id="mdChargesOk" style="margin-top:12px">Valider ✓</button>`;
-  };
-  const refresh=()=>{ openModal(render(), true); bind(); };
-  const bind=()=>{
-    document.querySelectorAll('[data-mdcharge]').forEach(inp=>inp.oninput=()=>{
-      const c=S.charges.find(x=>x.id===inp.dataset.mdcharge); if(c){ c.amount=Math.max(0,+inp.value||0); save(); }
-    });
-    document.querySelectorAll('[data-mddelcharge]').forEach(b=>b.addEventListener('click',()=>{
-      S.charges=S.charges.filter(x=>x.id!==b.dataset.mddelcharge); save(); refresh();
-    }));
-    const ac=$('#mdAddCharge'); if(ac) ac.onclick=()=>{ showAdd=true; refresh(); };
-    const na=$('#mdNewChargeAdd'); if(na) na.onclick=()=>{
-      const n=$('#mdNewChargeName').value.trim(); const amt=+$('#mdNewChargeAmt').value||0;
-      if(!n){ toast("Nom requis","✏️"); return; }
-      S.charges.push({id:e(), emoji:'📄', name:n, amount:amt, scope:'commune', locked:false, cls:'besoin'});
-      showAdd=false; save(); refresh();
-    };
-    $('#mdChargesOk').onclick=()=>{
-      S.pilotFrozen=false; mdCheckDone('charges'); save(); closeModal(); go('moneydate'); toast("Charges mises à jour ✓");
-    };
-  };
-  refresh();
+  const communes=S.charges.filter(c=>c.scope==='commune');
+  openModal(`<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt0(chargesCommunes())}</p>
+    ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt0(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoPilotageCharges">Modifier dans Simulation et validation budgétaire →</span>
+    </div>`);
+  $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
+}
+function openMdDepenses(){
+  const offset=S.ui.mdMonth;
+  const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
+  openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
+    ${list.length?list.map(x=>histRow(x)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`);
 }
 
 function bindAnalyse(){
@@ -2480,11 +2420,10 @@ function bindMoneyDate(){
   const mp=$('#mdMonthPrev'); if(mp) mp.onclick=()=>{ S.ui.mdMonth--; save(); go('moneydate'); };
   const mn=$('#mdMonthNext'); if(mn) mn.onclick=()=>{ if(S.ui.mdMonth<0){ S.ui.mdMonth++; save(); go('moneydate'); } };
 
-  // Étape 0 : ajuster une catégorie
-  document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat,'moneydate')));
+  // Étape 0 : consultation (lecture seule, la modification passe par la vraie page)
   document.querySelectorAll('[data-mddetail]').forEach(b=>b.addEventListener('click',()=>{
     const which=b.dataset.mddetail;
-    if(which==='revenus') openMdRevenus();
+    if(which==='depenses') openMdDepenses();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
   }));
