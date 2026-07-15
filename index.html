@@ -1040,13 +1040,15 @@ function renderVue(){
   // money date status
   const mdDone=S.moneyDate.doneSteps.length;
   const mdInProgress = mdDone>0 && mdDone<6;
-  let mdTitle, mdSub;
+  const mdNeverScheduled = mdDone===0 && !S.moneyDate.nextDate;
+  let mdTitle, mdSub, mdIcon='❤️';
   if(mdInProgress){
     mdTitle = "C'est l'heure de votre Money Date";
     mdSub = `${mdDone}/6 étapes — reprendre votre bilan`;
-  } else if(!S.moneyDate.nextDate){
-    mdTitle = "C'est l'heure de votre Money Date";
-    mdSub = "Votre rendez-vous financier à deux, en 6 étapes";
+  } else if(mdNeverScheduled){
+    mdTitle = "Aucune date de Money Date prévue";
+    mdSub = "Indiquez à deux quand faire votre premier point";
+    mdIcon = '🔔';
   } else {
     const days = Math.ceil((new Date(S.moneyDate.nextDate)-new Date(new Date().toDateString()))/86400000);
     if(days>1){ mdTitle = `Encore ${days} jours avant votre prochain Money Date`; mdSub = "Votre rendez-vous financier à deux"; }
@@ -1131,8 +1133,8 @@ function renderVue(){
   </div>
 
   <!-- Money date hero -->
-  <div class="card" style="margin-top:14px; background:linear-gradient(135deg,var(--blush),var(--card)); display:flex; align-items:center; gap:14px; cursor:pointer" id="mdCard">
-    <div class="emoji-badge" style="background:var(--terra); color:#fff; width:48px;height:48px; font-size:22px">❤️</div>
+  <div class="card" style="margin-top:14px; background:linear-gradient(135deg,${mdNeverScheduled?'color-mix(in srgb,var(--warn) 25%,var(--card))':'var(--blush)'},var(--card)); display:flex; align-items:center; gap:14px; cursor:pointer" id="mdCard">
+    <div class="emoji-badge" style="background:${mdNeverScheduled?'var(--warn)':'var(--terra)'}; color:#fff; width:48px;height:48px; font-size:22px">${mdIcon}</div>
     <div class="grow">
       <div class="name" style="font-family:var(--serif); font-size:16px">${mdTitle}</div>
       <div class="sub">${mdSub}</div>
@@ -2044,7 +2046,10 @@ function bindScreen(screen){
 
   if(screen==="vue"){
     document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{S.ui.period=b.dataset.period; save(); go('vue');}));
-    const md=$('#mdCard'); if(md) md.onclick=()=>{ mdStep=S.moneyDate.doneSteps.length>=6?0:S.moneyDate.doneSteps.length; go('moneydate'); };
+    const md=$('#mdCard'); if(md) md.onclick=()=>{
+      if(S.moneyDate.doneSteps.length===0 && !S.moneyDate.nextDate){ openMoneyDateSchedule(); return; }
+      mdStep=S.moneyDate.doneSteps.length>=6?0:S.moneyDate.doneSteps.length; go('moneydate');
+    };
     document.querySelectorAll('[data-exp]').forEach(r=>r.addEventListener('click',()=>openExpenseSheet(r.dataset.exp)));
   }
 
@@ -2122,6 +2127,18 @@ function openExpenseSheet(id){
   $('#exDel').onclick=()=>{ S.expenses=S.expenses.filter(e=>e.id!==id); save(); closeModal(); go(current); toast("Dépense supprimée","🗑"); };
 }
 
+function openMoneyDateSchedule(){
+  const d=new Date(); d.setMonth(d.getMonth()+1);
+  openModal(`<h3>📅 Votre premier Money Date</h3>
+    <p class="small muted" style="margin-bottom:14px">Choisissez ensemble la date de votre premier rendez-vous financier.</p>
+    <div class="field"><label>Date</label><input class="input" type="date" id="mdScheduleDate" value="${d.toISOString().slice(0,10)}"></div>
+    <button class="btn btn-primary" id="mdScheduleSave" style="width:100%">Confirmer cette date</button>`);
+  $('#mdScheduleSave').onclick=()=>{
+    const val=$('#mdScheduleDate').value;
+    if(!val){ toast("Choisissez une date","📅"); return; }
+    S.moneyDate.nextDate=val; save(); closeModal(); go('vue'); toast("Rendez-vous programmé ✓","📅");
+  };
+}
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>openEditProject(null,'projets');
   const ch=$('#cagHist'); if(ch) ch.onclick=openCagnotteHistory;
