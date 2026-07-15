@@ -1477,18 +1477,20 @@ const MD_STEPS=[
 ];
 let mdStep=0;
 function mdMonthKey(offset){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return `${d.getFullYear()}-${d.getMonth()}`; }
-function mdSurplusDecision(offset, catId){ return S.moneyDate.surplusDecisions[mdMonthKey(offset)+'_'+catId]; }
-function mdSetSurplusDecision(offset, catId, decision){
+function mdSurplusDecisions(offset, catId){ return S.moneyDate.surplusDecisions[mdMonthKey(offset)+'_'+catId] || []; }
+function mdAddSurplusDecision(offset, catId, decision){
   const k=mdMonthKey(offset)+'_'+catId;
-  if(decision===null) delete S.moneyDate.surplusDecisions[k];
-  else S.moneyDate.surplusDecisions[k]=decision;
+  if(!S.moneyDate.surplusDecisions[k]) S.moneyDate.surplusDecisions[k]=[];
+  S.moneyDate.surplusDecisions[k].push(decision);
 }
+function mdSurplusDecidedAmount(offset, catId){ return mdSurplusDecisions(offset,catId).reduce((s,d)=>s+d.amount,0); }
+function mdSurplusRemaining(offset, catId, surplus){ return Math.max(0, surplus - mdSurplusDecidedAmount(offset,catId)); }
 function renderMoneyDate(){
   const done=S.moneyDate.doneSteps.length;
   const pct=Math.round((mdStep)/6*100);
   if(mdStep>=6) return moneyDateDone();
   const st=MD_STEPS[mdStep];
-  const canContinue = (mdStep!==0 || mdChecklistAllDone(S.ui.mdMonth)) && (mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth));
+  const canContinue = (mdStep!==0 || mdChecklistAllDone(S.ui.mdMonth)) && (mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth)) && (mdStep!==3 || !!mdChecklist(S.ui.mdMonth).projets_alignes);
   return `
   <div class="steps-head">
     <div class="between" style="padding-top:4px">
@@ -1519,7 +1521,7 @@ function renderMoneyDate(){
     ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
     <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===5?'Terminer notre bilan ✓':'Continuer →'}</button>
   </div>
-  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':'Décidez pour chaque catégorie avant de continuer'}</p>`:''}
+  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':mdStep===3?'Cochez la case avant de continuer':'Décidez pour chaque catégorie avant de continuer'}</p>`:''}
   `;
 }
 function projectEtaLabel(p){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(p.months||0)); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`; }
@@ -1530,7 +1532,7 @@ function mdSurplusRows(offset){
   }).filter(x=>x.surplus>0);
 }
 function mdSurplusAllDecided(offset){
-  return mdSurplusRows(offset).every(x=>mdSurplusDecision(offset, x.c.id));
+  return mdSurplusRows(offset).every(x=>mdSurplusRemaining(offset, x.c.id, x.surplus)<=0.01);
 }
 const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
@@ -1592,27 +1594,37 @@ function mdContent(step){
     const rows=mdSurplusRows(offset);
     if(!rows.length) return `<p class="empty">Aucun surplus ce mois-ci, tout a été utilisé 💪</p>`;
     return rows.map(({c,surplus})=>{
-      const decision=mdSurplusDecision(offset, c.id);
-      const canUndo = decision && (decision.type==='kept' || decision.dest==='cagnotte' || (S.projects.find(p=>p.id===decision.dest && p.status!=='abandonne')));
+      const decisions=mdSurplusDecisions(offset, c.id);
+      const remaining=mdSurplusRemaining(offset, c.id, surplus);
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:8px">
           <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${c.name}</b></div>
           <b class="small" style="color:var(--terra)">+${fmt0(surplus)}</b>
         </div>
-        ${decision?`<div class="between">
-            <span class="small" style="color:var(--ok); font-weight:700">${decision.type==='kept'?'✓ Gardé pour le mois prochain':'✓ Transféré (mouvement interne)'}</span>
-            ${canUndo?`<span class="link" data-surplus-undo="${c.id}" style="font-size:12px">Modifier</span>`:`<span class="small muted" style="font-size:11px">Définitif</span>`}
-          </div>`
-        :`<div class="row" style="gap:6px">
-            <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}">Transférer</button>
-            <button class="btn btn-ghost btn-sm" style="flex:1" data-surplus-keep="${c.id}">Garder pour le mois prochain</button>
-          </div>`}
+        ${decisions.map((d,i)=>{
+          const canUndo = d.type==='kept' || d.dest==='cagnotte' || (S.projects.find(p=>p.id===d.dest && p.status!=='abandonne'));
+          return `<div class="between" style="padding:3px 0">
+            <span class="small" style="color:var(--ok); font-weight:700">${d.type==='kept'?`✓ Gardé (${fmt0(d.amount)})`:`✓ Transféré (${fmt0(d.amount)}, mouvement interne)`}</span>
+            ${canUndo?`<span class="link" data-surplus-undo="${c.id}" data-idx="${i}" style="font-size:12px">Modifier</span>`:`<span class="small muted" style="font-size:11px">Définitif</span>`}
+          </div>`;
+        }).join('')}
+        ${remaining>0.01?`<div class="row" style="gap:6px; margin-top:${decisions.length?8:0}px">
+            <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}" data-remaining="${remaining}">Transférer${decisions.length?` (${fmt0(remaining)})`:''}</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" data-surplus-keep="${c.id}" data-remaining="${remaining}">${decisions.length?`Garder (${fmt0(remaining)})`:'Garder pour le mois prochain'}</button>
+          </div>`:''}
       </div>`;
     }).join('');
   }
   if(step===3){
     const active=S.projects.filter(p=>p.status!=="abandonne");
-    return `<div class="card-soft" style="margin-bottom:12px; text-align:center">
+    const alignedOn=!!mdChecklist(offset).projets_alignes;
+    return `<div style="padding:10px 0 14px" data-mdcheck="projets_alignes">
+      <div class="row" style="gap:10px; cursor:pointer">
+        <span style="width:22px; height:22px; border-radius:50%; border:2px solid ${alignedOn?'var(--ok)':'var(--line-2)'}; background:${alignedOn?'var(--ok)':'transparent'}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0">${alignedOn?'✓':''}</span>
+        <span class="small" style="${alignedOn?'text-decoration:line-through; color:var(--muted)':''}">Sommes-nous toujours alignés sur nos rêves ?</span>
+      </div>
+    </div>
+    <div class="card-soft" style="margin-bottom:12px; text-align:center">
       <div class="small muted" style="font-weight:800">Disponible pour nos projets ce mois-ci</div>
       <div style="font-family:var(--serif); font-size:24px; color:var(--terra)">${fmt(disponiblePourProjets())}</div>
     </div>
@@ -2336,37 +2348,55 @@ function openAbandon(p, returnTo){
   $('#abDrop').onclick=()=>{ p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Projet abandonné"); };
   $('#abCancel').onclick=closeModal;
 }
-function openSurplusTransfer(catId, surplus){
+function openSurplusTransfer(catId, remaining){
   const c=catById(catId);
   const dests=S.projects.filter(p=>p.status==='actif');
-  openModal(`<h3>💸 Transférer le surplus</h3><p class="small muted" style="margin-bottom:14px">Surplus de « ${c.name} » : ${fmt0(surplus)}</p>
+  openModal(`<h3>💸 Transférer le surplus</h3><p class="small muted" style="margin-bottom:14px">Montant restant à décider pour « ${c.name} » : ${fmt0(remaining)}</p>
     <div class="field"><label>Destination</label><select class="select" id="stDest"><option value="cagnotte">👛 Cagnotte commune</option>${dests.map(p=>`<option value="${p.id}">${p.emoji} ${p.name}</option>`).join('')}</select></div>
-    <div class="field"><label>Montant à transférer</label><input class="input" type="number" id="stAmt" value="${Math.round(surplus)}"></div>
+    <div class="field"><label>Montant à transférer</label><input class="input" type="number" id="stAmt" value="${Math.round(remaining)}"></div>
     <button class="btn btn-primary" id="stSave">Transférer</button>`, true);
   $('#stSave').onclick=()=>{
-    const amt=Math.min(surplus,+$('#stAmt').value||0); const dest=$('#stDest').value;
+    const amt=Math.min(remaining,Math.max(0,+$('#stAmt').value||0));
+    if(amt<=0){ toast("Indiquez un montant","💶"); return; }
+    const dest=$('#stDest').value;
     const destLabel = dest==='cagnotte' ? 'Cagnotte commune' : (S.projects.find(x=>x.id===dest)?.name || 'Projet');
     const expId=e();
     S.expenses.push({id:expId, type:'transfert', prevision:false, amount:amt, cat:catId, who:me(), desc:`Surplus ${c.name} → ${destLabel}`, date:iso(0), note:""});
     if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); }
     else { const p=S.projects.find(x=>x.id===dest); if(p) p.saved+=amt; }
-    mdSetSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
-    save(); closeModal(); go('moneydate'); toast("Surplus transféré 💸 (mouvement interne)","✓");
+    mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
+    save(); closeModal();
+    const left=remaining-amt;
+    if(left>0.01){ openSurplusRemainderChoice(catId, left); }
+    else { go('moneydate'); toast("Surplus transféré 💸 (mouvement interne)","✓"); }
   };
 }
-function undoSurplusDecision(offset, catId){
-  const decision=mdSurplusDecision(offset, catId);
-  if(decision && decision.type==='transferred'){
+function openSurplusRemainderChoice(catId, remaining){
+  const c=catById(catId);
+  openModal(`<h3>Et le reste ?</h3><p class="small muted" style="margin-bottom:14px">Il reste ${fmt0(remaining)} à décider pour « ${c.name} ».</p>
+    <button class="btn btn-soft" id="srKeep" style="margin-bottom:10px">Garder pour le mois prochain</button>
+    <button class="btn btn-ghost" id="srTransfer">Transférer ailleurs aussi</button>`, true);
+  $('#srKeep').onclick=()=>{
+    mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'kept', amount:remaining});
+    save(); closeModal(); go('moneydate'); toast("Gardé pour le mois prochain ✓");
+  };
+  $('#srTransfer').onclick=()=>{ closeModal(); openSurplusTransfer(catId, remaining); };
+}
+function undoSurplusDecision(offset, catId, idx){
+  const k=mdMonthKey(offset)+'_'+catId;
+  const arr=S.moneyDate.surplusDecisions[k]; if(!arr || !arr[idx]) return;
+  const decision=arr[idx];
+  if(decision.type==='transferred'){
     const c=catById(catId);
     if(decision.dest==='cagnotte'){
       S.cagnotte.balance-=decision.amount;
-      const idx=S.cagnotte.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount);
-      if(idx>-1) S.cagnotte.history.splice(idx,1);
+      const hidx=S.cagnotte.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount);
+      if(hidx>-1) S.cagnotte.history.splice(hidx,1);
     } else { const p=S.projects.find(x=>x.id===decision.dest); if(p) p.saved-=decision.amount; }
     if(decision.expId) S.expenses=S.expenses.filter(x=>x.id!==decision.expId);
-    save();
   }
-  mdSetSurplusDecision(offset, catId, null);
+  arr.splice(idx,1);
+  save();
 }
 const MD_MODE_LABELS={fixe:'Contribution fixe', salaire:'Proportionnel aux revenus bruts', custom:'Personnalisé', net:'Proportionnel aux revenus nets'};
 function mdRepartitionSummary(){
@@ -2451,15 +2481,14 @@ function bindMoneyDate(){
 
   // Étape 2 : transfert de surplus par catégorie
   document.querySelectorAll('[data-surplus-transfer]').forEach(b=>b.addEventListener('click',()=>{
-    const catId=b.dataset.surplusTransfer; const c=catById(catId);
-    const surplus=Math.max(0, c.budget-spentByCat(catId,S.ui.mdMonth));
-    openSurplusTransfer(catId, surplus);
+    openSurplusTransfer(b.dataset.surplusTransfer, +b.dataset.remaining);
   }));
   document.querySelectorAll('[data-surplus-keep]').forEach(b=>b.addEventListener('click',()=>{
-    mdSetSurplusDecision(S.ui.mdMonth, b.dataset.surplusKeep, {type:'kept'}); save(); go('moneydate'); toast("Gardé pour le mois prochain ✓");
+    mdAddSurplusDecision(S.ui.mdMonth, b.dataset.surplusKeep, {type:'kept', amount:+b.dataset.remaining});
+    save(); go('moneydate'); toast("Gardé pour le mois prochain ✓");
   }));
   document.querySelectorAll('[data-surplus-undo]').forEach(b=>b.addEventListener('click',()=>{
-    undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo); go('moneydate');
+    undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo, +b.dataset.idx); go('moneydate');
   }));
 
   // Étape 3 : consultation des projets (la modification passe par Pilotage)
