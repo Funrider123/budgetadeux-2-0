@@ -1535,7 +1535,7 @@ const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
-  {key:'categories', label:"Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
+  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdContent(step){
@@ -2380,7 +2380,7 @@ function openMdRepartition(){
     ${mdRepartitionSummary()}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoPilotageRep">Modifier dans Simulation et validation budgétaire →</span>
-    </div>`);
+    </div>`, true);
   $('#mdGoPilotageRep').onclick=()=>{ closeModal(); go('pilotage'); };
 }
 function openMdCharges(){
@@ -2389,14 +2389,14 @@ function openMdCharges(){
     ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt0(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoPilotageCharges">Modifier dans Simulation et validation budgétaire →</span>
-    </div>`);
+    </div>`, true);
   $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
 }
 function openMdDepenses(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
   openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
-    ${list.length?list.map(x=>histRow(x)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`);
+    ${list.length?list.map(x=>histRow(x)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`, true);
 }
 
 function bindAnalyse(){
