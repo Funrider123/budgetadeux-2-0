@@ -618,6 +618,13 @@ function realExpenses(offset=0){ return S.expenses.filter(x=>x.type==="depense" 
 function totalSpent(offset=0){ return realExpenses(offset).reduce((s,x)=>s+x.amount,0); }
 function spentByCat(catId, offset=0){ return realExpenses(offset).filter(x=>x.cat===catId).reduce((s,x)=>s+x.amount,0); }
 function spentByWho(who, offset=0){ return realExpenses(offset).filter(x=>x.who===who).reduce((s,x)=>s+x.amount,0); }
+// Dépenses réelles d'un mois ventilées par nature (besoin/envie/investissement/protection),
+// selon la classification de la catégorie de chaque dépense. Sert à la vue annuelle empilée.
+function spentByClsMonth(offset=0){
+  const t={besoin:0,envie:0,invest:0,protection:0};
+  realExpenses(offset).forEach(x=>{ const c=catById(x.cat); const cl=(c&&c.cls) || 'besoin'; if(t[cl]===undefined) t[cl]=0; t[cl]+=x.amount; });
+  return t;
+}
 function previsionSpent(offset=0){ return S.expenses.filter(x=>x.type==="depense" && x.prevision && inMonth(x.date,offset)).reduce((s,x)=>s+x.amount,0); }
 
 // Découpage en vraies semaines calendaires (lundi → dimanche) : une semaine se termine le
@@ -1558,28 +1565,48 @@ function renderAnalyse(){
   <div class="section-title" style="margin-top:6px">Vue annuelle</div>
   <div class="card">
     ${(() => {
-      const cur = new Date().getMonth();
-      const tb = totalBudget();
-      const monthly = MOIS.map((m,i)=>{
-        const offset=i-cur;
-        const previsionPct = tb>0 ? Math.round(previsionSpent(offset)/tb*100) : 0;
-        return { m, spent: i<=cur ? totalSpent(offset) : 0, future: i>cur, previsionPct };
-      });
-      const max = Math.max(...monthly.map(x=>x.spent), 0);
-      const elapsed = cur+1;
-      const avg = monthly.reduce((s,x)=>s+x.spent,0)/elapsed;
-      const anyPrevision = monthly.some(x=>x.previsionPct>0);
-      const bars = monthly.map(x=>{
-        const h = x.future ? 14 : (max>0 ? Math.round(x.spent/max*100) : 0);
-        return `<div class="col ${x.future?'dim':''}">
-          ${x.previsionPct>0?`<span class="small" style="font-size:8.5px; font-weight:800; color:var(--warn); white-space:nowrap">${x.previsionPct}%</span>`:''}
-          <div class="b" style="height:${h}%"></div><div class="m">${x.m[0]}</div>
+      const budget = totalBudget();
+      // 12 derniers mois glissants (du plus ancien à gauche au mois en cours à droite).
+      const months = [];
+      for(let off=-11; off<=0; off++){
+        const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+off);
+        const cls=spentByClsMonth(off);
+        const total=cls.besoin+cls.envie+cls.invest+cls.protection;
+        months.push({off, ini:MOIS[d.getMonth()][0], cls, total, cur:off===0, over:budget>0 && total>budget});
+      }
+      const withData = months.filter(m=>m.total>0);
+      const avg = withData.length ? withData.reduce((s,m)=>s+m.total,0)/withData.length : 0;
+      const max = Math.max(...months.map(m=>m.total), budget, 1);
+      const nOver = months.filter(m=>m.over).length;
+      const H = 176;
+      const seg = (v,color) => v>0 ? `<div style="height:${(v/max*H).toFixed(1)}px; background:var(${color}); margin-bottom:1.5px"></div>` : '';
+      const bars = months.map(m=>{
+        return `<div data-anamonth="${m.off}" style="flex:1; display:flex; justify-content:center; align-items:flex-end; height:${H}px; cursor:pointer">
+          <div style="position:relative; width:100%; max-width:20px; display:flex; flex-direction:column-reverse; ${m.cur?'outline:2px solid var(--terra); outline-offset:2px; border-radius:3px':''}">
+            ${m.over?`<div style="position:absolute; top:-11px; left:50%; transform:translateX(-50%); width:6px; height:6px; border-radius:50%; background:var(--danger)"></div>`:''}
+            ${seg(m.cls.besoin,'--besoin')}${seg(m.cls.envie,'--envie')}${seg(m.cls.invest,'--invest')}${seg(m.cls.protection,'--protection')}
+          </div>
         </div>`;
       }).join('');
-      return `<div class="between" style="margin-bottom:6px"><b class="small">Dépenses sur 12 mois</b><span class="muted small">moy. ${fmt0(avg)}</span></div>
-      <div class="year">${bars}</div>
-      ${anyPrevision?`<p class="small muted" style="margin-top:8px">Le % en orange au-dessus d'une barre : part du budget déjà anticipée en prévisions pour ce mois-là.</p>`:''}
-      ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p>`:''}`;
+      const labels = months.map(m=>`<div style="flex:1; text-align:center; font-size:9px; font-weight:800; color:${m.cur?'var(--terra)':'var(--muted)'}">${m.ini}</div>`).join('');
+      const budgetY = budget>0 ? budget/max*H : 0;
+      const leg = (color,label)=>`<div style="display:flex; align-items:center; gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(${color})"></span><span class="small" style="color:var(--ink-2)">${label}</span></div>`;
+      if(max<=1){
+        return `<div class="between" style="margin-bottom:6px"><b class="small">Dépenses par nature</b></div>
+        <p class="small muted" style="margin-top:10px; text-align:center; padding:20px 0">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p>`;
+      }
+      return `<div class="between" style="margin-bottom:2px"><b class="small">Dépenses par nature</b><span class="muted small">moy. ${fmt0(avg)}/mois</span></div>
+      <p class="small muted" style="margin:0 0 16px">Le total de chaque mois et <b>sur quoi</b> il est parti. La ligne = votre budget mensuel.</p>
+      <div style="position:relative">
+        <div style="display:flex; align-items:flex-end; gap:5px; height:${H}px">${bars}</div>
+        ${budget>0?`<div style="position:absolute; left:0; right:0; bottom:${budgetY.toFixed(1)}px; border-top:2px dashed var(--ink-2); opacity:.5; pointer-events:none"></div>
+        <div style="position:absolute; right:0; bottom:${(budgetY+2).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--ink-2); background:var(--card); padding:0 4px; pointer-events:none">budget</div>`:''}
+      </div>
+      <div style="display:flex; gap:5px; margin-top:5px">${labels}</div>
+      <div class="row" style="gap:14px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+        ${leg('--besoin','Besoins')}${leg('--envie','Envies')}${leg('--invest','Investissement')}${leg('--protection','Protection')}
+      </div>
+      ${nOver>0?`<p class="small muted" style="margin-top:12px"><span style="color:var(--danger); font-weight:800">•</span> ${nOver} mois au-dessus du budget. Appuyez sur un mois pour le détail.</p>`:`<p class="small muted" style="margin-top:12px">Appuyez sur un mois pour voir le détail.</p>`}`;
     })()}
   </div>
 
@@ -2909,6 +2936,31 @@ function bindAnalyse(){
     const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
   }));
   document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('analyse'); }));
+  document.querySelectorAll('[data-anamonth]').forEach(b=>b.addEventListener('click',()=>openAnnualMonthDetail(+b.dataset.anamonth)));
+}
+// Détail chiffré d'un mois de la vue annuelle : total vs budget + ventilation par nature.
+function openAnnualMonthDetail(offset){
+  const budget=totalBudget();
+  const cls=spentByClsMonth(offset);
+  const total=cls.besoin+cls.envie+cls.invest+cls.protection;
+  const over=budget>0 && total>budget;
+  const diff=total-budget;
+  const row=(clsKey,color,label)=>{
+    const v=cls[clsKey]||0; if(v<=0 && total>0) return '';
+    const pct=total>0?Math.round(v/total*100):0;
+    return `<div class="between" style="padding:9px 0; border-top:1px solid var(--line)">
+      <div class="row" style="gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:var(${color})"></span><b class="small">${label}</b><span class="small muted">${pct}%</span></div>
+      <b class="small mono-num">${fmt0(v)}</b></div>`;
+  };
+  openModal(`<h3>${monthLabel(offset)}</h3>
+    <div class="card-soft" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px">
+      <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px">Total dépensé</div>
+      <div style="font-family:var(--serif); font-size:26px; color:${over?'var(--danger)':'var(--terra)'}">${fmt0(total)}</div></div>
+      ${budget>0?`<div style="text-align:right"><div class="small muted">budget ${fmt0(budget)}</div>
+      <span class="tag" style="margin-top:4px; color:${over?'var(--danger)':'var(--ok)'}; background:color-mix(in srgb,${over?'var(--danger)':'var(--ok)'} 14%,transparent)">${over?`+${fmt0(diff)}`:`${fmt0(Math.abs(diff))} sous le budget`}</span></div>`:''}
+    </div>
+    ${total>0?`${row('besoin','--besoin','Besoins')}${row('envie','--envie','Envies')}${row('invest','--invest','Investissement')}${row('protection','--protection','Protection')}`
+      :`<p class="small muted" style="padding:14px 0; text-align:center">Aucune dépense enregistrée ce mois-ci.</p>`}`, true);
 }
 function openEditIdeal(){
   const id=S.settings.idealSplit;
