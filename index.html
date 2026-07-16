@@ -296,7 +296,7 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .tab svg{width:22px;height:22px; stroke:currentColor; stroke-width:1.9; fill:none;}
 .tab-ic{display:flex; align-items:center; justify-content:center; width:36px; height:26px; border-radius:10px; transition:.16s;}
 .tab.on{color:var(--terra); font-weight:800;}
-.tab.on .tab-ic{background:var(--blush);}
+.tab.on .tab-ic{background:var(--terra); color:#fff; box-shadow:0 6px 14px -6px var(--terra);}
 .tab-add{margin-top:-26px;}
 .tab-add .plus{width:58px;height:58px;border-radius:20px; background:var(--terra); color:#fff; display:grid; place-items:center; box-shadow:0 16px 30px -12px var(--terra); transition:.18s;}
 .tab-add .plus svg{width:26px;height:26px; stroke-width:2.4;}
@@ -499,6 +499,7 @@ function migrate(s){
   // Anciennement une simple case à cocher (booléen) : on force un nouveau choix explicite
   // maintenant que c'est une décision à 2 issues ('ok' / 'modifier').
   Object.values(s.moneyDate.checklist).forEach(ch=>{ if(typeof ch.projets_alignes==='boolean') delete ch.projets_alignes; });
+  s.projects.forEach(p=>{ if(!p.history) p.history=[]; });
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
@@ -1338,6 +1339,17 @@ function histRow(x){
 /* ============================================================
    4 · PROJETS
    ============================================================ */
+let cagUI={histOpen:false, addOpen:false, dir:'in', label:'', amt:''};
+let projUI={};
+function projUIState(id){ return projUI[id] || (projUI[id]={histOpen:false, addOpen:false, who:'lui', amt:''}); }
+function historyRowsHtml(list){
+  if(!list || !list.length) return `<p class="small muted" style="padding:10px 2px">Aucun mouvement enregistré pour l'instant.</p>`;
+  return `<div class="card" style="margin-top:8px">${list.map(h=>`<div class="lrow">
+    <div class="emoji-badge">${h.who?'🙋':(h.amount<0?'↪':'🔁')}</div>
+    <div class="grow"><div class="name">${escapeHtml(h.label)}</div><div class="sub">${new Date(h.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}</div></div>
+    <div class="amt" style="color:${h.amount>=0?'var(--ok)':'var(--danger)'}">${h.amount>=0?'+':''}${fmt(h.amount)}</div>
+  </div>`).join('')}</div>`;
+}
 function renderProjets(){
   const dispo = monthlySurplus();
   return `
@@ -1346,22 +1358,40 @@ function renderProjets(){
     <p class="hero-sub">Chaque virement nous rapproche d'un projet à deux.</p>
   </div>
 
-  <!-- Cagnotte -->
-  <div class="panel-terra" style="margin-top:14px">
+  <div class="section-title" style="margin-top:20px">👛 Cagnotte commune</div>
+  <div class="panel-terra">
     <div class="between">
-      <div><div class="lbl">Cagnotte commune</div><div class="big">${fmt(S.cagnotte.balance)}</div></div>
+      <div><div class="lbl">Solde actuel</div><div class="big">${fmt(S.cagnotte.balance)}</div></div>
       <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">👛</div>
     </div>
-    <button class="btn" id="cagHist" style="background:rgba(255,255,255,.16); color:#fff; margin-top:6px; font-size:13px; padding:11px">Voir l'historique des entrées / sorties</button>
+  </div>
+  <div class="pilot-collapse-hdr ${cagUI.histOpen?'open':''}" id="cagHistHdr" style="margin-top:10px; background:var(--card-2); border-radius:14px; padding:12px 16px">
+    <span class="small" style="font-weight:800">Historique des entrées / sorties</span><span class="chev">▼</span>
+  </div>
+  ${cagUI.histOpen?historyRowsHtml(S.cagnotte.history):''}
+  <div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>
+  ${cagUI.addOpen?`<div class="card-soft" style="margin-top:8px">
+    <div class="row" style="gap:8px">
+      <input class="input" id="cagLineLabel" placeholder="Ex : Trop perçu EDF" value="${escapeHtml(cagUI.label)}" style="padding:11px 13px; font-size:13px; flex:2">
+      <input class="input" id="cagLineAmt" type="number" placeholder="Montant" value="${cagUI.amt}" style="padding:11px 13px; font-size:13px; flex:1">
+    </div>
+    <div class="row" style="gap:8px; margin-top:8px">
+      <button class="btn ${cagUI.dir==='in'?'btn-soft':'btn-ghost'} btn-sm" id="cagDirIn" style="flex:1">+ Entrée</button>
+      <button class="btn ${cagUI.dir==='out'?'btn-soft':'btn-ghost'} btn-sm" id="cagDirOut" style="flex:1">− Sortie</button>
+    </div>
+    <button class="btn btn-primary btn-sm" id="cagLineSave" style="margin-top:8px; width:100%">Ajouter</button>
+  </div>`:''}
+
+  <div style="height:1px; background:var(--line-2); margin:28px 0 4px"></div>
+
+  <div class="section-title" style="margin-top:16px">🎯 Vos projets <span class="link" id="newProj">+ Nouveau</span></div>
+  <div class="panel-terra">
+    <div class="between">
+      <div><div class="lbl">Disponible pour vos projets</div><div class="big">${fmt(dispo)}</div></div>
+      <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">✨</div>
+    </div>
   </div>
 
-  <div class="card-soft" style="margin-top:14px; display:flex; align-items:center; gap:12px">
-    <span style="font-size:22px">✨</span>
-    <div class="grow"><div class="small" style="font-weight:800">Disponible pour vos projets</div><div class="small muted">Surplus mensuel calculé automatiquement</div></div>
-    <b style="font-family:var(--serif); font-size:18px; color:var(--terra)">${fmt0(dispo)}</b>
-  </div>
-
-  <div class="section-title">Projets en cours <span class="link" id="newProj">+ Nouveau</span></div>
   ${S.projects.map(p=>projectCard(p)).join('')}
 
   <div class="photo-card" style="margin-top:16px">
@@ -1381,6 +1411,7 @@ function projectCard(p){
   const reste=p.target-p.saved;
   const mens=p.months>0?reste/p.months:0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
+  const ui=projUIState(p.id);
   return `<div class="card" style="margin-top:14px; ${aband?'opacity:.6':''}" data-proj="${p.id}">
     <div class="between" style="margin-bottom:12px">
       <div class="row" style="gap:11px"><div class="emoji-badge">${p.emoji}</div>
@@ -1397,11 +1428,26 @@ function projectCard(p){
     ${!aband?`<div class="between" style="margin-top:6px; font-size:12px" class="muted">
       <span class="muted small">${reste>0?`≈ ${fmt0(mens)} / mois · virement le ${p.day}`:''}</span>
     </div>`:''}
+    <div class="pilot-collapse-hdr ${ui.histOpen?'open':''}" data-projhist="${p.id}" style="margin-top:10px; padding:8px 0; border-top:1px solid var(--line)">
+      <span class="small link" style="font-weight:800">Historique des mouvements</span><span class="chev">▼</span>
+    </div>
+    ${ui.histOpen?historyRowsHtml(p.history):''}
     <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap">
       <button class="btn btn-soft btn-sm" data-paction="pause" data-id="${p.id}">${paused?'▶ Reprendre':'⏸ Pause'}</button>
       <button class="btn btn-ghost btn-sm" data-paction="realloc" data-id="${p.id}">↪ Réaffecter</button>
       <button class="btn btn-ghost btn-sm" data-paction="abandon" data-id="${p.id}" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">Abandonner</button>
     </div>
+    ${!aband?`<div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
+      <span class="link small" data-projaddtoggle="${p.id}">+ Ajouter un versement</span>
+      ${ui.addOpen?`<div class="card-soft" style="margin-top:8px">
+        <div class="row" style="gap:8px; margin-bottom:8px">
+          <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
+          <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
+        </div>
+        <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
+        <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
+      </div>`:''}
+    </div>`:''}
   </div>`;
 }
 function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investissement",protection:"Protection"}[c]||c; }
@@ -2340,16 +2386,47 @@ function openMoneyDateSchedule(){
 }
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>openEditProject(null,'projets');
-  const ch=$('#cagHist'); if(ch) ch.onclick=openCagnotteHistory;
+  const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
+  const cat=$('#cagAddToggle'); if(cat) cat.onclick=()=>{cagUI.addOpen=!cagUI.addOpen; go('projets');};
+  const cin=$('#cagDirIn'); if(cin) cin.onclick=()=>{cagUI.dir='in'; go('projets');};
+  const cout=$('#cagDirOut'); if(cout) cout.onclick=()=>{cagUI.dir='out'; go('projets');};
+  const clbl=$('#cagLineLabel'); if(clbl) clbl.oninput=ev=>cagUI.label=ev.target.value;
+  const camt=$('#cagLineAmt'); if(camt) camt.oninput=ev=>cagUI.amt=ev.target.value;
+  const csave=$('#cagLineSave'); if(csave) csave.onclick=()=>{
+    const lbl=(cagUI.label||'').trim(); const amt=parseFloat((cagUI.amt+'').replace(',','.'))||0;
+    if(!lbl||!amt){ toast("Libellé et montant requis","✏️"); return; }
+    const signed = cagUI.dir==='out' ? -amt : amt;
+    S.cagnotte.balance+=signed;
+    S.cagnotte.history.unshift({date:iso(0), label:lbl, amount:signed});
+    cagUI={histOpen:true, addOpen:false, dir:'in', label:'', amt:''};
+    save(); go('projets'); toast("Ligne ajoutée ✓");
+  };
+  document.querySelectorAll('[data-projhist]').forEach(b=>b.addEventListener('click',()=>{
+    const ui=projUIState(b.dataset.projhist); ui.histOpen=!ui.histOpen; go('projets');
+  }));
+  document.querySelectorAll('[data-projaddtoggle]').forEach(b=>b.addEventListener('click',()=>{
+    const ui=projUIState(b.dataset.projaddtoggle); ui.addOpen=!ui.addOpen; go('projets');
+  }));
+  document.querySelectorAll('[data-projwho]').forEach(b=>b.addEventListener('click',()=>{
+    const [id,who]=b.dataset.projwho.split(':'); projUIState(id).who=who; go('projets');
+  }));
+  document.querySelectorAll('[data-projamt]').forEach(inp=>inp.addEventListener('input',ev=>{
+    projUIState(inp.dataset.projamt).amt=ev.target.value;
+  }));
+  document.querySelectorAll('[data-projaddsave]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.projaddsave; const ui=projUIState(id); const p=S.projects.find(x=>x.id===id); if(!p) return;
+    const amt=parseFloat((ui.amt+'').replace(',','.'))||0;
+    if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
+    p.saved+=amt; if(!p.history) p.history=[];
+    p.history.unshift({date:iso(0), label:nameOf(ui.who), amount:+amt, who:ui.who});
+    projUI[id]={histOpen:true, addOpen:false, who:'lui', amt:''};
+    save(); go('projets'); toast("Versement ajouté ✓");
+  }));
   document.querySelectorAll('[data-paction]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.id);
     if(b.dataset.paction==='pause'){ p.status=p.status==='pause'?'actif':'pause'; save(); go('projets'); toast(p.status==='pause'?"Projet mis en pause ⏸":"Projet relancé ▶"); }
     if(b.dataset.paction==='realloc') openRealloc(p);
     if(b.dataset.paction==='abandon') openAbandon(p);
   }));
-}
-function openCagnotteHistory(){
-  openModal(`<h3>👛 Cagnotte commune</h3><p class="small muted" style="margin-bottom:8px">Solde actuel : <b style="color:var(--terra)">${fmt(S.cagnotte.balance)}</b></p>
-    <div class="card" style="box-shadow:none; border:1px solid var(--line)">${S.cagnotte.history.map(h=>`<div class="between" style="padding:11px 0; border-top:1px solid var(--line)"><div><div class="small" style="font-weight:700">${escapeHtml(h.label)}</div><div class="small muted">${new Date(h.date).toLocaleDateString('fr-FR')}</div></div><b style="color:${h.amount>=0?'var(--ok)':'var(--danger)'}; font-family:var(--serif)">${h.amount>=0?'+':''}${fmt(h.amount)}</b></div>`).join('')}</div>`);
 }
 function openEditProject(id, returnTo){
   returnTo = returnTo || 'projets';
@@ -2375,7 +2452,7 @@ function openEditProject(id, returnTo){
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
     if(id){ p.name=nm; p.target=t; p.saved=+$('#npSaved').value||0; p.months=+$('#npMonths').value||12; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; }
-    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif'}); }
+    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
     save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
   const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
@@ -2388,8 +2465,16 @@ function openRealloc(p, returnTo){
     <button class="btn btn-primary" id="raSave">Transférer</button>`);
   $('#raSave').onclick=()=>{ const amt=Math.min(p.saved,+$('#raAmt').value||0); const dest=$('#raDest').value;
     p.saved-=amt;
-    if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt}); }
-    else if(!dest.startsWith('cat:')){ const o=S.projects.find(x=>x.id===dest); if(o) o.saved+=amt; }
+    if(!p.history) p.history=[];
+    if(dest==='cagnotte'){
+      S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt});
+      p.history.unshift({date:iso(0),label:`Réaffecté vers la cagnotte commune`,amount:-amt});
+    }
+    else if(!dest.startsWith('cat:')){
+      const o=S.projects.find(x=>x.id===dest);
+      if(o){ o.saved+=amt; if(!o.history) o.history=[]; o.history.unshift({date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt}); }
+      p.history.unshift({date:iso(0),label:`Réaffecté vers ${o?o.name:'un autre projet'}`,amount:-amt});
+    }
     save(); closeModal(); go(returnTo); toast("Épargne réaffectée ↪","✓"); };
 }
 function openAbandon(p, returnTo){
@@ -2398,7 +2483,7 @@ function openAbandon(p, returnTo){
     <button class="btn btn-soft" id="abKeep" style="margin-bottom:10px">💛 Récupérer l'argent vers la cagnotte</button>
     <button class="btn btn-ghost" id="abDrop" style="margin-bottom:10px">Abandonner sans récupérer</button>
     <button class="btn btn-ghost btn-sm" id="abCancel" style="width:100%">Annuler</button>`);
-  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Argent récupéré dans la cagnotte 💛"); };
+  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); if(!p.history) p.history=[]; p.history.unshift({date:iso(0),label:`Récupéré vers la cagnotte commune`,amount:-p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Argent récupéré dans la cagnotte 💛"); };
   $('#abDrop').onclick=()=>{ p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Projet abandonné"); };
   $('#abCancel').onclick=closeModal;
 }
@@ -2417,7 +2502,7 @@ function openSurplusTransfer(catId, remaining){
     const expId=e();
     S.expenses.push({id:expId, type:'transfert', prevision:false, amount:amt, cat:catId, who:me(), desc:`Surplus ${c.name} → ${destLabel}`, date:iso(0), note:""});
     if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); }
-    else { const p=S.projects.find(x=>x.id===dest); if(p) p.saved+=amt; }
+    else { const p=S.projects.find(x=>x.id===dest); if(p){ p.saved+=amt; if(!p.history) p.history=[]; p.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); } }
     mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
     save(); closeModal();
     const left=remaining-amt;
@@ -2446,7 +2531,7 @@ function undoSurplusDecision(offset, catId, idx){
       S.cagnotte.balance-=decision.amount;
       const hidx=S.cagnotte.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount);
       if(hidx>-1) S.cagnotte.history.splice(hidx,1);
-    } else { const p=S.projects.find(x=>x.id===decision.dest); if(p) p.saved-=decision.amount; }
+    } else { const p=S.projects.find(x=>x.id===decision.dest); if(p){ p.saved-=decision.amount; if(p.history){ const phidx=p.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount); if(phidx>-1) p.history.splice(phidx,1); } } }
     if(decision.expId) S.expenses=S.expenses.filter(x=>x.id!==decision.expId);
   }
   arr.splice(idx,1);
