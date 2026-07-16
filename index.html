@@ -1449,37 +1449,28 @@ function projectCard(p, rank){
   return `<div class="card" style="margin-top:14px; box-shadow:none; background:color-mix(in srgb,var(--blush) 35%,var(--card)); border:1px solid color-mix(in srgb,var(--blush-2) 50%,var(--line)); ${aband?'opacity:.6':''}" data-proj="${p.id}">
     <div class="between" style="margin-bottom:8px; gap:10px">
       <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
-      <b style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
+      <div class="row" style="gap:8px; flex-shrink:0">
+        <b style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap">${aband?'—':`${fmt0(mens)} / mois`}</b>
+        ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:30px; height:30px; flex-shrink:0">⚙️</button>`:''}
+      </div>
     </div>
     <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${paused?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">En pause</span>':''}${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
-    <div class="between" style="margin-top:9px">
-      <span class="small muted">${fmt0(p.saved)} / ${fmt0(p.target)}</span>
-      <span class="small" style="font-weight:700; color:var(--terra-d)">${reste>0?`Encore ${fmt0(reste)}`:'Objectif atteint ! 🎉'}</span>
+    <div style="margin-top:9px; text-align:right">
+      <span class="small" style="font-weight:700; color:var(--terra-d)">${reste>0?`${fmt0(p.saved)} / ${fmt0(p.target)}`:'Objectif atteint ! 🎉'}</span>
     </div>
-    ${!aband?`<div class="between" style="margin-top:6px; font-size:12px" class="muted">
-      <span class="muted small">${reste>0?`Virement le ${p.day}`:''}</span>
+    ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
+      <div class="row" style="gap:8px; margin-bottom:8px">
+        <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
+        <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
+      </div>
+      <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
+      <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
     </div>`:''}
-    <div class="pilot-collapse-hdr ${ui.histOpen?'open':''}" data-projhist="${p.id}" style="margin-top:10px; padding:8px 0; border-top:1px solid var(--line)">
+    <div class="pilot-collapse-hdr ${ui.histOpen?'open':''}" data-projhist="${p.id}" style="margin-top:12px; padding:8px 0; border-top:1px solid var(--line)">
       <span class="small link" style="font-weight:800">Historique des mouvements</span><span class="chev">▼</span>
     </div>
     ${ui.histOpen?historyRowsHtml(p.history):''}
-    <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" data-paction="pause" data-id="${p.id}">${paused?'▶ Reprendre':'⏸ Pause'}</button>
-      <button class="btn btn-ghost btn-sm" data-paction="realloc" data-id="${p.id}">↪ Réaffecter</button>
-      <button class="btn btn-ghost btn-sm" data-paction="abandon" data-id="${p.id}" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">Abandonner</button>
-    </div>
-    ${!aband?`<div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
-      <span class="link small" data-projaddtoggle="${p.id}">+ Ajouter un versement</span>
-      ${ui.addOpen?`<div class="card-soft" style="margin-top:8px">
-        <div class="row" style="gap:8px; margin-bottom:8px">
-          <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
-          <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
-        </div>
-        <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
-        <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
-      </div>`:''}
-    </div>`:''}
   </div>`;
 }
 function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investissement",protection:"Protection"}[c]||c; }
@@ -1487,12 +1478,14 @@ function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investisseme
 /* ============================================================
    5 · ANALYSE (50/30/20)
    ============================================================ */
+let analyseUI={};
 function renderAnalyse(){
   const off=S.ui.analyMonth;
   const ideal=S.settings.idealSplit;
   const real=realitySplit(off);
   const projContribs=projectContribsThisMonth(off);
   return `
+  ${prevScreen==='moneydate'?`<div style="padding-top:10px"><button class="btn btn-ghost btn-sm" id="analyseBack">← Retour</button></div>`:''}
   <div class="section-title" style="margin-top:6px">Vue annuelle</div>
   <div class="card">
     ${(() => {
@@ -1534,8 +1527,8 @@ function renderAnalyse(){
   </div>
 
   <div class="grid2" style="margin-top:14px">
-    ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.protection, ideal.invest, 'editIdealBtn')}
-    ${donutCard("Votre réalité", real.besoin, real.envie, real.protection, real.invest)}
+    ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection, 'editIdealBtn')}
+    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1543,17 +1536,26 @@ function renderAnalyse(){
     <p class="small muted" style="margin-top:6px">${verdictText(real,ideal)}</p>
   </div>
 
-  <div class="section-title">Répartition réelle par nature de dépense</div>
+  <div class="section-title">Détail classification</div>
   <div class="card">
-    ${['besoin','envie','protection','invest'].map(cls=>{
+    ${['besoin','envie','invest','protection'].map(cls=>{
       const cats=S.categories.filter(c=>c.cls===cls);
       const total=cats.reduce((s,c)=>s+spentByCat(c.id,off),0) + (cls==='invest'?projContribs:0);
       const pct=real[cls]||0;
+      const open=!!analyseUI[cls];
       return `<div style="padding:12px 0; border-top:1px solid var(--line)">
-        <div class="between" style="margin-bottom:8px"><b class="small">${clsLabel(cls)}</b><b class="small" style="color:var(--terra)">${pct}% · ${fmt0(total)}</b></div>
-        ${cats.filter(c=>spentByCat(c.id,off)>0).map(c=>`<div class="between small muted" style="padding:3px 0"><span>${c.emoji} ${c.name}</span><span>${fmt0(spentByCat(c.id,off))}</span></div>`).join('')}
-        ${cls==='invest'&&projContribs>0?`<div class="between small muted" style="padding:3px 0"><span>🎯 Versements projets ce mois-ci</span><span>${fmt0(projContribs)}</span></div>`:''}
-        ${total===0?`<p class="small muted">Aucune dépense ${cls==='invest'?'ni versement':''} dans cette catégorie ce mois-ci.</p>`:''}
+        <div class="between" data-anacls="${cls}" style="cursor:pointer">
+          <div class="row" style="gap:6px"><b class="small">${clsLabel(cls)}</b><span class="chev" style="transition:transform .2s; transform:rotate(${open?'180deg':'0deg'})">▾</span></div>
+          <b class="small" style="color:var(--terra)">${pct}% · ${fmt0(total)}</b>
+        </div>
+        ${open?`<div style="margin-top:8px">
+          ${cats.filter(c=>spentByCat(c.id,off)>0).map(c=>{
+            const sp=spentByCat(c.id,off); const catPct=total>0?Math.round(sp/total*100):0;
+            return `<div class="between small muted" style="padding:4px 0"><span>${c.emoji} ${c.name}</span><span>${catPct}% · ${fmt0(sp)}</span></div>`;
+          }).join('')}
+          ${cls==='invest'&&projContribs>0?`<div class="between small muted" style="padding:4px 0"><span>🎯 Versements projets ce mois-ci</span><span>${total>0?Math.round(projContribs/total*100):0}% · ${fmt0(projContribs)}</span></div>`:''}
+          ${total===0?`<p class="small muted">Aucune dépense ${cls==='invest'?'ni versement':''} dans cette catégorie ce mois-ci.</p>`:''}
+        </div>`:''}
       </div>`;
     }).join('')}
   </div>
@@ -1572,22 +1574,22 @@ function renderAnalyse(){
   </div>
   `;
 }
-function donutCard(title,b,e,pr,s,editableId){
+function donutCard(title,b,e,inv,pr,editableId){
   return `<div class="card" style="padding:16px">
     <div class="between" style="margin-bottom:10px">
       <div class="small" style="font-weight:800">${title}</div>
       ${editableId?`<span class="link small" id="${editableId}">Modifier</span>`:''}
     </div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
-      <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--protection) ${b+e}% ${b+e+pr}%, var(--invest) ${b+e+pr}% 100%)">
-        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:14px">${b}/${e}/${pr}/${s}</div></div>
+      <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% ${b+e+inv}%, var(--protection) ${b+e+inv}% 100%)">
+        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:14px">${b}/${e}/${inv}/${pr}</div></div>
       </div>
     </div>
     <div class="legend">
       <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${b}%</span></div>
       <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${e}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--invest)"></span>Épargne <span class="r">${inv}%</span></div>
       <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${pr}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--invest)"></span>Épargne <span class="r">${s}%</span></div>
     </div>
   </div>`;
 }
@@ -1677,7 +1679,8 @@ const MD_CHECKLIST_ITEMS=[
   {key:'categorisation', label:"Sommes-nous ok sur la catégorisation de chaque dépense ?", detail:'categorisation'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
-  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
+  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"},
+  {key:'ideal_realite', label:"Notre idéal et notre réalité sont-ils toujours en phase ?", detail:'ideal_realite'}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdChecklistAllDone(offset){
@@ -2442,8 +2445,8 @@ function bindProjets(){
   document.querySelectorAll('[data-projhist]').forEach(b=>b.addEventListener('click',()=>{
     const ui=projUIState(b.dataset.projhist); ui.histOpen=!ui.histOpen; go('projets');
   }));
-  document.querySelectorAll('[data-projaddtoggle]').forEach(b=>b.addEventListener('click',()=>{
-    const ui=projUIState(b.dataset.projaddtoggle); ui.addOpen=!ui.addOpen; go('projets');
+  document.querySelectorAll('[data-projmenu]').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.projmenu); if(p) openProjectMenu(p);
   }));
   document.querySelectorAll('[data-projwho]').forEach(b=>b.addEventListener('click',()=>{
     const [id,who]=b.dataset.projwho.split(':'); projUIState(id).who=who; go('projets');
@@ -2460,11 +2463,31 @@ function bindProjets(){
     projUI[id]={histOpen:true, addOpen:false, who:'lui', amt:''};
     save(); go('projets'); toast("Versement ajouté ✓");
   }));
-  document.querySelectorAll('[data-paction]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.id);
-    if(b.dataset.paction==='pause'){ p.status=p.status==='pause'?'actif':'pause'; save(); go('projets'); toast(p.status==='pause'?"Projet mis en pause ⏸":"Projet relancé ▶"); }
-    if(b.dataset.paction==='realloc') openRealloc(p);
-    if(b.dataset.paction==='abandon') openAbandon(p);
-  }));
+}
+function openProjectMenu(p){
+  const paused=p.status==='pause';
+  openModal(`<h3>${p.emoji||'🌟'} ${escapeHtml(p.name)}</h3>
+    <button class="btn btn-ghost" id="pmAddVers" style="margin-bottom:8px; justify-content:flex-start">+ Ajouter un versement</button>
+    <button class="btn btn-ghost" id="pmDate" style="margin-bottom:8px; justify-content:flex-start">📅 Changer la date de virement</button>
+    <button class="btn btn-ghost" id="pmPause" style="margin-bottom:8px; justify-content:flex-start">${paused?'▶ Reprendre':'⏸ Mettre en pause'}</button>
+    <button class="btn btn-ghost" id="pmRealloc" style="margin-bottom:8px; justify-content:flex-start">↪ Réaffecter l'épargne</button>
+    <button class="btn btn-ghost" id="pmDelete" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); justify-content:flex-start">🗑 Supprimer le projet</button>`);
+  $('#pmAddVers').onclick=()=>{ closeModal(); const ui=projUIState(p.id); ui.addOpen=true; go('projets'); };
+  $('#pmDate').onclick=()=>{ closeModal(); openEditProjectDay(p); };
+  $('#pmPause').onclick=()=>{ closeModal(); p.status=paused?'actif':'pause'; save(); go('projets'); toast(paused?"Projet relancé ▶":"Projet mis en pause ⏸"); };
+  $('#pmRealloc').onclick=()=>{ closeModal(); openRealloc(p); };
+  $('#pmDelete').onclick=()=>{ closeModal(); openAbandon(p); };
+}
+function openEditProjectDay(p){
+  openModal(`<h3>📅 Date de virement</h3>
+    <p class="small muted" style="margin-bottom:14px">Jour du mois où le virement pour « ${escapeHtml(p.name)} » est prévu.</p>
+    <div class="field"><label>Jour du mois</label><input class="input" type="number" min="1" max="28" id="pDayInput" value="${p.day}"></div>
+    <button class="btn btn-primary" id="pDaySave">Enregistrer</button>`, true);
+  $('#pDaySave').onclick=()=>{
+    const d=+$('#pDayInput').value;
+    if(!d||d<1||d>28){ toast("Jour invalide (1-28)","📅"); return; }
+    p.day=d; save(); closeModal(); go('projets'); toast("Date mise à jour ✓");
+  };
 }
 function openCagnotteAddLine(){
   openModal(`<h3>👛 Ajouter une ligne</h3>
@@ -2662,6 +2685,27 @@ function openMdCategorisation(){
     </div>`, true);
   $('#mdGoHistCategorisation').onclick=()=>{ closeModal(); go('historique'); };
 }
+function openMdIdealRealite(offset){
+  const ideal=S.settings.idealSplit;
+  const real=realitySplit(offset);
+  openModal(`<h3>🧭 Idéal vs réalité de ${monthLabel(offset)}</h3>
+    <div class="grid2" style="margin-bottom:14px">
+      ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection)}
+      ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
+    </div>
+    <div class="card-soft" style="margin-bottom:14px">
+      <div class="between"><b class="small">Verdict</b>${verdictBadge(real,ideal)}</div>
+      <p class="small muted" style="margin-top:6px">${verdictText(real,ideal)}</p>
+    </div>
+    <div style="border-top:1px solid var(--line); padding-top:14px">
+      <div class="row" style="gap:10px">
+        <span class="link small" id="mdGoAnalyseIdeal" style="flex:1">Revoir notre idéal →</span>
+        <span class="link small" id="mdGoPilotageBudgets" style="flex:1">Revoir nos budgets →</span>
+      </div>
+    </div>`, true);
+  $('#mdGoAnalyseIdeal').onclick=()=>{ closeModal(); go('analyse'); };
+  $('#mdGoPilotageBudgets').onclick=()=>{ closeModal(); go('pilotage'); };
+}
 function mdCategoriesDetailHtml(offset){
   const closed = offset<0;
   const budgetTotal = totalBudget();
@@ -2736,10 +2780,14 @@ function mdCategoriesDetailHtml(offset){
 }
 
 function bindAnalyse(){
+  const ab=$('#analyseBack'); if(ab) ab.onclick=()=>go(prevScreen||'vue');
   const p=$('#aPrev'), n=$('#aNext');
   if(p) p.onclick=()=>{S.ui.analyMonth--; save(); go('analyse');};
   if(n) n.onclick=()=>{ if(S.ui.analyMonth<0){S.ui.analyMonth++; save(); go('analyse');} };
   const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
+  document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
+    const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
+  }));
 }
 function openEditIdeal(){
   const id=S.settings.idealSplit;
@@ -2748,8 +2796,8 @@ function openEditIdeal(){
     <div class="grid2">
       <div class="field"><label>Besoins %</label><input class="input" type="number" id="idBesoin" value="${id.besoin}"></div>
       <div class="field"><label>Envies %</label><input class="input" type="number" id="idEnvie" value="${id.envie}"></div>
-      <div class="field"><label>Protection %</label><input class="input" type="number" id="idProtection" value="${id.protection}"></div>
       <div class="field"><label>Épargne %</label><input class="input" type="number" id="idInvest" value="${id.invest}"></div>
+      <div class="field"><label>Protection %</label><input class="input" type="number" id="idProtection" value="${id.protection}"></div>
     </div>
     <p class="small" id="idealTotalHint" style="margin-bottom:14px"></p>
     <button class="btn btn-primary" id="idealSave">Enregistrer</button>`, true);
@@ -2789,6 +2837,7 @@ function bindMoneyDate(){
     if(which==='categorisation') openMdCategorisation();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
+    if(which==='ideal_realite') openMdIdealRealite(S.ui.mdMonth);
   }));
   const gpc=$('#mdGoPilotageCategories'); if(gpc) gpc.onclick=()=>go('pilotage');
 
