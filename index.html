@@ -2572,6 +2572,16 @@ function openMdDepenses(){
   openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
     ${list.length?list.map(x=>histRow(x,false)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`, true);
 }
+function openMdCategorisation(){
+  const offset=S.ui.mdMonth;
+  const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
+  openModal(`<h3>🏷️ Catégorisation de ${monthLabel(offset)}</h3>
+    ${list.length?list.map(x=>histRow(x,false)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoHistCategorisation">Modifier dans Historique →</span>
+    </div>`, true);
+  $('#mdGoHistCategorisation').onclick=()=>{ closeModal(); go('historique'); };
+}
 function mdCategoriesDetailHtml(offset){
   const closed = offset<0;
   const budgetTotal = totalBudget();
@@ -2670,7 +2680,7 @@ function bindMoneyDate(){
   document.querySelectorAll('[data-mddetail]').forEach(b=>b.addEventListener('click',()=>{
     const which=b.dataset.mddetail;
     if(which==='depenses') openMdDepenses();
-    if(which==='categorisation') go('historique');
+    if(which==='categorisation') openMdCategorisation();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
   }));
