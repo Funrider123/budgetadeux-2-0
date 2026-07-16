@@ -1446,14 +1446,12 @@ function projectCard(p, rank){
   const mens=p.months>0?reste/p.months:0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
   const ui=projUIState(p.id);
-  return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--blush); border:1px solid var(--blush-2); ${aband?'opacity:.6':''}" data-proj="${p.id}">
-    <div class="between" style="margin-bottom:12px">
-      <div class="row" style="gap:11px"><div class="emoji-badge">${p.emoji}</div>
-        <div><div class="name" style="font-family:var(--serif); font-size:17px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
-        <div class="sub"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${paused?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">En pause</span>':''}${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div></div>
-      </div>
-      <b style="font-family:var(--serif); font-size:18px; color:var(--terra); white-space:nowrap">${aband?'—':`${fmt0(mens)} / mois`}</b>
+  return `<div class="card" style="margin-top:14px; box-shadow:none; background:color-mix(in srgb,var(--blush) 35%,var(--card)); border:1px solid color-mix(in srgb,var(--blush-2) 50%,var(--line)); ${aband?'opacity:.6':''}" data-proj="${p.id}">
+    <div class="between" style="margin-bottom:8px; gap:10px">
+      <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
+      <b style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
+    <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${paused?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">En pause</span>':''}${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
     <div class="between" style="margin-top:9px">
       <span class="small muted">${fmt0(p.saved)} / ${fmt0(p.target)}</span>
