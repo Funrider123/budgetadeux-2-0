@@ -494,6 +494,10 @@ function migrate(s){
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
   if(!s.moneyDate.checklist) s.moneyDate.checklist = {};
   if(s.ui.mdMonth===undefined) s.ui.mdMonth = 0;
+  if(!s.ui.pilotageFrom) s.ui.pilotageFrom = 'reglages';
+  // Anciennement une simple case à cocher (booléen) : on force un nouveau choix explicite
+  // maintenant que c'est une décision à 2 issues ('ok' / 'modifier').
+  Object.values(s.moneyDate.checklist).forEach(ch=>{ if(typeof ch.projets_alignes==='boolean') delete ch.projets_alignes; });
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
@@ -1259,9 +1263,16 @@ function renderHistorique(){
   if(histFilter.who!=="all") list=list.filter(x=>x.who===histFilter.who);
   if(histFilter.cat!=="all") list=list.filter(x=>x.cat===histFilter.cat);
   list=list.sort((a,b)=>b.date.localeCompare(a.date));
-  // recap by cat
+  // recap by cat — utile seulement en vue non filtrée par catégorie ; sinon un total suffit
   const recap={};
   list.filter(x=>x.type==="depense"&&!x.prevision).forEach(x=>recap[x.cat]=(recap[x.cat]||0)+x.amount);
+  const showCatBreakdown = histFilter.cat==='all' && Object.keys(recap).length>0;
+  const depTotal = Object.values(recap).reduce((a,b)=>a+b,0);
+  const transferTotal = list.filter(x=>x.type==='transfert').reduce((s,x)=>s+x.amount,0);
+  // Un transfert n'est jamais une dépense (juste un mouvement d'argent entre budgets/cagnotte) :
+  // le total dépensé l'exclut toujours ; l'onglet Mouvements affiche son propre total à part.
+  const totalLabel = histFilter.type==='transfert' ? 'Total transféré' : 'Total dépensé';
+  const totalValue = histFilter.type==='transfert' ? transferTotal : depTotal;
   return `
   <div style="padding-top:6px"><span class="pill">Historique</span>
     <div class="between" style="margin-top:10px">
@@ -1288,11 +1299,14 @@ function renderHistorique(){
     </select>
   </div>
 
-  ${Object.keys(recap).length?`<div class="section-title">Récapitulatif par catégorie</div>
+  ${showCatBreakdown?`<div class="section-title">Récapitulatif par catégorie</div>
   <div class="card">${Object.entries(recap).sort((a,b)=>b[1]-a[1]).map(([id,v])=>{const c=catById(id); return `<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><div class="row" style="gap:9px"><span style="font-size:17px">${c.emoji}</span><b class="small">${c.name}</b></div><b class="small mono-num">${fmt(v)}</b></div>`;}).join('')}
-  <div class="between" style="padding:11px 0 2px; border-top:2px solid var(--line-2); margin-top:4px"><b>Total dépensé</b><b style="font-family:var(--serif); color:var(--terra)">${fmt(Object.values(recap).reduce((a,b)=>a+b,0))}</b></div></div>`:''}
+  <div class="between" style="padding:11px 0 2px; border-top:2px solid var(--line-2); margin-top:4px"><b>Total dépensé</b><b style="font-family:var(--serif); color:var(--terra)">${fmt(depTotal)}</b></div></div>`:''}
 
-  <div class="section-title">${list.length} mouvement${list.length>1?'s':''}</div>
+  <div class="section-title">
+    <span>${list.length} mouvement${list.length>1?'s':''}</span>
+    ${(!showCatBreakdown && totalValue>0)?`<span style="text-transform:none; letter-spacing:0; font-family:var(--sans); color:var(--terra)">${totalLabel} : ${fmt(totalValue)}</span>`:''}
+  </div>
   ${list.length? `<div class="card">${list.map(x=>histRow(x)).join('')}</div>` : `<div class="card empty"><div class="e">🍃</div><p>Aucun mouvement ce mois-ci avec ces filtres.</p></div>`}
   `;
 }
@@ -1561,7 +1575,7 @@ const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
-  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
+  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?", detail:'categories'}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdChecklistAllDone(offset){
@@ -1972,7 +1986,7 @@ function renderPilotage(){
   const activeProjects=S.projects.filter(p=>p.status==="actif");
   return `
   <div style="padding-top:10px">
-    <button class="btn btn-ghost btn-sm" id="backReg">← Réglages</button>
+    <button class="btn btn-ghost btn-sm" id="backReg">← ${S.ui.pilotageFrom==='moneydate'?'Money Date':'Réglages'}</button>
   </div>
   <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
@@ -2455,7 +2469,7 @@ function openMdRepartition(){
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoPilotageRep">Modifier dans Simulation et validation budgétaire →</span>
     </div>`, true);
-  $('#mdGoPilotageRep').onclick=()=>{ closeModal(); go('pilotage'); };
+  $('#mdGoPilotageRep').onclick=()=>{ closeModal(); S.ui.pilotageFrom='moneydate'; save(); go('pilotage'); };
 }
 function openMdCharges(){
   const communes=S.charges.filter(c=>c.scope==='commune');
@@ -2464,13 +2478,87 @@ function openMdCharges(){
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoPilotageCharges">Modifier dans Simulation et validation budgétaire →</span>
     </div>`, true);
-  $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
+  $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); S.ui.pilotageFrom='moneydate'; save(); go('pilotage'); };
 }
 function openMdDepenses(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
   openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
     ${list.length?list.map(x=>histRow(x)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`, true);
+}
+function openMdCategoriesDetail(offset){
+  const closed = offset<0;
+  const budgetTotal = totalBudget();
+  const spent = totalSpent(offset);
+  const usedPct = budgetTotal>0 ? Math.round(spent/budgetTotal*100) : 0;
+  const remaining = budgetTotal - spent;
+  let rythmeHtml;
+  if(closed){
+    const onBudget = spent<=budgetTotal;
+    rythmeHtml = `<div class="panel-terra" style="margin-bottom:14px">
+      <div class="between"><div class="lbl">Mois clôturé</div><span class="pill" style="background:rgba(255,255,255,.9); color:${onBudget?'var(--ok)':'var(--terra-d)'}">${onBudget?'✅ Budget tenu':'⚠️ Dépassé'}</span></div>
+      <div class="big">${fmt(remaining)}</div>
+      <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${Math.min(100,usedPct)}%; background:#fff"></i></div>
+      <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
+        <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetTotal)} prévu</span>
+      </div>
+    </div>`;
+  } else {
+    const w=weekOfMonthInfo();
+    const periodDays=w.daysInMonth, elapsedDays=w.daysInMonth-w.daysLeftInMonth;
+    const periodElapsedPct=Math.round(elapsedDays/periodDays*100);
+    const onTrack = usedPct<=periodElapsedPct;
+    const projectedTotal = elapsedDays>0 ? (spent/elapsedDays)*periodDays : spent;
+    const diffAmount = budgetTotal-projectedTotal;
+    rythmeHtml = `<div class="panel-terra" style="margin-bottom:14px">
+      <div class="between"><div class="lbl">Restant pour ce mois</div><span class="pill" style="background:rgba(255,255,255,.9); color:${onTrack?'var(--ok)':'var(--terra-d)'}">${onTrack?'✅ En avance':'⚠️ En retard'}</span></div>
+      <div class="big">${fmt(remaining)}</div>
+      <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${Math.min(100,usedPct)}%; background:#fff"></i></div>
+      <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
+        <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetTotal)} prévu</span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex; gap:14px; align-items:center">
+        <div style="flex:1">
+          <div style="margin-bottom:10px">
+            <div class="between small muted" style="margin-bottom:4px"><span>📅 Temps</span><span style="font-weight:700; color:var(--ink)">${periodElapsedPct}%</span></div>
+            <div class="bar thin"><i style="width:${periodElapsedPct}%; background:var(--muted-2)"></i></div>
+          </div>
+          <div>
+            <div class="between small muted" style="margin-bottom:4px"><span>💶 Dépensé</span><span style="font-weight:700; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${usedPct}%</span></div>
+            <div class="bar thin"><i style="width:${usedPct}%; background:${onTrack?'var(--ok)':'var(--terra-d)'}"></i></div>
+          </div>
+        </div>
+        <div style="width:1px; align-self:stretch; background:var(--line)"></div>
+        <div style="text-align:center; width:100px">
+          <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
+          <div class="small muted" style="line-height:1.3; margin-top:4px">À ce rythme, projection fin de mois</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  const catsHtml = S.categories.filter(c=>c.budget>0).map(c=>{
+    const sp=spentByCat(c.id, offset);
+    const pct=c.budget>0?Math.round(sp/c.budget*100):0;
+    const cls=pct>100?'over':pct>=85?'warn':'';
+    const alert = pct>100?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
+    return `<div style="padding:11px 0; border-top:1px solid var(--line)">
+      <div class="between" style="margin-bottom:8px">
+        <div class="row" style="gap:9px"><span style="font-size:18px">${c.emoji}</span><b style="font-size:14px">${c.name}</b> ${alert}</div>
+        <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(c.budget)}</span></span>
+      </div>
+      <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
+    </div>`;
+  }).join('');
+  openModal(`<h3>📊 Budgets de ${monthLabel(offset)}</h3>
+    ${rythmeHtml}
+    <div class="section-title" style="margin-top:0">Budgets par catégorie</div>
+    <div class="card">${catsHtml}</div>
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoPilotageCategories">Modifier dans Simulation et validation budgétaire →</span>
+    </div>`, true);
+  $('#mdGoPilotageCategories').onclick=()=>{ closeModal(); S.ui.pilotageFrom='moneydate'; save(); go('pilotage'); };
 }
 
 function bindAnalyse(){
@@ -2500,6 +2588,7 @@ function bindMoneyDate(){
     if(which==='depenses') openMdDepenses();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
+    if(which==='categories') openMdCategoriesDetail(S.ui.mdMonth);
   }));
 
   // Étape 1 : note
@@ -2540,7 +2629,7 @@ function bindMoneyDate(){
   };
   const pMod=$('#mdProjModif'); if(pMod) pMod.onclick=()=>{
     const k=mdMonthKey(S.ui.mdMonth); if(!S.moneyDate.checklist[k]) S.moneyDate.checklist[k]={};
-    S.moneyDate.checklist[k].projets_alignes='modifier'; save(); go('pilotage');
+    S.moneyDate.checklist[k].projets_alignes='modifier'; S.ui.pilotageFrom='moneydate'; save(); go('pilotage');
   };
   const pUndo=$('#mdProjUndo'); if(pUndo) pUndo.onclick=()=>{
     const k=mdMonthKey(S.ui.mdMonth); if(S.moneyDate.checklist[k]) delete S.moneyDate.checklist[k].projets_alignes; save(); go('moneydate');
@@ -2562,7 +2651,7 @@ function bindReglages(){
   const cp=$('#copyC2'); if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code couple copié 📋");};
   const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); };
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
-  const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
+  const gp=$('#goPilotage'); if(gp) gp.onclick=()=>{ S.ui.pilotageFrom='reglages'; save(); go('pilotage'); };
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
   const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne"); if(S.ui.sync) initSync(); else stopSync();};
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
@@ -2689,7 +2778,7 @@ function onProjectInput(el){
   recalcPilotage();
 }
 function bindPilotage(){
-  const br=$('#backReg'); if(br) br.onclick=()=>go('reglages');
+  const br=$('#backReg'); if(br) br.onclick=()=>go(S.ui.pilotageFrom==='moneydate'?'moneydate':'reglages');
 
   // Le salaire est une donnée connue (pas un curseur à explorer) : simple champ €, sans slider.
   const sl=$('#salLui'), se=$('#salElle');
