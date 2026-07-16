@@ -1606,7 +1606,7 @@ let donutUnit='pct'; // 'pct' ou 'eur' — bascule l'affichage des camemberts Id
 // pour piloter l'affichage des deux à la fois sans appartenir à l'une ou l'autre.
 function donutUnitToggleHtml(){
   const unit=donutUnit;
-  return `<div class="row" style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); z-index:2; gap:2px; background:var(--cream-2); border:1px solid var(--line); border-radius:99px; padding:2px; box-shadow:var(--shadow)">
+  return `<div class="row" style="position:absolute; top:11px; left:50%; transform:translateX(-50%); z-index:2; gap:2px; background:var(--cream-2); border:1px solid var(--line); border-radius:99px; padding:2px; box-shadow:var(--shadow)">
     <span class="small" data-unit="pct" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='pct'?'background:var(--terra); color:#fff':'color:var(--muted)'}">%</span>
     <span class="small" data-unit="eur" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='eur'?'background:var(--terra); color:#fff':'color:var(--muted)'}">€</span>
   </div>`;
