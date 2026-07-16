@@ -1561,7 +1561,7 @@ const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
-  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
+  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?", detail:'categories'}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdChecklistAllDone(offset){
@@ -2458,6 +2458,15 @@ function openMdCharges(){
     </div>`, true);
   $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
 }
+function openMdCategoriesDetail(){
+  const cats=S.categories.filter(c=>c.budget>0);
+  openModal(`<h3>📦 Catégories</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt0(totalBudget())}</p>
+    ${cats.length?cats.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt0(c.budget)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune catégorie.</p>'}
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
+      <span class="link" id="mdGoPilotageCategories">Modifier dans Simulation et validation budgétaire →</span>
+    </div>`, true);
+  $('#mdGoPilotageCategories').onclick=()=>{ closeModal(); go('pilotage'); };
+}
 function openMdDepenses(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -2492,6 +2501,7 @@ function bindMoneyDate(){
     if(which==='depenses') openMdDepenses();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
+    if(which==='categories') openMdCategoriesDetail();
   }));
 
   // Étape 1 : note
