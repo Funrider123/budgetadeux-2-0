@@ -294,7 +294,9 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 }
 .tab{display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--muted); font-size:10.5px; font-weight:700; padding:6px 4px; flex:1; transition:.16s;}
 .tab svg{width:22px;height:22px; stroke:currentColor; stroke-width:1.9; fill:none;}
-.tab.on{color:var(--terra);}
+.tab-ic{display:flex; align-items:center; justify-content:center; width:36px; height:26px; border-radius:10px; transition:.16s;}
+.tab.on{color:var(--terra); font-weight:800;}
+.tab.on .tab-ic{background:var(--blush);}
 .tab-add{margin-top:-26px;}
 .tab-add .plus{width:58px;height:58px;border-radius:20px; background:var(--terra); color:#fff; display:grid; place-items:center; box-shadow:0 16px 30px -12px var(--terra); transition:.18s;}
 .tab-add .plus svg{width:26px;height:26px; stroke-width:2.4;}
@@ -1012,7 +1014,7 @@ const TABS=[
 function renderTab(){
   $('#tabbar').innerHTML=TABS.map(t=>{
     if(t.add) return `<button class="tab tab-add" data-go="ajouter"><span class="plus"><svg viewBox="0 0 24 24">${t.icon}</svg></span></button>`;
-    return `<button class="tab ${current===t.id?'on':''}" data-go="${t.id}"><svg viewBox="0 0 24 24">${t.icon}</svg><span>${t.label}</span></button>`;
+    return `<button class="tab ${current===t.id?'on':''}" data-go="${t.id}"><span class="tab-ic"><svg viewBox="0 0 24 24">${t.icon}</svg></span><span>${t.label}</span></button>`;
   }).join('');
   document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 }
