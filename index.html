@@ -497,8 +497,17 @@ function migrate(s){
   if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(s.projectsFrozen===undefined) s.projectsFrozen = false;
-  if(s.pilotSnapshot===undefined) s.pilotSnapshot = null;
-  if(s.projectsSnapshot===undefined) s.projectsSnapshot = null;
+  // Comptes déjà existants avant "Annuler mes changements" : pas d'instantané encore enregistré.
+  // On en crée un dès maintenant à partir de l'état actuel, sinon le bouton n'apparaîtrait
+  // qu'après un premier clic sur Valider (ce qui, vu de l'utilisateur, ressemble à un bug).
+  if(s.pilotSnapshot===undefined || s.pilotSnapshot===null){
+    s.pilotSnapshot = {
+      salaries:{...s.settings.salaries}, mode:s.settings.mode, custom:{...s.settings.custom}, fixed:{...s.settings.fixed},
+      charges:s.charges.map(c=>({id:c.id, amount:c.amount})),
+      categories:s.categories.map(c=>({id:c.id, budget:c.budget}))
+    };
+  }
+  const needsProjectsSnapshot = (s.projectsSnapshot===undefined || s.projectsSnapshot===null);
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
@@ -508,6 +517,10 @@ function migrate(s){
   // maintenant que c'est une décision à 2 issues ('ok' / 'modifier').
   Object.values(s.moneyDate.checklist).forEach(ch=>{ if(typeof ch.projets_alignes==='boolean') delete ch.projets_alignes; });
   s.projects.forEach(p=>{ if(!p.history) p.history=[]; if(p.mensuel===undefined) p.mensuel = p.months>0 ? Math.max(0,(p.target-p.saved)/p.months) : 0; });
+  if(needsProjectsSnapshot){
+    s.projectsSnapshot = {};
+    s.projects.forEach(p=>{ s.projectsSnapshot[p.id] = {mensuel:p.mensuel||0, months:p.months||0}; });
+  }
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
