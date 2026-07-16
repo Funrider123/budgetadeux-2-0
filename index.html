@@ -459,6 +459,8 @@ const DEFAULT = {
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   projectsFrozen:false, // idem mais pour les mensualités de projets ajustées depuis "Vos projets"
+  pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler mes changements"
+  projectsSnapshot:null, // dernier état validé des mensualités de projets pour "Annuler mes changements"
   settings:{
     salaries:{lui:0, elle:0},
     mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0},
@@ -495,6 +497,8 @@ function migrate(s){
   if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(s.projectsFrozen===undefined) s.projectsFrozen = false;
+  if(s.pilotSnapshot===undefined) s.pilotSnapshot = null;
+  if(s.projectsSnapshot===undefined) s.projectsSnapshot = null;
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
@@ -516,7 +520,7 @@ function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_)
    couple dans la table `couple_state`, avec mise à jour temps réel.
    ============================================================ */
 // Champs partagés entre partenaires ; le reste (auth/partner/ui) reste local à l'appareil.
-const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','pilotFrozen','projectsFrozen'];
+const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
 function syncActive(){ return !!(S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
@@ -1023,6 +1027,17 @@ function renderSetupBanner(){
     $('#setupBannerBtn').onclick=()=>go('pilotage');
     return;
   }
+  // Même logique pour les mensualités de projets ajustées depuis "Vos projets" : tant que ce
+  // n'est pas validé là-bas, on le rappelle partout (sauf sur l'écran Vos projets lui-même,
+  // où l'état est déjà visible directement).
+  if(!S.projectsFrozen && current!=='projets'){
+    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn" style="background:var(--warn)">
+      <span>⚠️ Mensualités de projets non validées</span>
+      <span class="cta">Valider →</span>
+    </div>`;
+    $('#setupBannerBtn').onclick=()=>go('projets');
+    return;
+  }
   el.innerHTML='';
 }
 function renderAppbar(){
@@ -1448,7 +1463,10 @@ function renderProjets(){
       })()}
       <div style="margin-top:14px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
       </div>
-      ${!S.projectsFrozen?`<button class="btn btn-primary" id="validProjects" style="margin-top:16px">Valider les mensualités ✓</button>`:''}
+      ${!S.projectsFrozen?`<div class="row" style="gap:10px; margin-top:16px">
+        <button class="btn btn-primary" id="validProjects" style="flex:1">Valider les mensualités ✓</button>
+        ${S.projectsSnapshot?`<button class="btn btn-ghost" id="cancelProjects">Annuler mes changements</button>`:''}
+      </div>`:''}
     </div>
   </div>
 
@@ -1472,9 +1490,9 @@ function projectCard(p, rank){
       <b data-menslabel="${p.id}" style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
     <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
-    ${(!paused && !aband)?`<div class="row" style="gap:10px; align-items:center; margin-bottom:10px">
+    ${(!paused && !aband)?`<div class="pilot-row" style="padding:0 0 10px">
       <input type="range" class="mini-slider" min="0" max="${sliderMax(mens, Math.max(disponiblePourProjets(),100))}" step="1" value="${mens}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
-      <input type="number" class="pamt-input" value="${Math.round(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
+      <input type="number" class="pamt-input" style="width:74px" value="${Math.round(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
     </div>`:''}
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
     <div class="between" style="margin-top:9px">
@@ -2248,7 +2266,10 @@ function renderPilotage(){
     <div class="seg" style="display:flex; width:100%; margin-top:8px"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
   </div>
 
-  <button class="btn btn-primary" id="validBudget" style="margin-top:16px">Valider le budget du mois ✓</button>
+  <div class="row" style="gap:10px; margin-top:16px">
+    <button class="btn btn-primary" id="validBudget" style="flex:1">Valider le budget du mois ✓</button>
+    ${S.pilotSnapshot?`<button class="btn btn-ghost" id="cancelBudget">Annuler mes changements</button>`:''}
+  </div>
   </div>
   `;
 }
@@ -2513,8 +2534,20 @@ function openMoneyDateSchedule(){
 }
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>openEditProject(null,'projets');
-  const vp=$('#validProjects'); if(vp) vp.onclick=()=>{ S.projectsFrozen=true; save(); go('projets'); toast("Mensualités validées ✓ — vous êtes prêts !","❤️"); };
+  const vp=$('#validProjects'); if(vp) vp.onclick=()=>{
+    S.projectsSnapshot={};
+    S.projects.forEach(p=>{ S.projectsSnapshot[p.id]={mensuel:p.mensuel||0, months:p.months||0}; });
+    S.projectsFrozen=true; save(); go('projets'); toast("Mensualités validées ✓ — vous êtes prêts !","❤️");
+  };
   const uvp=$('#unfreezeProjects'); if(uvp) uvp.onclick=()=>{ S.projectsFrozen=false; save(); go('projets'); };
+  const cp=$('#cancelProjects'); if(cp) cp.onclick=()=>{
+    const snap=S.projectsSnapshot; if(!snap) return;
+    Object.keys(snap).forEach(id=>{
+      const p=S.projects.find(x=>x.id===id);
+      if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
+    });
+    S.projectsFrozen=true; save(); go('projets'); toast("Modifications annulées ↩","✓");
+  };
   const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
   const cat=$('#cagAddToggle'); if(cat) cat.onclick=openCagnotteAddLine;
   document.querySelectorAll('[data-caghist]').forEach(b=>b.addEventListener('click',()=>openEditCagnotteEntry(+b.dataset.caghist)));
@@ -3204,12 +3237,24 @@ function bindPilotage(){
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
     if(!S.moneyDate.nextDate){ const nd=new Date(); nd.setMonth(nd.getMonth()+1); S.moneyDate.nextDate=nd.toISOString().slice(0,10); }
+    S.pilotSnapshot={
+      salaries:{...S.settings.salaries}, mode:S.settings.mode, custom:{...S.settings.custom}, fixed:{...S.settings.fixed},
+      charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
+      categories:S.categories.map(c=>({id:c.id, budget:c.budget}))
+    };
     S.pilotFrozen=true;
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️");
     go('pilotage');
   };
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; save(); go('pilotage'); };
   const ufp=$('#unfreezeProjectsPilot'); if(ufp) ufp.onclick=()=>{ S.projectsFrozen=false; save(); go('pilotage'); };
+  const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>{
+    const snap=S.pilotSnapshot; if(!snap) return;
+    S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
+    snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
+    snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
+    S.pilotFrozen=true; save(); go('pilotage'); toast("Modifications annulées ↩","✓");
+  };
 }
 function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
