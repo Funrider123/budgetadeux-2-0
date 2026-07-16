@@ -1002,12 +1002,26 @@ function enterApp(){
 function needsSetup(){ return !S.settings.salaries.lui && !S.settings.salaries.elle; }
 function renderSetupBanner(){
   const el=$('#setupBanner'); if(!el) return;
-  if(!needsSetup() || current==='pilotage'){ el.innerHTML=''; return; }
-  el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
-    <span>⚙️ À configurer : revenus, catégories...</span>
-    <span class="cta">Configurer →</span>
-  </div>`;
-  $('#setupBannerBtn').onclick=()=>go('pilotage');
+  if(current==='pilotage'){ el.innerHTML=''; return; }
+  if(needsSetup()){
+    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
+      <span>⚙️ À configurer : revenus, catégories...</span>
+      <span class="cta">Configurer →</span>
+    </div>`;
+    $('#setupBannerBtn').onclick=()=>go('pilotage');
+    return;
+  }
+  // Rappel persistant tant que le couple n'a pas cliqué sur "Valider le budget du mois" :
+  // évite de croire que des chiffres ajustés sont déjà officiels alors qu'ils ne le sont pas.
+  if(!S.pilotFrozen){
+    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn" style="background:var(--warn)">
+      <span>⚠️ Budget non validé — vos ajustements ne sont pas encore officiels</span>
+      <span class="cta">Valider →</span>
+    </div>`;
+    $('#setupBannerBtn').onclick=()=>go('pilotage');
+    return;
+  }
+  el.innerHTML='';
 }
 function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
