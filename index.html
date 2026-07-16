@@ -1012,8 +1012,6 @@ const TABS=[
   {id:"projets", label:"Projets", icon:'<path d="M20.8 6.6a5 5 0 0 0-7 0L12 8.2l-1.8-1.6a5 5 0 1 0-7 7l8.8 8.4 8.8-8.4a5 5 0 0 0 0-7Z"/>'},
   {id:"analyse", label:"Analyse", icon:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>'}
 ];
-const SCREEN_LABELS={vue:"Vue", historique:"Historique", ajouter:"Ajouter", projets:"Projets", analyse:"Analyse", moneydate:"Money Date", reglages:"Réglages", pilotage:"Pilotage"};
-function screenLabel(id){ return SCREEN_LABELS[id]||"Réglages"; }
 function renderTab(){
   $('#tabbar').innerHTML=TABS.map(t=>{
     if(t.add) return `<button class="tab tab-add" data-go="ajouter"><span class="plus"><svg viewBox="0 0 24 24">${t.icon}</svg></span></button>`;
@@ -1195,17 +1193,26 @@ function ajouterMissing(){
   if(!draft.merchant && !draft.desc.trim()) missing.push('un commerce et/ou une description');
   return missing;
 }
-function updateAjouterValidity(){
+function ajouterCagnotteExceeded(){
+  const amt=parseFloat((draft.amount+"").replace(',','.'))||0;
+  return draft.cat==='__cagnotte__' && amt>S.cagnotte.balance;
+}
+function ajouterHint(){
+  if(ajouterCagnotteExceeded()) return "Le montant dépasse le solde de la cagnotte commune";
   const missing=ajouterMissing();
-  const btn=$('#dSave'); if(btn) btn.disabled=missing.length>0;
+  return missing.length ? `Ajoutez ${missing.join(', ')}` : '';
+}
+function updateAjouterValidity(){
+  const btn=$('#dSave'); if(btn) btn.disabled=ajouterMissing().length>0||ajouterCagnotteExceeded();
   const hint=$('#dMissingHint');
-  if(hint){ hint.textContent = missing.length ? `Ajoutez ${missing.join(', ')}` : ''; hint.style.display = missing.length ? 'block' : 'none'; }
+  if(hint){ const txt=ajouterHint(); hint.textContent=txt; hint.style.display=txt?'block':'none'; }
 }
 function renderAjouter(){
   const c = draft.cat && draft.cat!=='__cagnotte__' ? catById(draft.cat) : null;
   const isCagnotte = draft.cat==='__cagnotte__';
   const isTransfer=/transfert|virement/i.test(draft.desc);
   const missing=ajouterMissing();
+  const disabled = missing.length>0||ajouterCagnotteExceeded();
   const whoSel = draft.who||me();
   return `
   <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
@@ -1242,7 +1249,7 @@ function renderAjouter(){
       <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
     </div>
 
-    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${missing.length?'block':'none'}">${missing.length?`Ajoutez ${missing.join(', ')}`:''}</p>
+    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
 
     <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (date, prévision, qui a payé) ▾"}</span></div>
     ${draft._showMore?`
@@ -1258,7 +1265,7 @@ function renderAjouter(){
       </div>
     </div>`:''}
 
-    <button class="btn btn-primary" id="dSave" ${missing.length?'disabled':''}>${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
+    <button class="btn btn-primary" id="dSave" ${disabled?'disabled':''}>${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
   </div>
   `;
 }
@@ -1323,7 +1330,7 @@ function renderHistorique(){
   ${list.length? `<div class="card">${list.map(x=>histRow(x)).join('')}</div>` : `<div class="card empty"><div class="e">🍃</div><p>Aucun mouvement ce mois-ci avec ces filtres.</p></div>`}
   `;
 }
-function histRow(x){
+function histRow(x, editable=true){
   const c=catById(x.cat);
   const transfer=x.type==="transfert";
   return `<div class="lrow" data-exp="${x.id}">
@@ -1332,6 +1339,7 @@ function histRow(x){
       <div class="name">${escapeHtml(x.desc)} ${x.prevision?'🔮':''} ${x.cagnotte?'👛':''}</div>
       <div class="sub">${new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} · ${nameOf(x.who)} · ${transfer?'Mouvement interne':c.name}${x.note?` · <i>${escapeHtml(x.note)}</i>`:''}</div>
     </div>
+    ${editable?'<span class="muted" style="font-size:13px">✏️</span>':''}
     <div class="amt" style="color:${transfer?'var(--invest)':'var(--ink)'}">${transfer?'↔ ':'-'}${fmt(x.amount)}</div>
   </div>`;
 }
@@ -2029,7 +2037,7 @@ function renderPilotage(){
   const activeProjects=S.projects.filter(p=>p.status==="actif");
   return `
   <div style="padding-top:10px">
-    <button class="btn btn-ghost btn-sm" id="backReg">← ${screenLabel(prevScreen||'reglages')}</button>
+    <button class="btn btn-ghost btn-sm" id="backReg">← Retour</button>
   </div>
   <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
@@ -2331,6 +2339,7 @@ function saveExpense(){
   if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
   if(!draft.cat){ toast("Choisissez une catégorie","🏷️"); return; }
   if(!draft.merchant && !draft.desc.trim()){ toast("Ajoutez un commerce ou une description","✏️"); return; }
+  if(draft.cat==='__cagnotte__' && amt>S.cagnotte.balance){ toast("Le montant dépasse le solde de la cagnotte commune","👛"); return; }
   const isTransfer=/transfert|virement/i.test(draft.desc);
   const isCagnotte=draft.cat==='__cagnotte__';
   const merchant = draft.merchant ? S.merchants.find(m=>m.id===draft.merchant) : null;
@@ -2366,7 +2375,7 @@ function openExpenseSheet(id){
     <div class="row" style="gap:10px; margin-top:8px">
       <button class="btn btn-primary" id="exSave" style="flex:1">Enregistrer</button>
       <button class="btn btn-ghost btn-sm" id="exDel" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">🗑 Supprimer</button>
-    </div>`);
+    </div>`, true);
   $('#exSave').onclick=()=>{ if(transfer){x.note=$('#exNote').value;} else {x.cat=$('#exCat').value;} save(); closeModal(); go(current); toast(transfer?"Note enregistrée":"Catégorie mise à jour","✓"); };
   $('#exDel').onclick=()=>{ S.expenses=S.expenses.filter(e=>e.id!==id); save(); closeModal(); go(current); toast("Dépense supprimée","🗑"); };
 }
@@ -2567,7 +2576,7 @@ function openMdDepenses(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
   openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
-    ${list.length?list.map(x=>histRow(x)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`, true);
+    ${list.length?list.map(x=>histRow(x,false)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}`, true);
 }
 function mdCategoriesDetailHtml(offset){
   const closed = offset<0;
