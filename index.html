@@ -1448,15 +1448,13 @@ function projectCard(p, rank){
   const ui=projUIState(p.id);
   return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); ${aband?'opacity:.6':''}" data-proj="${p.id}">
     <div class="between" style="margin-bottom:8px; gap:10px">
-      <div class="row" style="gap:8px; min-width:0">
-        ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:30px; height:30px; flex-shrink:0">⚙️</button>`:''}
-        <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
-      </div>
+      <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
       <b style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
     <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${paused?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">En pause</span>':''}${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
-    <div style="margin-top:9px; text-align:right">
+    <div class="between" style="margin-top:9px">
+      <span class="small muted">${reste>0?`Échéance ${projectEtaLabel(p)}`:''}</span>
       <span class="small" style="font-weight:700; color:var(--terra-d)">${reste>0?`${fmt0(p.saved)} / ${fmt0(p.target)}`:'Objectif atteint ! 🎉'}</span>
     </div>
     ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
@@ -1467,8 +1465,12 @@ function projectCard(p, rank){
       <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
       <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
     </div>`:''}
-    <div class="pilot-collapse-hdr ${ui.histOpen?'open':''}" data-projhist="${p.id}" style="margin-top:12px; padding:8px 0; border-top:1px solid var(--line)">
-      <span class="small link" style="font-weight:800">Historique des mouvements</span><span class="chev">▼</span>
+    <div class="between" style="margin-top:12px; padding:8px 0; border-top:1px solid var(--line)">
+      <div class="row" style="gap:6px; cursor:pointer" data-projhist="${p.id}">
+        <span class="small link" style="font-weight:800">Historique des mouvements</span>
+        <span class="chev" style="transition:transform .2s; transform:rotate(${ui.histOpen?'180deg':'0deg'})">▾</span>
+      </div>
+      ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:28px; height:28px; flex-shrink:0">⚙️</button>`:''}
     </div>
     ${ui.histOpen?historyRowsHtml(p.history):''}
   </div>`;
