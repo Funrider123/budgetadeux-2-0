@@ -1354,7 +1354,7 @@ function projUIState(id){ return projUI[id] || (projUI[id]={histOpen:false, addO
 function historyRowsHtml(list){
   if(!list || !list.length) return `<p class="small muted" style="padding:10px 2px">Aucun mouvement enregistré pour l'instant.</p>`;
   const sorted=list.slice().sort((a,b)=>b.date.localeCompare(a.date));
-  return `<div class="card" style="margin-top:8px">${sorted.map(h=>`<div class="lrow">
+  return `<div class="card" style="margin-top:8px; box-shadow:none; border:1px solid var(--line)">${sorted.map(h=>`<div class="lrow">
     <div class="emoji-badge">${h.who?'🙋':(h.amount<0?'↪':'🔁')}</div>
     <div class="grow"><div class="name">${escapeHtml(h.label)}</div><div class="sub">${new Date(h.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}</div></div>
     <div class="amt" style="color:${h.amount>=0?'var(--ok)':'var(--danger)'}">${h.amount>=0?'+':''}${fmt(h.amount)}</div>
@@ -1368,29 +1368,32 @@ function renderProjets(){
     <p class="hero-sub">Chaque virement nous rapproche d'un projet à deux.</p>
   </div>
 
-  <div class="panel-terra" style="margin-top:20px">
-    <div class="between">
-      <div><div class="lbl">Cagnotte commune : Solde actuel</div><div class="big">${fmt(S.cagnotte.balance)}</div></div>
-      <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">👛</div>
+  <div style="margin-top:20px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
+    <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">👛 Cagnotte commune</div>
+    <div style="padding:20px; background:var(--card)">
+      <div class="between">
+        <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Solde actuel</div><div style="font-family:var(--serif); font-size:32px; font-weight:600; color:var(--terra); margin-top:4px">${fmt(S.cagnotte.balance)}</div></div>
+        <div class="emoji-badge">👛</div>
+      </div>
+      <div class="pilot-collapse-hdr ${cagUI.histOpen?'open':''}" id="cagHistHdr" style="margin-top:14px; background:var(--cream-2); border-radius:14px; padding:12px 16px">
+        <span class="small" style="font-weight:800">Historique des entrées / sorties</span><span class="chev">▼</span>
+      </div>
+      ${cagUI.histOpen?historyRowsHtml(S.cagnotte.history):''}
+      <div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>
     </div>
   </div>
-  <div class="pilot-collapse-hdr ${cagUI.histOpen?'open':''}" id="cagHistHdr" style="margin-top:10px; background:var(--card-2); border-radius:14px; padding:12px 16px">
-    <span class="small" style="font-weight:800">Historique des entrées / sorties</span><span class="chev">▼</span>
-  </div>
-  ${cagUI.histOpen?historyRowsHtml(S.cagnotte.history):''}
-  <div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>
 
-  <div style="height:1px; background:var(--line-2); margin:28px 0 4px"></div>
-
-  <div class="panel-terra" style="margin-top:16px">
-    <div class="between">
-      <div><div class="lbl">Vos projets : Montant mensuel</div><div class="big">${fmt(dispo)}</div></div>
-      <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">✨</div>
+  <div style="margin-top:18px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
+    <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">🎯 Vos projets</div>
+    <div style="padding:20px; background:var(--card)">
+      <div class="between">
+        <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div><div style="font-family:var(--serif); font-size:32px; font-weight:600; color:var(--terra); margin-top:4px">${fmt(dispo)}</div></div>
+        <div class="emoji-badge">✨</div>
+      </div>
+      <div style="margin-top:14px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
+      ${S.projects.map(p=>projectCard(p)).join('')}
     </div>
   </div>
-  <div style="margin-top:10px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
-
-  ${S.projects.map(p=>projectCard(p)).join('')}
 
   <div class="photo-card" style="margin-top:16px">
     <img src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&h=400&fit=crop">
@@ -1410,7 +1413,7 @@ function projectCard(p){
   const mens=p.months>0?reste/p.months:0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
   const ui=projUIState(p.id);
-  return `<div class="card" style="margin-top:14px; ${aband?'opacity:.6':''}" data-proj="${p.id}">
+  return `<div class="card" style="margin-top:14px; box-shadow:none; border:1px solid var(--line); ${aband?'opacity:.6':''}" data-proj="${p.id}">
     <div class="between" style="margin-bottom:12px">
       <div class="row" style="gap:11px"><div class="emoji-badge">${p.emoji}</div>
         <div><div class="name" style="font-family:var(--serif); font-size:17px">${p.name}</div>
