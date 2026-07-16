@@ -1333,7 +1333,7 @@ function renderHistorique(){
 function histRow(x, editable=true){
   const c=catById(x.cat);
   const transfer=x.type==="transfert";
-  return `<div class="lrow" data-exp="${x.id}">
+  return `<div class="lrow" data-exp="${x.id}" style="${editable?'cursor:pointer':''}">
     <div class="emoji-badge" style="${transfer?'background:color-mix(in srgb,var(--invest) 12%,transparent)':''}">${transfer?'🔁':c.emoji}</div>
     <div class="grow">
       <div class="name">${escapeHtml(x.desc)} ${x.prevision?'🔮':''} ${x.cagnotte?'👛':''}</div>
@@ -1628,6 +1628,7 @@ function mdSurplusAllDecided(offset){
 }
 const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
+  {key:'categorisation', label:"Sommes-nous ok sur la catégorisation de chaque dépense ?", detail:'categorisation'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
   {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
@@ -2670,6 +2671,7 @@ function bindMoneyDate(){
   document.querySelectorAll('[data-mddetail]').forEach(b=>b.addEventListener('click',()=>{
     const which=b.dataset.mddetail;
     if(which==='depenses') openMdDepenses();
+    if(which==='categorisation') go('historique');
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
   }));
