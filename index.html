@@ -1540,7 +1540,7 @@ function renderAnalyse(){
 
   <div class="grid2" style="margin-top:14px">
     ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection, 'editIdealBtn')}
-    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
+    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection, null, true)}
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1556,7 +1556,7 @@ function renderAnalyse(){
       const grandTotal=grandAllocationTotal();
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
       const open=!!analyseUI[cls];
-      return `<div style="padding:12px 0; border-top:1px solid var(--line)">
+      return `<div id="anacls-${cls}" style="padding:12px 0; border-top:1px solid var(--line)">
         <div class="between" data-anacls="${cls}" style="cursor:pointer">
           <div class="row" style="gap:6px"><b class="small">${clsLabel(cls)}</b><span class="chev" style="transition:transform .2s; transform:rotate(${open?'180deg':'0deg'})">▾</span></div>
           <b class="small" style="color:var(--terra)">${pct}% · ${fmt0(clsTotal)}</b>
@@ -1585,7 +1585,10 @@ function renderAnalyse(){
   </div>
   `;
 }
-function donutCard(title,b,e,inv,pr,editableId){
+function donutCard(title,b,e,inv,pr,editableId,linkable){
+  const li=(cls,color,label,val)=>linkable
+    ?`<div class="li" data-anacls="${cls}" style="cursor:pointer"><span class="sw" style="background:var(${color})"></span>${label} <span class="r">${val}%</span></div>`
+    :`<div class="li"><span class="sw" style="background:var(${color})"></span>${label} <span class="r">${val}%</span></div>`;
   return `<div class="card" style="padding:16px">
     <div class="between" style="margin-bottom:10px">
       <div class="small" style="font-weight:800">${title}</div>
@@ -1597,10 +1600,10 @@ function donutCard(title,b,e,inv,pr,editableId){
       </div>
     </div>
     <div class="legend">
-      <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${b}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${e}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--invest)"></span>Investissement <span class="r">${inv}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${pr}%</span></div>
+      ${li('besoin','--besoin','Besoins',b)}
+      ${li('envie','--envie','Envies',e)}
+      ${li('invest','--invest','Investissement',inv)}
+      ${li('protection','--protection','Protection',pr)}
     </div>
   </div>`;
 }
@@ -1669,7 +1672,7 @@ function renderMoneyDate(){
 
   <div class="quote" style="text-align:center; margin:22px 14px 4px">${mdQuote(mdStep)}</div>
 
-  <div style="position:sticky; bottom:0; background:linear-gradient(var(--cream) 65%, var(--cream) 100%); padding:12px 0 calc(10px + env(safe-area-inset-bottom)); margin-top:18px">
+  <div id="mdFooter" style="position:sticky; bottom:0; background:linear-gradient(var(--cream) 65%, var(--cream) 100%); padding:12px 0 calc(10px + env(safe-area-inset-bottom)); margin-top:18px">
     <div class="row" style="gap:10px">
       ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
       <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===N-1?'Terminer notre bilan ✓':'Continuer →'}</button>
@@ -2800,7 +2803,11 @@ function bindAnalyse(){
   if(n) n.onclick=()=>{ if(S.ui.analyMonth<0){S.ui.analyMonth++; save(); go('analyse');} };
   const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
   document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
-    const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
+    const cls=b.dataset.anacls;
+    const fromLegend=b.classList.contains('li');
+    if(fromLegend) analyseUI[cls]=true; else analyseUI[cls]=!analyseUI[cls];
+    go('analyse');
+    if(fromLegend) requestAnimationFrame(()=>{ const el=document.getElementById('anacls-'+cls); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); });
   }));
 }
 function openEditIdeal(){
@@ -2832,6 +2839,10 @@ function openEditIdeal(){
 }
 
 function bindMoneyDate(){
+  const ft=$('#mdFooter'); if(ft) ft.addEventListener('pointerdown',()=>{
+    const a=document.activeElement;
+    if(a && (a.tagName==='TEXTAREA' || a.tagName==='INPUT')) a.blur();
+  });
   const ex=$('#mdExit'); if(ex) ex.onclick=()=>go('vue');
   const bk=$('#mdBack'); if(bk) bk.onclick=()=>{mdStep--; go('moneydate');};
   const nx=$('#mdNext'); if(nx) nx.onclick=()=>{ if(!S.moneyDate.doneSteps.includes(mdStep)) S.moneyDate.doneSteps.push(mdStep); if(mdStep===MD_STEPS.length-1){const dt=$('#mdDate'); if(dt) S.moneyDate.nextDate=dt.value;} mdStep++; save(); go('moneydate'); };
