@@ -1667,11 +1667,13 @@ function renderMoneyDate(){
 
   <div class="quote" style="text-align:center; margin:22px 14px 4px">${mdQuote(mdStep)}</div>
 
-  <div class="row" style="gap:10px; margin-top:18px">
-    ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
-    <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===N-1?'Terminer notre bilan ✓':'Continuer →'}</button>
+  <div style="position:sticky; bottom:0; background:linear-gradient(var(--cream) 65%, var(--cream) 100%); padding:12px 0 calc(10px + env(safe-area-inset-bottom)); margin-top:18px">
+    <div class="row" style="gap:10px">
+      ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
+      <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===N-1?'Terminer notre bilan ✓':'Continuer →'}</button>
+    </div>
+    ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':mdStep===2?'Décidez pour chaque catégorie avant de continuer':'Cochez la case avant de continuer'}</p>`:''}
   </div>
-  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':mdStep===2?'Décidez pour chaque catégorie avant de continuer':'Cochez la case avant de continuer'}</p>`:''}
   `;
 }
 function projectEtaLabel(p){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(p.months||0)); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`; }
