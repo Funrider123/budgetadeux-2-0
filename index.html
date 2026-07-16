@@ -1494,7 +1494,7 @@ const MD_STEPS=[
   {t:"Situation Globale", q:"", e:"🧭"},
   {t:"Dépenses imprévues", q:"Ce mois-ci : y a-t-il eu des surprises à digérer ?", e:"🌦️"},
   {t:"Transfert de surplus", q:"On répartit ce qui reste, sereinement.", e:"💸"},
-  {t:"Point sur les projets", q:"Sommes-nous toujours alignés sur nos rêves ?", e:"🎯"},
+  {t:"Point sur les projets", q:"", e:"🎯"},
   {t:"Anticiper le mois prochain", q:"Le mois prochain : quelles dépenses prévoir déjà ?", e:"🔮"},
   {t:"Prochain Money Date", q:"On se redonne rendez-vous quand ?", e:"📅"}
 ];
@@ -1513,7 +1513,7 @@ function renderMoneyDate(){
   const pct=Math.round((mdStep)/6*100);
   if(mdStep>=6) return moneyDateDone();
   const st=MD_STEPS[mdStep];
-  const canContinue = (mdStep!==0 || mdChecklistAllDone(S.ui.mdMonth)) && (mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth)) && (mdStep!==3 || !!mdChecklist(S.ui.mdMonth).projets_alignes);
+  const canContinue = (mdStep!==0 || mdChecklistAllDone(S.ui.mdMonth)) && (mdStep!==1 || !!mdChecklist(S.ui.mdMonth).depenses_imprevues) && (mdStep!==2 || mdSurplusAllDecided(S.ui.mdMonth)) && (mdStep!==3 || !!mdChecklist(S.ui.mdMonth).projets_alignes);
   return `
   <div class="steps-head">
     <div class="between" style="padding-top:4px">
@@ -1544,7 +1544,7 @@ function renderMoneyDate(){
     ${mdStep>0?`<button class="btn btn-ghost" id="mdBack" style="flex:.5">← Retour</button>`:''}
     <button class="btn btn-primary" id="mdNext" style="flex:1" ${canContinue?'':'disabled'}>${mdStep===5?'Terminer notre bilan ✓':'Continuer →'}</button>
   </div>
-  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':mdStep===3?'Cochez la case avant de continuer':'Décidez pour chaque catégorie avant de continuer'}</p>`:''}
+  ${!canContinue?`<p class="small muted" style="text-align:center; margin-top:8px">${mdStep===0?'Cochez chaque point avant de continuer':(mdStep===1||mdStep===3)?'Cochez la case avant de continuer':'Décidez pour chaque catégorie avant de continuer'}</p>`:''}
   `;
 }
 function projectEtaLabel(p){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(p.months||0)); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`; }
@@ -1561,7 +1561,7 @@ const MD_CHECKLIST_ITEMS=[
   {key:'depenses', label:"Toutes les dépenses ont-elles bien été enregistrées ?", detail:'depenses'},
   {key:'revenus_repartition', label:"Nos revenus ont-ils changé, ou voulons-nous changer notre répartition budgétaire ?", detail:'repartition'},
   {key:'charges', label:"Des charges à ajouter, enlever ou modifier ?", detail:'charges'},
-  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?", detail:'categories'}
+  {key:'categories', label:"Nos budgets ont-ils été respectés ? Faut-il modifier, ajouter ou supprimer une ou plusieurs catégories ?"}
 ];
 function mdChecklist(offset){ return S.moneyDate.checklist[mdMonthKey(offset)] || {}; }
 function mdChecklistAllDone(offset){
@@ -1599,10 +1599,18 @@ function mdContent(step){
     }).join('')}`;
   }
   if(step===1){
-    const imp=realExpenses(offset).filter(x=>x.amount>=80);
+    const check=mdChecklist(offset);
+    const on=!!check.depenses_imprevues;
     const notes=S.moneyDate.notes||[];
-    return `<p class="small muted" style="margin-bottom:10px">Les dépenses notables déjà survenues ce mois-ci :</p>
-    ${imp.length?imp.map(x=>`<div class="lrow"><div class="emoji-badge">${catById(x.cat).emoji}</div><div class="grow"><div class="name">${escapeHtml(x.desc)}</div><div class="sub">${nameOf(x.who)} · ${catById(x.cat).name}</div></div><div class="amt">${fmt(x.amount)}</div></div>`).join(''):'<p class="empty">Aucune grosse surprise ce mois-ci 🌤️</p>'}
+    return `<div style="padding:4px 0 14px" data-mdcheck="depenses_imprevues">
+      <div class="between">
+        <div class="row" style="gap:10px; cursor:pointer">
+          <span style="width:22px; height:22px; border-radius:50%; border:2px solid ${on?'var(--ok)':'var(--line-2)'}; background:${on?'var(--ok)':'transparent'}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0">${on?'✓':''}</span>
+          <span class="small" style="${on?'text-decoration:line-through; color:var(--muted)':''}">Y a-t-il eu une ou plusieurs dépenses imprévues ce mois-ci ?</span>
+        </div>
+        <span class="link" data-mddetail="depenses" style="font-size:12px; white-space:nowrap; flex-shrink:0" onclick="event.stopPropagation()">Détail →</span>
+      </div>
+    </div>
     ${notes.length?`<div class="card-soft" style="margin-top:14px; text-align:left">
       <div class="small muted" style="font-weight:800; margin-bottom:6px">Notes laissées précédemment</div>
       ${notes.slice(0,5).map(n=>`<div class="between" style="padding:6px 0; border-top:1px solid var(--line); align-items:flex-start">
@@ -1640,13 +1648,16 @@ function mdContent(step){
   }
   if(step===3){
     const active=S.projects.filter(p=>p.status!=="abandonne");
-    const alignedOn=!!mdChecklist(offset).projets_alignes;
-    return `<div style="padding:10px 0 14px" data-mdcheck="projets_alignes">
-      <div class="row" style="gap:10px; cursor:pointer">
-        <span style="width:22px; height:22px; border-radius:50%; border:2px solid ${alignedOn?'var(--ok)':'var(--line-2)'}; background:${alignedOn?'var(--ok)':'transparent'}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0">${alignedOn?'✓':''}</span>
-        <span class="small" style="${alignedOn?'text-decoration:line-through; color:var(--muted)':''}">Sommes-nous toujours alignés sur nos rêves ?</span>
-      </div>
-    </div>
+    const decision=mdChecklist(offset).projets_alignes;
+    return `<div class="small" style="font-weight:700; margin-bottom:10px">Sommes-nous toujours alignés sur nos rêves ?</div>
+    ${decision?`<div class="between" style="padding:2px 0 14px">
+        <span class="small" style="color:var(--ok); font-weight:700">${decision==='ok'?'✓ Tout est ok, on ne change rien':'✏️ On modifie dans Simulation et validation budgétaire'}</span>
+        <span class="link" id="mdProjUndo" style="font-size:12px">Modifier</span>
+      </div>`
+    :`<div class="row" style="gap:8px; padding-bottom:14px">
+        <button class="btn btn-soft btn-sm" style="flex:1" id="mdProjOk">Tout est ok, on ne change rien</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" id="mdProjModif">On veut modifier →</button>
+      </div>`}
     <div class="card-soft" style="margin-bottom:12px; text-align:center">
       <div class="small muted" style="font-weight:800">Disponible pour nos projets ce mois-ci</div>
       <div style="font-family:var(--serif); font-size:24px; color:var(--terra)">${fmt(disponiblePourProjets())}</div>
@@ -1662,10 +1673,7 @@ function mdContent(step){
         <div class="bar thin" style="margin-bottom:8px"><i style="width:${Math.min(100,pct)}%"></i></div>
         <div class="small muted">${fmt0(monthly)} / mois · atteint en ${pct>=100?'—':projectEtaLabel(p)}</div>
       </div>`;
-    }).join(''):'<p class="empty">Aucun projet actif pour l\'instant.</p>'}
-    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageProjects">Modifier dans Simulation et validation budgétaire →</span>
-    </div>`;
+    }).join(''):'<p class="empty">Aucun projet actif pour l\'instant.</p>'}`;
   }
   if(step===4){
     const nextPrevisions=S.expenses.filter(x=>x.type==="depense" && x.prevision && inMonth(x.date,offset+1));
@@ -2458,15 +2466,6 @@ function openMdCharges(){
     </div>`, true);
   $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
 }
-function openMdCategoriesDetail(){
-  const cats=S.categories.filter(c=>c.budget>0);
-  openModal(`<h3>📦 Catégories</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt0(totalBudget())}</p>
-    ${cats.length?cats.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt0(c.budget)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune catégorie.</p>'}
-    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageCategories">Modifier dans Simulation et validation budgétaire →</span>
-    </div>`, true);
-  $('#mdGoPilotageCategories').onclick=()=>{ closeModal(); go('pilotage'); };
-}
 function openMdDepenses(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -2501,7 +2500,6 @@ function bindMoneyDate(){
     if(which==='depenses') openMdDepenses();
     if(which==='repartition') openMdRepartition();
     if(which==='charges') openMdCharges();
-    if(which==='categories') openMdCategoriesDetail();
   }));
 
   // Étape 1 : note
@@ -2535,8 +2533,18 @@ function bindMoneyDate(){
     undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo, +b.dataset.idx); go('moneydate');
   }));
 
-  // Étape 3 : consultation des projets (la modification passe par Pilotage)
-  const gp=$('#mdGoPilotageProjects'); if(gp) gp.onclick=()=>go('pilotage');
+  // Étape 3 : décision sur les projets (ok = on laisse tel quel, modifier = go Pilotage)
+  const pOk=$('#mdProjOk'); if(pOk) pOk.onclick=()=>{
+    const k=mdMonthKey(S.ui.mdMonth); if(!S.moneyDate.checklist[k]) S.moneyDate.checklist[k]={};
+    S.moneyDate.checklist[k].projets_alignes='ok'; save(); go('moneydate');
+  };
+  const pMod=$('#mdProjModif'); if(pMod) pMod.onclick=()=>{
+    const k=mdMonthKey(S.ui.mdMonth); if(!S.moneyDate.checklist[k]) S.moneyDate.checklist[k]={};
+    S.moneyDate.checklist[k].projets_alignes='modifier'; save(); go('pilotage');
+  };
+  const pUndo=$('#mdProjUndo'); if(pUndo) pUndo.onclick=()=>{
+    const k=mdMonthKey(S.ui.mdMonth); if(S.moneyDate.checklist[k]) delete S.moneyDate.checklist[k].projets_alignes; save(); go('moneydate');
+  };
 
   // Étape 4 : prévisions pour le mois prochain
   const ps=$('#mdPrevSave'); if(ps) ps.onclick=()=>{
