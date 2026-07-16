@@ -1294,6 +1294,7 @@ function renderHistorique(){
   const totalLabel = histFilter.type==='transfert' ? 'Total transféré' : 'Total dépensé';
   const totalValue = histFilter.type==='transfert' ? transferTotal : depTotal;
   return `
+  ${prevScreen==='moneydate'?`<div style="padding-top:10px"><button class="btn btn-ghost btn-sm" id="histBack">← Retour</button></div>`:''}
   <div style="padding-top:6px"><span class="pill">Historique</span>
     <div class="between" style="margin-top:10px">
       <button class="icon-btn" id="hPrev">‹</button>
@@ -2347,6 +2348,7 @@ function saveExpense(){
 }
 
 function bindHistorique(){
+  const hb=$('#histBack'); if(hb) hb.onclick=()=>go(prevScreen||'vue');
   const p=$('#hPrev'), n=$('#hNext');
   if(p) p.onclick=()=>{S.ui.histMonth--; save(); go('historique');};
   if(n) n.onclick=()=>{ if(S.ui.histMonth<0){S.ui.histMonth++; save(); go('historique');} };
@@ -2575,7 +2577,7 @@ function openMdDepenses(){
 function openMdCategorisation(){
   const offset=S.ui.mdMonth;
   const list=S.expenses.filter(x=>inMonth(x.date,offset)).sort((a,b)=>b.date.localeCompare(a.date));
-  openModal(`<h3>🏷️ Catégorisation de ${monthLabel(offset)}</h3>
+  openModal(`<h3>🧾 Dépenses de ${monthLabel(offset)}</h3>
     ${list.length?list.map(x=>histRow(x,false)).join(''):'<p class="empty">Aucune dépense enregistrée ce mois-ci.</p>'}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoHistCategorisation">Modifier dans Historique →</span>
