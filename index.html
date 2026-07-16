@@ -2416,8 +2416,7 @@ function bindProjets(){
 }
 function openCagnotteAddLine(){
   openModal(`<h3>👛 Ajouter une ligne</h3>
-    <p class="small muted" style="margin-bottom:14px">Une entrée ou une sortie manuelle sur la cagnotte commune. Indiquez un montant négatif pour une sortie (ex : -80).</p>
-    <div class="field"><label>Montant</label><input class="input" type="number" id="cagAddAmt" placeholder="Ex : 150 ou -80"></div>
+    <div class="field"><label>Montant</label><input class="input" type="number" id="cagAddAmt" placeholder="Ex : 150"></div>
     <div class="field"><label>Description</label><input class="input" id="cagAddDesc" placeholder="Ex : Trop perçu EDF"></div>
     <div class="field"><label>Date</label><input class="input" type="date" id="cagAddDate" value="${iso(0)}"></div>
     <button class="btn btn-primary" id="cagAddSave">Ajouter</button>`, true);
@@ -2425,7 +2424,7 @@ function openCagnotteAddLine(){
     const amt=parseFloat(($('#cagAddAmt').value+'').replace(',','.'))||0;
     const desc=$('#cagAddDesc').value.trim();
     const date=$('#cagAddDate').value||iso(0);
-    if(!amt||!desc){ toast("Montant et description requis","✏️"); return; }
+    if(!amt||amt<=0||!desc){ toast("Montant et description requis","✏️"); return; }
     S.cagnotte.balance+=amt;
     S.cagnotte.history.unshift({date, label:desc, amount:amt});
     cagUI.histOpen=true;
