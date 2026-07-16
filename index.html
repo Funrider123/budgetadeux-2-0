@@ -635,27 +635,26 @@ function expensesInWeek(){
 }
 function spentThisWeek(){ return expensesInWeek().reduce((s,x)=>s+x.amount,0); }
 function totalBudget(){ return S.categories.reduce((s,c)=>s+c.budget,0); }
-// Reprend exactement ce qui pèse réellement ce mois-ci pour chaque nature : les dépenses
-// réelles catégorisées, + les charges fixes communes (qui tombent chaque mois), + les
-// versements projets du mois (attribués à la nature propre du projet, pas systématiquement "invest").
-// C'est la même logique que classAllocationItems (Détail classification), en version "réel du mois".
-function clsTotalsReality(offset=0){
-  const t={besoin:0,envie:0,invest:0,protection:0};
-  realExpenses(offset).forEach(x=>{ const c=catById(x.cat); if(c) t[c.cls]=(t[c.cls]||0)+x.amount; });
-  S.charges.filter(c=>c.scope==='commune' && c.cls).forEach(c=>{ t[c.cls]=(t[c.cls]||0)+c.amount; });
-  S.projects.filter(p=>p.status==='actif').forEach(p=>{
-    const contrib=(p.history||[]).filter(h=>inMonth(h.date,offset)).reduce((s,h)=>s+Math.max(0,h.amount),0);
-    if(contrib>0) t[p.cls]=(t[p.cls]||0)+contrib;
-  });
-  return t;
-}
 // Répartition réelle des dépenses du mois entre les 4 natures (besoin/envie/investissement/protection), en %.
+// Basée sur classAllocationTotal (même source que "Détail classification") pour que le camembert
+// "Votre réalité" et le détail affichent toujours exactement les mêmes chiffres.
 function realitySplit(offset=0){
-  const t=clsTotalsReality(offset);
-  const besoin=t.besoin||0, envie=t.envie||0, protection=t.protection||0, invest=t.invest||0;
+  const besoin=classAllocationTotal('besoin',offset), envie=classAllocationTotal('envie',offset),
+        invest=classAllocationTotal('invest',offset), protection=classAllocationTotal('protection',offset);
   const tot=besoin+envie+protection+invest||1;
   const bP=Math.round(besoin/tot*100), eP=Math.round(envie/tot*100), pP=Math.round(protection/tot*100);
   return {besoin:bP, envie:eP, protection:pP, invest:100-bP-eP-pP};
+}
+// Montants réels (€) derrière le camembert "Votre réalité", pour l'affichage en €.
+function realityEur(offset=0){
+  return {besoin:classAllocationTotal('besoin',offset), envie:classAllocationTotal('envie',offset),
+          invest:classAllocationTotal('invest',offset), protection:classAllocationTotal('protection',offset)};
+}
+// Montants (€) que représenterait l'idéal si on l'appliquait au total réel du mois — permet
+// d'afficher le camembert "Votre idéal" en € en plus des %.
+function idealEur(offset=0){
+  const total=grandAllocationTotal(offset), ideal=S.settings.idealSplit;
+  return {besoin:total*ideal.besoin/100, envie:total*ideal.envie/100, invest:total*ideal.invest/100, protection:total*ideal.protection/100};
 }
 function monthShort(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return MOIS[d.getMonth()].slice(0,3); }
 
@@ -1484,14 +1483,18 @@ function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investisseme
 // Tout ce qui est rattaché à une nature (besoin/envie/investissement/protection) et qui pèse
 // dans le budget du couple : catégories, charges fixes communes classées, et versements mensuels
 // des projets actifs. Sert de reference pour "Détail classification" (budget alloué, pas dépense réelle).
-function classAllocationItems(cls){
-  const cats=S.categories.filter(c=>c.cls===cls).map(c=>({icon:c.emoji, name:c.name, amount:c.budget}));
+// Ce qui pèse réellement ce mois-ci (offset) pour une nature donnée : dépenses réelles par
+// catégorie, charges fixes communes (qui tombent chaque mois), et versements réels effectués
+// vers les projets actifs ce mois précis (pas un forfait théorique) — sert à la fois au camembert
+// "Votre réalité" et à "Détail classification" pour qu'ils affichent toujours les mêmes chiffres.
+function classAllocationItems(cls, offset=0){
+  const cats=S.categories.filter(c=>c.cls===cls).map(c=>({icon:c.emoji, name:c.name, amount:spentByCat(c.id, offset)}));
   const chgs=S.charges.filter(c=>c.cls===cls).map(c=>({icon:'🧾', name:c.name, amount:c.amount}));
-  const projs=S.projects.filter(p=>p.status==='actif' && p.cls===cls).map(p=>({icon:p.emoji||'🎯', name:p.name, amount:p.months>0?Math.max(0,(p.target-p.saved)/p.months):0}));
+  const projs=S.projects.filter(p=>p.status==='actif' && p.cls===cls).map(p=>({icon:p.emoji||'🎯', name:p.name, amount:(p.history||[]).filter(h=>inMonth(h.date,offset)).reduce((s,h)=>s+Math.max(0,h.amount),0)}));
   return [...cats, ...chgs, ...projs];
 }
-function classAllocationTotal(cls){ return classAllocationItems(cls).reduce((s,x)=>s+x.amount,0); }
-function grandAllocationTotal(){ return ['besoin','envie','invest','protection'].reduce((s,cls)=>s+classAllocationTotal(cls),0); }
+function classAllocationTotal(cls, offset=0){ return classAllocationItems(cls, offset).reduce((s,x)=>s+x.amount,0); }
+function grandAllocationTotal(offset=0){ return ['besoin','envie','invest','protection'].reduce((s,cls)=>s+classAllocationTotal(cls,offset),0); }
 
 /* ============================================================
    5 · ANALYSE (50/30/20)
@@ -1543,9 +1546,9 @@ function renderAnalyse(){
     <p class="hero-sub">Votre idéal face à votre réalité, en toute bienveillance.</p>
   </div>
 
-  <div class="grid2" style="margin-top:14px">
-    ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection, 'editIdealBtn')}
-    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
+  <div class="grid2" style="margin-top:14px; align-items:stretch">
+    ${donutCard("Votre idéal", ideal, idealEur(off), 'editIdealBtn', true)}
+    ${donutCard("Votre réalité", real, realityEur(off))}
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1556,9 +1559,9 @@ function renderAnalyse(){
   <div class="section-title">Détail classification</div>
   <div class="card">
     ${['besoin','envie','invest','protection'].map(cls=>{
-      const items=classAllocationItems(cls);
+      const items=classAllocationItems(cls, off);
       const clsTotal=items.reduce((s,x)=>s+x.amount,0);
-      const grandTotal=grandAllocationTotal();
+      const grandTotal=grandAllocationTotal(off);
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
       const open=!!analyseUI[cls];
       return `<div style="padding:12px 0; border-top:1px solid var(--line)">
@@ -1590,23 +1593,32 @@ function renderAnalyse(){
   </div>
   `;
 }
-function donutCard(title,b,e,inv,pr,editableId){
-  return `<div class="card" style="padding:16px">
-    <div class="between" style="margin-bottom:10px">
-      <div class="small" style="font-weight:800">${title}</div>
-      ${editableId?`<span class="link small" id="${editableId}">Modifier</span>`:''}
+let donutUnit='pct'; // 'pct' ou 'eur' — bascule l'affichage des camemberts Idéal/Réalité
+function donutCard(title,pct,eur,editableId,unitToggle){
+  const {besoin:b,envie:e,invest:inv,protection:pr}=pct;
+  const unit=donutUnit;
+  const disp=k=>unit==='eur'?fmt0(eur[k]):`${pct[k]}%`;
+  const centerVal=unit==='eur'?fmt0((eur.besoin||0)+(eur.envie||0)+(eur.invest||0)+(eur.protection||0)):`${b}/${e}/${inv}/${pr}`;
+  return `<div class="card" style="padding:16px; height:100%; box-sizing:border-box; display:flex; flex-direction:column">
+    <div style="position:relative; margin-bottom:10px">
+      ${unitToggle?`<div class="row" style="position:absolute; top:0; right:0; gap:2px; background:var(--cream-2); border-radius:99px; padding:2px">
+        <span class="small" data-unit="pct" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='pct'?'background:var(--terra); color:#fff':'color:var(--muted)'}">%</span>
+        <span class="small" data-unit="eur" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='eur'?'background:var(--terra); color:#fff':'color:var(--muted)'}">€</span>
+      </div>`:''}
+      <div class="small" style="font-weight:800; text-align:center">${title}</div>
     </div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
       <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% ${b+e+inv}%, var(--protection) ${b+e+inv}% 100%)">
-        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:14px">${b}/${e}/${inv}/${pr}</div></div>
+        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:${unit==='eur'?'12px':'14px'}">${centerVal}</div></div>
       </div>
     </div>
     <div class="legend">
-      <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${b}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${e}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--invest)"></span>Investissement <span class="r">${inv}%</span></div>
-      <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${pr}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${disp('besoin')}</span></div>
+      <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${disp('envie')}</span></div>
+      <div class="li"><span class="sw" style="background:var(--invest)"></span>Investissement <span class="r">${disp('invest')}</span></div>
+      <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${disp('protection')}</span></div>
     </div>
+    ${editableId?`<div style="text-align:center; margin-top:auto; padding-top:10px"><span class="link small" id="${editableId}">Modifier</span></div>`:''}
   </div>`;
 }
 function verdictBadge(real,ideal){
@@ -1782,9 +1794,9 @@ function mdContent(step){
         <button class="btn btn-ghost btn-sm" style="flex:1" id="mdIdealRevoirIdeal">Revoir notre idéal →</button>
         <button class="btn btn-ghost btn-sm" style="flex:1" id="mdIdealRevoirBudgets">Revoir nos budgets →</button>
       </div>`}
-    <div class="grid2" style="margin-top:4px">
-      ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection)}
-      ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
+    <div class="grid2" style="margin-top:4px; align-items:stretch">
+      ${donutCard("Votre idéal", ideal, idealEur(offset), null, true)}
+      ${donutCard("Votre réalité", real, realityEur(offset))}
     </div>
     <div class="card-soft" style="margin-top:12px">
       <div class="between"><b class="small">Verdict</b>${verdictBadge(real,ideal)}</div>
@@ -2823,6 +2835,7 @@ function bindAnalyse(){
   document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
     const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
   }));
+  document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('analyse'); }));
 }
 function openEditIdeal(){
   const id=S.settings.idealSplit;
@@ -2857,6 +2870,7 @@ function bindMoneyDate(){
     const a=document.activeElement;
     if(a && (a.tagName==='TEXTAREA' || a.tagName==='INPUT')) a.blur();
   });
+  document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('moneydate'); }));
   const ex=$('#mdExit'); if(ex) ex.onclick=()=>go('vue');
   const bk=$('#mdBack'); if(bk) bk.onclick=()=>{mdStep--; go('moneydate');};
   const nx=$('#mdNext'); if(nx) nx.onclick=()=>{ if(!S.moneyDate.doneSteps.includes(mdStep)) S.moneyDate.doneSteps.push(mdStep); if(mdStep===MD_STEPS.length-1){const dt=$('#mdDate'); if(dt) S.moneyDate.nextDate=dt.value;} mdStep++; save(); go('moneydate'); };
