@@ -460,7 +460,8 @@ const DEFAULT = {
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   settings:{
     salaries:{lui:0, elle:0},
-    mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0}
+    mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0},
+    idealSplit:{besoin:50, envie:30, protection:0, invest:20}
   },
   categories:[
     {id:"courses", emoji:"🛒", name:"Courses", budget:300, cls:"besoin"},
@@ -490,6 +491,7 @@ function load(){
 // existants n'ont pas les nouveaux champs ajoutés après leur création.
 function migrate(s){
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
+  if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
@@ -636,9 +638,24 @@ function totalBudget(){ return S.categories.reduce((s,c)=>s+c.budget,0); }
 function clsTotalsReality(offset=0){
   const t={besoin:0,envie:0,invest:0,protection:0};
   realExpenses(offset).forEach(x=>{ const c=catById(x.cat); t[c.cls]=(t[c.cls]||0)+x.amount; });
-  // épargne projets counts toward invest/savings
   return t;
 }
+// Versements réels effectués vers les projets ce mois-ci (contributions manuelles, surplus transférés, etc.)
+// — remplace un ancien forfait fictif : ceci reflète les vrais mouvements enregistrés dans p.history.
+function projectContribsThisMonth(offset=0){
+  return S.projects.reduce((sum,p)=>sum+(p.history||[]).filter(h=>inMonth(h.date,offset)).reduce((s,h)=>s+Math.max(0,h.amount),0),0);
+}
+// Répartition réelle des dépenses du mois entre les 4 natures (besoin/envie/protection/épargne),
+// en %, en tenant compte des versements projets pour la part épargne.
+function realitySplit(offset=0){
+  const real=clsTotalsReality(offset);
+  const besoin=real.besoin||0, envie=real.envie||0, protection=real.protection||0;
+  const invest=(real.invest||0)+projectContribsThisMonth(offset);
+  const tot=besoin+envie+protection+invest||1;
+  const bP=Math.round(besoin/tot*100), eP=Math.round(envie/tot*100), pP=Math.round(protection/tot*100);
+  return {besoin:bP, envie:eP, protection:pP, invest:100-bP-eP-pP};
+}
+function monthShort(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return MOIS[d.getMonth()].slice(0,3); }
 
 /* repartition */
 function chargesPerso(who){ return S.charges.filter(c=>c.scope===who).reduce((s,c)=>s+c.amount,0); }
@@ -1474,11 +1491,9 @@ function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investisseme
    ============================================================ */
 function renderAnalyse(){
   const off=S.ui.analyMonth;
-  const real=clsTotalsReality(off);
-  const epargneReelle = realExpenses(off).filter(x=>catById(x.cat).cls==="invest").reduce((s,x)=>s+x.amount,0) + 300; // + transferts épargne
-  const besoin=real.besoin||0, envie=real.envie||0;
-  const totR=besoin+envie+epargneReelle||1;
-  const bP=Math.round(besoin/totR*100), eP=Math.round(envie/totR*100), sP=100-bP-eP;
+  const ideal=S.settings.idealSplit;
+  const real=realitySplit(off);
+  const projContribs=projectContribsThisMonth(off);
   return `
   <div class="section-title" style="margin-top:6px">Vue annuelle</div>
   <div class="card">
@@ -1493,6 +1508,7 @@ function renderAnalyse(){
       const max = Math.max(...monthly.map(x=>x.spent), 0);
       const elapsed = cur+1;
       const avg = monthly.reduce((s,x)=>s+x.spent,0)/elapsed;
+      const anyPrevision = monthly.some(x=>x.previsionPct>0);
       const bars = monthly.map(x=>{
         const h = x.future ? 14 : (max>0 ? Math.round(x.spent/max*100) : 0);
         return `<div class="col ${x.future?'dim':''}">
@@ -1502,13 +1518,14 @@ function renderAnalyse(){
       }).join('');
       return `<div class="between" style="margin-bottom:6px"><b class="small">Dépenses sur 12 mois</b><span class="muted small">moy. ${fmt0(avg)}</span></div>
       <div class="year">${bars}</div>
+      ${anyPrevision?`<p class="small muted" style="margin-top:8px">Le % en orange au-dessus d'une barre : part du budget déjà anticipée en prévisions pour ce mois-là.</p>`:''}
       ${max===0?`<p class="small muted" style="margin-top:10px; text-align:center">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p>`:''}`;
     })()}
   </div>
 
-  <div style="padding-top:6px"><span class="pill">La règle d'or</span>
+  <div style="padding-top:6px"><span class="pill">Votre équilibre</span>
     <div class="between" style="margin-top:10px">
-      <h1 class="hero-title" style="font-size:24px">Équilibre 50 / 30 / 20</h1>
+      <h1 class="hero-title" style="font-size:24px">Idéal vs réalité</h1>
       <div class="row" style="gap:4px">
         <button class="icon-btn" id="aPrev">‹</button>
         <span class="small" style="font-weight:800; white-space:nowrap">${monthLabel(off)}</span>
@@ -1519,61 +1536,72 @@ function renderAnalyse(){
   </div>
 
   <div class="grid2" style="margin-top:14px">
-    ${donutCard("Votre idéal", 50,30,20)}
-    ${donutCard("Votre réalité", bP,eP,sP)}
+    ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.protection, ideal.invest, 'editIdealBtn')}
+    ${donutCard("Votre réalité", real.besoin, real.envie, real.protection, real.invest)}
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="between"><b>Votre verdict</b>${verdictBadge(bP,eP,sP)}</div>
-    <p class="small muted" style="margin-top:6px">${verdictText(bP,eP,sP)}</p>
+    <div class="between"><b>Votre verdict</b>${verdictBadge(real,ideal)}</div>
+    <p class="small muted" style="margin-top:6px">${verdictText(real,ideal)}</p>
   </div>
 
-  <div class="section-title">Détail par catégorie — accord du couple</div>
+  <div class="section-title">Répartition réelle par nature de dépense</div>
   <div class="card">
-    ${S.categories.filter(c=>spentByCat(c.id,off)>0).map(c=>{
-      const sp=spentByCat(c.id,off);
-      return `<div class="between" style="padding:11px 0; border-top:1px solid var(--line)">
-        <div class="row" style="gap:9px"><span style="font-size:17px">${c.emoji}</span><div><div class="small" style="font-weight:800">${c.name}</div><span class="tag ${c.cls}">${clsLabel(c.cls)}</span></div></div>
-        <div style="text-align:right"><b class="small mono-num">${fmt0(sp)}</b><br>
-          <span class="agree ${S._agreed&&S._agreed.includes(c.id)?'on':''}" data-agree="${c.id}"><span class="bx">✓</span>D'accord</span></div>
+    ${['besoin','envie','protection','invest'].map(cls=>{
+      const cats=S.categories.filter(c=>c.cls===cls);
+      const total=cats.reduce((s,c)=>s+spentByCat(c.id,off),0) + (cls==='invest'?projContribs:0);
+      const pct=real[cls]||0;
+      return `<div style="padding:12px 0; border-top:1px solid var(--line)">
+        <div class="between" style="margin-bottom:8px"><b class="small">${clsLabel(cls)}</b><b class="small" style="color:var(--terra)">${pct}% · ${fmt0(total)}</b></div>
+        ${cats.filter(c=>spentByCat(c.id,off)>0).map(c=>`<div class="between small muted" style="padding:3px 0"><span>${c.emoji} ${c.name}</span><span>${fmt0(spentByCat(c.id,off))}</span></div>`).join('')}
+        ${cls==='invest'&&projContribs>0?`<div class="between small muted" style="padding:3px 0"><span>🎯 Versements projets ce mois-ci</span><span>${fmt0(projContribs)}</span></div>`:''}
+        ${total===0?`<p class="small muted">Aucune dépense ${cls==='invest'?'ni versement':''} dans cette catégorie ce mois-ci.</p>`:''}
       </div>`;
     }).join('')}
   </div>
 
   <div class="section-title">Votre trajectoire</div>
   <div class="card">
-    <div class="between" style="margin-bottom:10px"><b class="small">Part « Besoins » sur 6 mois</b><span class="tag besoin">cible 50%</span></div>
+    <div class="between" style="margin-bottom:10px"><b class="small">Part « Besoins » sur 6 mois</b><span class="tag besoin">cible ${ideal.besoin}%</span></div>
     <div class="trend">
-      ${[58,55,53,51,49,bP].map((v,i)=>`<div class="tc"><div class="tb" style="height:${v}%; ${i===5?'background:linear-gradient(var(--terra),var(--terra-d))':''}"></div><div class="tm">${['Jan','Fév','Mar','Avr','Mai','Juin'][i]}</div></div>`).join('')}
+      ${[5,4,3,2,1,0].map(back=>{
+        const monthOffset=off-back;
+        const v=realitySplit(monthOffset).besoin;
+        return `<div class="tc"><div class="tb" style="height:${v}%; ${back===0?'background:linear-gradient(var(--terra),var(--terra-d))':''}"></div><div class="tm">${monthShort(monthOffset)}</div></div>`;
+      }).join('')}
     </div>
-    <p class="small muted" style="margin-top:10px">📉 Vous vous rapprochez de l'équilibre idéal mois après mois. Continuez ainsi !</p>
+    <p class="small muted" style="margin-top:10px">${real.besoin<=ideal.besoin?'📉 Votre part de besoins reste sous votre idéal — continuez ainsi !':'📈 Votre part de besoins dépasse votre idéal ce mois-ci.'}</p>
   </div>
   `;
 }
-function donutCard(title,b,e,s){
+function donutCard(title,b,e,pr,s,editableId){
   return `<div class="card" style="padding:16px">
-    <div class="small" style="font-weight:800; margin-bottom:10px">${title}</div>
+    <div class="between" style="margin-bottom:10px">
+      <div class="small" style="font-weight:800">${title}</div>
+      ${editableId?`<span class="link small" id="${editableId}">Modifier</span>`:''}
+    </div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
-      <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% 100%)">
-        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:17px">${b}/${e}/${s}</div></div>
+      <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--protection) ${b+e}% ${b+e+pr}%, var(--invest) ${b+e+pr}% 100%)">
+        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:14px">${b}/${e}/${pr}/${s}</div></div>
       </div>
     </div>
     <div class="legend">
       <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${b}%</span></div>
       <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${e}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${pr}%</span></div>
       <div class="li"><span class="sw" style="background:var(--invest)"></span>Épargne <span class="r">${s}%</span></div>
     </div>
   </div>`;
 }
-function verdictBadge(b,e,s){
-  const ok = b<=55 && s>=15;
+function verdictBadge(real,ideal){
+  const ok = real.besoin<=ideal.besoin+5 && real.invest>=ideal.invest-5;
   return ok?`<span class="tag" style="color:var(--ok); background:color-mix(in srgb,var(--ok) 14%,transparent)">Bel équilibre 🤎</span>`
            :`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">À ajuster ensemble</span>`;
 }
-function verdictText(b,e,s){
-  if(s<15) return `Votre épargne est à ${s}% (idéal 20%). Une petite discussion lors du prochain Money Date pourrait aider à dégager un peu plus pour vos rêves.`;
-  if(b>55) return `Vos besoins pèsent ${b}% (idéal 50%). Vos charges fixes sont un peu lourdes — rien de grave, on en parle à deux.`;
-  return `Vous êtes parfaitement alignés sur vos futurs projets. Vos envies à ${e}% restent maîtrisées — bravo à vous deux !`;
+function verdictText(real,ideal){
+  if(real.invest<ideal.invest-5) return `Votre épargne est à ${real.invest}% (idéal ${ideal.invest}%). Une petite discussion lors du prochain Money Date pourrait aider à dégager un peu plus pour vos rêves.`;
+  if(real.besoin>ideal.besoin+5) return `Vos besoins pèsent ${real.besoin}% (idéal ${ideal.besoin}%). Vos charges fixes sont un peu lourdes — rien de grave, on en parle à deux.`;
+  return `Vous êtes parfaitement alignés sur vos futurs projets. Vos envies à ${real.envie}% restent maîtrisées — bravo à vous deux !`;
 }
 
 /* ============================================================
@@ -2713,8 +2741,34 @@ function bindAnalyse(){
   const p=$('#aPrev'), n=$('#aNext');
   if(p) p.onclick=()=>{S.ui.analyMonth--; save(); go('analyse');};
   if(n) n.onclick=()=>{ if(S.ui.analyMonth<0){S.ui.analyMonth++; save(); go('analyse');} };
-  if(!S._agreed) S._agreed=[];
-  document.querySelectorAll('[data-agree]').forEach(b=>b.addEventListener('click',()=>{ const id=b.dataset.agree; if(S._agreed.includes(id)) S._agreed=S._agreed.filter(x=>x!==id); else S._agreed.push(id); go('analyse'); }));
+  const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
+}
+function openEditIdeal(){
+  const id=S.settings.idealSplit;
+  openModal(`<h3>🎯 Votre idéal</h3>
+    <p class="small muted" style="margin-bottom:14px">Définissez ensemble la répartition qui vous ressemble. Le total doit faire 100%.</p>
+    <div class="grid2">
+      <div class="field"><label>Besoins %</label><input class="input" type="number" id="idBesoin" value="${id.besoin}"></div>
+      <div class="field"><label>Envies %</label><input class="input" type="number" id="idEnvie" value="${id.envie}"></div>
+      <div class="field"><label>Protection %</label><input class="input" type="number" id="idProtection" value="${id.protection}"></div>
+      <div class="field"><label>Épargne %</label><input class="input" type="number" id="idInvest" value="${id.invest}"></div>
+    </div>
+    <p class="small" id="idealTotalHint" style="margin-bottom:14px"></p>
+    <button class="btn btn-primary" id="idealSave">Enregistrer</button>`, true);
+  const upd=()=>{
+    const t=(+$('#idBesoin').value||0)+(+$('#idEnvie').value||0)+(+$('#idProtection').value||0)+(+$('#idInvest').value||0);
+    const hint=$('#idealTotalHint');
+    hint.textContent = `Total : ${t}%${t===100?' ✓':' (doit faire 100%)'}`;
+    hint.style.color = t===100 ? 'var(--ok)' : 'var(--danger)';
+  };
+  ['idBesoin','idEnvie','idProtection','idInvest'].forEach(fid=>$('#'+fid).oninput=upd);
+  upd();
+  $('#idealSave').onclick=()=>{
+    const b=+$('#idBesoin').value||0, ev=+$('#idEnvie').value||0, pr=+$('#idProtection').value||0, inv=+$('#idInvest').value||0;
+    if(b+ev+pr+inv!==100){ toast("Le total doit faire 100%","🎯"); return; }
+    S.settings.idealSplit={besoin:b,envie:ev,protection:pr,invest:inv};
+    save(); closeModal(); go('analyse'); toast("Idéal mis à jour ✓");
+  };
 }
 
 function bindMoneyDate(){
