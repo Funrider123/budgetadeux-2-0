@@ -1446,12 +1446,14 @@ function projectCard(p, rank){
   const mens=p.months>0?reste/p.months:0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
   const ui=projUIState(p.id);
-  return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); ${aband?'opacity:.6':''}" data-proj="${p.id}">
+  return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); position:relative; overflow:hidden" data-proj="${p.id}">
+    ${paused?`<div style="position:absolute; top:16px; right:-38px; transform:rotate(35deg); background:var(--muted); color:#fff; font-size:11px; font-weight:800; letter-spacing:.5px; padding:3px 42px; z-index:2; pointer-events:none">EN PAUSE</div>`:''}
+    <div style="${aband?'opacity:.6':''} ${paused?'opacity:.55; filter:grayscale(.6)':''}">
     <div class="between" style="margin-bottom:8px; gap:10px">
       <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
       <b style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
-    <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${paused?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">En pause</span>':''}${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
+    <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
     <div class="between" style="margin-top:9px">
       <span class="small muted">${reste>0?`Échéance ${projectEtaLabel(p)}`:''}</span>
@@ -1473,6 +1475,7 @@ function projectCard(p, rank){
       ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:28px; height:28px; flex-shrink:0">⚙️</button>`:''}
     </div>
     ${ui.histOpen?historyRowsHtml(p.history):''}
+    </div>
   </div>`;
 }
 function clsLabel(c){ return {besoin:"Besoin",envie:"Envie",invest:"Investissement",protection:"Protection"}[c]||c; }
@@ -2509,7 +2512,7 @@ function openProjectMenu(p){
     <button class="btn btn-ghost" id="pmDate" style="margin-bottom:8px; justify-content:flex-start">📅 Changer la date de virement</button>
     <button class="btn btn-ghost" id="pmPause" style="margin-bottom:8px; justify-content:flex-start">${paused?'▶ Reprendre':'⏸ Mettre en pause'}</button>
     <button class="btn btn-ghost" id="pmRealloc" style="margin-bottom:8px; justify-content:flex-start">↪ Réaffecter l'épargne</button>
-    <button class="btn btn-ghost" id="pmDelete" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); justify-content:flex-start">🗑 Supprimer le projet</button>`);
+    <button class="btn btn-ghost" id="pmDelete" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); justify-content:flex-start">🗑 Supprimer le projet</button>`, true);
   $('#pmAddVers').onclick=()=>{ closeModal(); const ui=projUIState(p.id); ui.addOpen=true; go('projets'); };
   $('#pmDate').onclick=()=>{ closeModal(); openEditProjectDay(p); };
   $('#pmPause').onclick=()=>{ closeModal(); p.status=paused?'actif':'pause'; save(); go('projets'); toast(paused?"Projet relancé ▶":"Projet mis en pause ⏸"); };
