@@ -678,7 +678,7 @@ function totalRevenuFoyer(){
   return S.settings.salaries.lui+S.settings.salaries.elle;
 }
 function chargesCommunes(){ return S.charges.filter(c=>c.scope==="commune").reduce((s,c)=>s+c.amount,0); }
-function epargneProjetsMensuelle(){ return S.projects.filter(p=>p.status==="actif").reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
+function epargneProjetsMensuelle(excludeId){ return S.projects.filter(p=>p.status==="actif" && p.id!==excludeId).reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
 // Ce qu'il reste chaque mois une fois charges communes et catégories couvertes — base de
 // l'allocation projets. Les charges perso sont déjà déduites dans totalRevenuFoyer() pour
 // le mode "net" (pas la peine de les redéduire ici, sinon on les compterait deux fois).
@@ -1390,7 +1390,9 @@ function cagnotteHistoryHtml(list){
   </div>`).join('')}</div>`;
 }
 function renderProjets(){
-  const dispo = monthlySurplus();
+  const dispo = disponiblePourProjets();
+  const used = epargneProjetsMensuelle();
+  const pctUse = dispo>0 ? Math.round(used/dispo*100) : (used>0?100:0);
   return `
   <div style="padding-top:6px"><span class="pill">Épargne & rêves</span>
     <h1 class="hero-title">Nos rêves partagés</h1>
@@ -1413,10 +1415,14 @@ function renderProjets(){
   </div>
 
   <div style="margin-top:18px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
-    <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">🎯 Vos projets</div>
+    <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">🎯 Vos projets <span style="opacity:.85; font-weight:700">(utilisation ${pctUse}%)</span></div>
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
       <div class="between">
-        <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div><div style="font-family:var(--serif); font-size:32px; font-weight:600; color:var(--terra); margin-top:4px">${fmt(dispo)}</div></div>
+        <div>
+          <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div>
+          <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt(dispo)}</span></div>
+          ${used>dispo?`<p class="small" style="color:var(--danger); margin-top:4px">⚠️ Budget dépassé de ${fmt0(used-dispo)}</p>`:''}
+        </div>
         <div class="emoji-badge">✨</div>
       </div>
       ${(()=>{
@@ -1435,12 +1441,6 @@ function renderProjets(){
     <div class="ov"><h3>Rêver, c'est déjà commencer</h3><p>${S.projects.filter(p=>p.status==='actif').length} projets vous attendent</p></div>
   </div>
   `;
-}
-function monthlySurplus(){
-  const revenus=S.settings.salaries.lui+S.settings.salaries.elle;
-  const charges=S.charges.reduce((s,c)=>s+c.amount,0);
-  const enveloppes=S.categories.filter(c=>c.cls!=="invest").reduce((s,c)=>s+c.budget,0);
-  return Math.max(0, revenus - charges - enveloppes*0.6 - epargneProjetsMensuelle());
 }
 function projectCard(p, rank){
   const pct=Math.min(100,Math.round(p.saved/p.target*100));
@@ -2514,7 +2514,15 @@ function openProjectMenu(p){
     <button class="btn btn-ghost" id="pmDelete" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); justify-content:flex-start">🗑 Supprimer le projet</button>`, true);
   $('#pmAddVers').onclick=()=>{ closeModal(); const ui=projUIState(p.id); ui.addOpen=true; go('projets'); };
   $('#pmDate').onclick=()=>{ closeModal(); openEditProjectDay(p); };
-  $('#pmPause').onclick=()=>{ closeModal(); p.status=paused?'actif':'pause'; save(); go('projets'); toast(paused?"Projet relancé ▶":"Projet mis en pause ⏸"); };
+  $('#pmPause').onclick=()=>{
+    if(paused){
+      const mens=p.months>0?Math.max(0,(p.target-p.saved)/p.months):0;
+      const otherTotal=epargneProjetsMensuelle(p.id);
+      const dispo=disponiblePourProjets();
+      if(otherTotal+mens>dispo+0.5){ closeModal(); toast(`Impossible de reprendre : budget dépassé (${fmt0(otherTotal+mens)} / ${fmt0(dispo)})`,"⚠️"); return; }
+    }
+    closeModal(); p.status=paused?'actif':'pause'; save(); go('projets'); toast(paused?"Projet relancé ▶":"Projet mis en pause ⏸");
+  };
   $('#pmRealloc').onclick=()=>{ closeModal(); openRealloc(p); };
   $('#pmDelete').onclick=()=>{ closeModal(); openAbandon(p); };
 }
@@ -2597,8 +2605,16 @@ function openEditProject(id, returnTo){
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
-    if(id){ p.name=nm; p.target=t; p.saved=+$('#npSaved').value||0; p.months=+$('#npMonths').value||12; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; }
-    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:+$('#npSaved').value||0,months:+$('#npMonths').value||12,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
+    const sv=+$('#npSaved').value||0, mo=+$('#npMonths').value||12;
+    const willBeActive = id ? p.status==='actif' : true;
+    if(willBeActive){
+      const mens=Math.max(0,(t-sv)/mo);
+      const otherTotal=epargneProjetsMensuelle(id);
+      const dispo=disponiblePourProjets();
+      if(otherTotal+mens>dispo+0.5){ toast(`Budget dépassé : ${fmt0(otherTotal+mens)} / ${fmt0(dispo)} disponibles pour vos projets`,"⚠️"); return; }
+    }
+    if(id){ p.name=nm; p.target=t; p.saved=sv; p.months=mo; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; }
+    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:sv,months:mo,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
     save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
   const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
