@@ -1477,8 +1477,8 @@ function renderProjets(){
       <div style="margin-top:14px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
       </div>
       ${!S.projectsFrozen?`<div class="row" style="gap:10px; margin-top:16px">
-        <button class="btn btn-primary" id="validProjects" style="flex:1">Valider les mensualités ✓</button>
-        ${S.projectsSnapshot?`<button class="btn btn-ghost" id="cancelProjects">Annuler mes changements</button>`:''}
+        <button class="btn btn-soft" id="validProjects" style="flex:1; width:auto">Valider les mensualités ✓</button>
+        ${S.projectsSnapshot?`<button class="btn btn-soft" id="cancelProjects" style="flex:1; width:auto">Annuler mes changements</button>`:''}
       </div>`:''}
     </div>
   </div>
@@ -1599,16 +1599,17 @@ function renderAnalyse(){
     ${donutUnitToggleHtml()}
     <div class="grid2" style="align-items:stretch">
       ${donutCard("Votre idéal", ideal, idealEur(), 'editIdealBtn')}
-      ${donutCard("Votre réalité", real, realityEur())}
+      ${donutCard("Votre répartition actuelle", real, realityEur())}
     </div>
   </div>
+  <div style="text-align:center; margin:8px 0 -2px"><span class="small muted">↓ Le détail de votre répartition actuelle, juste en dessous</span></div>
 
   <div class="card" style="margin-top:14px">
     <div class="between"><b>Votre verdict</b>${verdictBadge(real,ideal)}</div>
     <p class="small muted" style="margin-top:6px">${verdictText(real,ideal)}</p>
   </div>
 
-  <div class="section-title">Détail classification</div>
+  <div class="section-title">Détail de votre répartition actuelle</div>
   <div class="card">
     ${['besoin','envie','invest','protection'].map(cls=>{
       const items=classAllocationItems(cls);
@@ -1616,15 +1617,18 @@ function renderAnalyse(){
       const grandTotal=grandAllocationTotal();
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
       const open=!!analyseUI[cls];
+      const unit=donutUnit;
+      const clsDisp=unit==='eur'?fmt0(clsTotal):`${pct}%`;
       return `<div style="padding:12px 0; border-top:1px solid var(--line)">
         <div class="between" data-anacls="${cls}" style="cursor:pointer">
           <div class="row" style="gap:6px"><b class="small">${clsLabel(cls)}</b><span class="chev" style="transition:transform .2s; transform:rotate(${open?'180deg':'0deg'})">▾</span></div>
-          <b class="small" style="color:var(--terra)">${pct}% · ${fmt0(clsTotal)}</b>
+          <b class="small" style="color:var(--terra)">${clsDisp}</b>
         </div>
         ${open?`<div style="margin-top:8px">
           ${items.length?items.map(it=>{
             const itPct=clsTotal>0?Math.round(it.amount/clsTotal*100):0;
-            return `<div class="between small muted" style="padding:4px 0"><span>${it.icon} ${it.name}</span><span>${itPct}% · ${fmt0(it.amount)}</span></div>`;
+            const itDisp=unit==='eur'?fmt0(it.amount):`${itPct}%`;
+            return `<div class="between small muted" style="padding:4px 0"><span>${it.icon} ${it.name}</span><span>${itDisp}</span></div>`;
           }).join(''):`<p class="small muted">Rien de rattaché à « ${clsLabel(cls)} » pour l'instant.</p>`}
         </div>`:''}
       </div>`;
@@ -1646,12 +1650,11 @@ function donutCard(title,pct,eur,editableId){
   const {besoin:b,envie:e,invest:inv,protection:pr}=pct;
   const unit=donutUnit;
   const disp=k=>unit==='eur'?fmt0(eur[k]):`${pct[k]}%`;
-  const centerVal=unit==='eur'?fmt0((eur.besoin||0)+(eur.envie||0)+(eur.invest||0)+(eur.protection||0)):`${b}/${e}/${inv}/${pr}`;
   return `<div class="card" style="padding:16px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; margin-top:0">
     <div class="small" style="font-weight:800; text-align:center; margin-bottom:10px">${title}</div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
       <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% ${b+e+inv}%, var(--protection) ${b+e+inv}% 100%)">
-        <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:${unit==='eur'?'12px':'14px'}">${centerVal}</div></div>
+        <div class="hole" style="width:74px;height:74px"></div>
       </div>
     </div>
     <div class="legend">
@@ -1844,7 +1847,7 @@ function mdContent(step){
       ${donutUnitToggleHtml()}
       <div class="grid2" style="align-items:stretch">
         ${donutCard("Votre idéal", ideal, idealEur())}
-        ${donutCard("Votre réalité", real, realityEur())}
+        ${donutCard("Votre répartition actuelle", real, realityEur())}
       </div>
     </div>
     <div class="card-soft" style="margin-top:12px">
@@ -2280,8 +2283,8 @@ function renderPilotage(){
   </div>
 
   <div class="row" style="gap:10px; margin-top:16px">
-    <button class="btn btn-primary" id="validBudget" style="flex:1">Valider le budget du mois ✓</button>
-    ${S.pilotSnapshot?`<button class="btn btn-ghost" id="cancelBudget">Annuler mes changements</button>`:''}
+    <button class="btn btn-soft" id="validBudget" style="flex:1; width:auto">Valider le budget du mois ✓</button>
+    ${S.pilotSnapshot?`<button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto">Annuler mes changements</button>`:''}
   </div>
   </div>
   `;
