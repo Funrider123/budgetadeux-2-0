@@ -1347,12 +1347,13 @@ function histRow(x, editable=true){
 /* ============================================================
    4 · PROJETS
    ============================================================ */
-let cagUI={histOpen:false, addOpen:false, dir:'in', label:'', amt:''};
+let cagUI={histOpen:false};
 let projUI={};
 function projUIState(id){ return projUI[id] || (projUI[id]={histOpen:false, addOpen:false, who:'lui', amt:''}); }
 function historyRowsHtml(list){
   if(!list || !list.length) return `<p class="small muted" style="padding:10px 2px">Aucun mouvement enregistré pour l'instant.</p>`;
-  return `<div class="card" style="margin-top:8px">${list.map(h=>`<div class="lrow">
+  const sorted=list.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  return `<div class="card" style="margin-top:8px">${sorted.map(h=>`<div class="lrow">
     <div class="emoji-badge">${h.who?'🙋':(h.amount<0?'↪':'🔁')}</div>
     <div class="grow"><div class="name">${escapeHtml(h.label)}</div><div class="sub">${new Date(h.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}</div></div>
     <div class="amt" style="color:${h.amount>=0?'var(--ok)':'var(--danger)'}">${h.amount>=0?'+':''}${fmt(h.amount)}</div>
@@ -1366,10 +1367,9 @@ function renderProjets(){
     <p class="hero-sub">Chaque virement nous rapproche d'un projet à deux.</p>
   </div>
 
-  <div class="section-title" style="margin-top:20px">👛 Cagnotte commune</div>
-  <div class="panel-terra">
+  <div class="panel-terra" style="margin-top:20px">
     <div class="between">
-      <div><div class="lbl">Solde actuel</div><div class="big">${fmt(S.cagnotte.balance)}</div></div>
+      <div><div class="lbl">Cagnotte commune : Solde actuel</div><div class="big">${fmt(S.cagnotte.balance)}</div></div>
       <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">👛</div>
     </div>
   </div>
@@ -1378,27 +1378,16 @@ function renderProjets(){
   </div>
   ${cagUI.histOpen?historyRowsHtml(S.cagnotte.history):''}
   <div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>
-  ${cagUI.addOpen?`<div class="card-soft" style="margin-top:8px">
-    <div class="row" style="gap:8px">
-      <input class="input" id="cagLineLabel" placeholder="Ex : Trop perçu EDF" value="${escapeHtml(cagUI.label)}" style="padding:11px 13px; font-size:13px; flex:2">
-      <input class="input" id="cagLineAmt" type="number" placeholder="Montant" value="${cagUI.amt}" style="padding:11px 13px; font-size:13px; flex:1">
-    </div>
-    <div class="row" style="gap:8px; margin-top:8px">
-      <button class="btn ${cagUI.dir==='in'?'btn-soft':'btn-ghost'} btn-sm" id="cagDirIn" style="flex:1">+ Entrée</button>
-      <button class="btn ${cagUI.dir==='out'?'btn-soft':'btn-ghost'} btn-sm" id="cagDirOut" style="flex:1">− Sortie</button>
-    </div>
-    <button class="btn btn-primary btn-sm" id="cagLineSave" style="margin-top:8px; width:100%">Ajouter</button>
-  </div>`:''}
 
   <div style="height:1px; background:var(--line-2); margin:28px 0 4px"></div>
 
-  <div class="section-title" style="margin-top:16px">🎯 Vos projets <span class="link" id="newProj">+ Nouveau</span></div>
-  <div class="panel-terra">
+  <div class="panel-terra" style="margin-top:16px">
     <div class="between">
-      <div><div class="lbl">Disponible pour vos projets</div><div class="big">${fmt(dispo)}</div></div>
+      <div><div class="lbl">Vos projets : Montant mensuel</div><div class="big">${fmt(dispo)}</div></div>
       <div class="emoji-badge" style="background:rgba(255,255,255,.18); color:#fff">✨</div>
     </div>
   </div>
+  <div style="margin-top:10px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
 
   ${S.projects.map(p=>projectCard(p)).join('')}
 
@@ -2396,20 +2385,7 @@ function openMoneyDateSchedule(){
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>openEditProject(null,'projets');
   const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
-  const cat=$('#cagAddToggle'); if(cat) cat.onclick=()=>{cagUI.addOpen=!cagUI.addOpen; go('projets');};
-  const cin=$('#cagDirIn'); if(cin) cin.onclick=()=>{cagUI.dir='in'; go('projets');};
-  const cout=$('#cagDirOut'); if(cout) cout.onclick=()=>{cagUI.dir='out'; go('projets');};
-  const clbl=$('#cagLineLabel'); if(clbl) clbl.oninput=ev=>cagUI.label=ev.target.value;
-  const camt=$('#cagLineAmt'); if(camt) camt.oninput=ev=>cagUI.amt=ev.target.value;
-  const csave=$('#cagLineSave'); if(csave) csave.onclick=()=>{
-    const lbl=(cagUI.label||'').trim(); const amt=parseFloat((cagUI.amt+'').replace(',','.'))||0;
-    if(!lbl||!amt){ toast("Libellé et montant requis","✏️"); return; }
-    const signed = cagUI.dir==='out' ? -amt : amt;
-    S.cagnotte.balance+=signed;
-    S.cagnotte.history.unshift({date:iso(0), label:lbl, amount:signed});
-    cagUI={histOpen:true, addOpen:false, dir:'in', label:'', amt:''};
-    save(); go('projets'); toast("Ligne ajoutée ✓");
-  };
+  const cat=$('#cagAddToggle'); if(cat) cat.onclick=openCagnotteAddLine;
   document.querySelectorAll('[data-projhist]').forEach(b=>b.addEventListener('click',()=>{
     const ui=projUIState(b.dataset.projhist); ui.histOpen=!ui.histOpen; go('projets');
   }));
@@ -2436,6 +2412,24 @@ function bindProjets(){
     if(b.dataset.paction==='realloc') openRealloc(p);
     if(b.dataset.paction==='abandon') openAbandon(p);
   }));
+}
+function openCagnotteAddLine(){
+  openModal(`<h3>👛 Ajouter une ligne</h3>
+    <p class="small muted" style="margin-bottom:14px">Une entrée ou une sortie manuelle sur la cagnotte commune. Indiquez un montant négatif pour une sortie (ex : -80).</p>
+    <div class="field"><label>Montant</label><input class="input" type="number" id="cagAddAmt" placeholder="Ex : 150 ou -80"></div>
+    <div class="field"><label>Description</label><input class="input" id="cagAddDesc" placeholder="Ex : Trop perçu EDF"></div>
+    <div class="field"><label>Date</label><input class="input" type="date" id="cagAddDate" value="${iso(0)}"></div>
+    <button class="btn btn-primary" id="cagAddSave">Ajouter</button>`, true);
+  $('#cagAddSave').onclick=()=>{
+    const amt=parseFloat(($('#cagAddAmt').value+'').replace(',','.'))||0;
+    const desc=$('#cagAddDesc').value.trim();
+    const date=$('#cagAddDate').value||iso(0);
+    if(!amt||!desc){ toast("Montant et description requis","✏️"); return; }
+    S.cagnotte.balance+=amt;
+    S.cagnotte.history.unshift({date, label:desc, amount:amt});
+    cagUI.histOpen=true;
+    save(); closeModal(); go('projets'); toast("Ligne ajoutée ✓");
+  };
 }
 function openEditProject(id, returnTo){
   returnTo = returnTo || 'projets';
