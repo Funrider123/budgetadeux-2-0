@@ -1551,9 +1551,12 @@ function renderAnalyse(){
     <p class="hero-sub">Votre idéal face à votre réalité, en toute bienveillance.</p>
   </div>
 
-  <div class="grid2" style="margin-top:14px; align-items:stretch">
-    ${donutCard("Votre idéal", ideal, idealEur(), 'editIdealBtn', true)}
-    ${donutCard("Votre réalité", real, realityEur())}
+  <div style="position:relative; margin-top:22px">
+    ${donutUnitToggleHtml()}
+    <div class="grid2" style="align-items:stretch">
+      ${donutCard("Votre idéal", ideal, idealEur(), 'editIdealBtn')}
+      ${donutCard("Votre réalité", real, realityEur())}
+    </div>
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1586,20 +1589,22 @@ function renderAnalyse(){
   `;
 }
 let donutUnit='pct'; // 'pct' ou 'eur' — bascule l'affichage des camemberts Idéal/Réalité
-function donutCard(title,pct,eur,editableId,unitToggle){
+// Petit switch %/€ flottant, centré au-dessus des deux camemberts (entre les deux cartes),
+// pour piloter l'affichage des deux à la fois sans appartenir à l'une ou l'autre.
+function donutUnitToggleHtml(){
+  const unit=donutUnit;
+  return `<div class="row" style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); z-index:2; gap:2px; background:var(--cream-2); border:1px solid var(--line); border-radius:99px; padding:2px; box-shadow:var(--shadow)">
+    <span class="small" data-unit="pct" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='pct'?'background:var(--terra); color:#fff':'color:var(--muted)'}">%</span>
+    <span class="small" data-unit="eur" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='eur'?'background:var(--terra); color:#fff':'color:var(--muted)'}">€</span>
+  </div>`;
+}
+function donutCard(title,pct,eur,editableId){
   const {besoin:b,envie:e,invest:inv,protection:pr}=pct;
   const unit=donutUnit;
   const disp=k=>unit==='eur'?fmt0(eur[k]):`${pct[k]}%`;
   const centerVal=unit==='eur'?fmt0((eur.besoin||0)+(eur.envie||0)+(eur.invest||0)+(eur.protection||0)):`${b}/${e}/${inv}/${pr}`;
   return `<div class="card" style="padding:16px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; margin-top:0">
-    <div style="display:flex; align-items:center; min-height:26px; margin-bottom:10px">
-      <div style="flex:1; display:flex; justify-content:flex-start">${unitToggle?`<div class="row" style="gap:2px; background:var(--cream-2); border-radius:99px; padding:2px">
-        <span class="small" data-unit="pct" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='pct'?'background:var(--terra); color:#fff':'color:var(--muted)'}">%</span>
-        <span class="small" data-unit="eur" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='eur'?'background:var(--terra); color:#fff':'color:var(--muted)'}">€</span>
-      </div>`:''}</div>
-      <div class="small" style="font-weight:800; text-align:center; white-space:nowrap; flex-shrink:0">${title}</div>
-      <div style="flex:1"></div>
-    </div>
+    <div class="small" style="font-weight:800; text-align:center; margin-bottom:10px">${title}</div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
       <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% ${b+e+inv}%, var(--protection) ${b+e+inv}% 100%)">
         <div class="hole" style="width:74px;height:74px"><div class="t">Réel</div><div class="v" style="font-size:${unit==='eur'?'12px':'14px'}">${centerVal}</div></div>
@@ -1791,9 +1796,12 @@ function mdContent(step){
         <button class="btn btn-ghost btn-sm" style="flex:1" id="mdIdealRevoirIdeal">Revoir notre idéal →</button>
         <button class="btn btn-ghost btn-sm" style="flex:1" id="mdIdealRevoirBudgets">Revoir nos budgets →</button>
       </div>`}
-    <div class="grid2" style="margin-top:4px; align-items:stretch">
-      ${donutCard("Votre idéal", ideal, idealEur(), null, true)}
-      ${donutCard("Votre réalité", real, realityEur())}
+    <div style="position:relative; margin-top:16px">
+      ${donutUnitToggleHtml()}
+      <div class="grid2" style="align-items:stretch">
+        ${donutCard("Votre idéal", ideal, idealEur())}
+        ${donutCard("Votre réalité", real, realityEur())}
+      </div>
     </div>
     <div class="card-soft" style="margin-top:12px">
       <div class="between"><b class="small">Verdict</b>${verdictBadge(real,ideal)}</div>
