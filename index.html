@@ -635,22 +635,24 @@ function expensesInWeek(){
 }
 function spentThisWeek(){ return expensesInWeek().reduce((s,x)=>s+x.amount,0); }
 function totalBudget(){ return S.categories.reduce((s,c)=>s+c.budget,0); }
+// Reprend exactement ce qui pèse réellement ce mois-ci pour chaque nature : les dépenses
+// réelles catégorisées, + les charges fixes communes (qui tombent chaque mois), + les
+// versements projets du mois (attribués à la nature propre du projet, pas systématiquement "invest").
+// C'est la même logique que classAllocationItems (Détail classification), en version "réel du mois".
 function clsTotalsReality(offset=0){
   const t={besoin:0,envie:0,invest:0,protection:0};
-  realExpenses(offset).forEach(x=>{ const c=catById(x.cat); t[c.cls]=(t[c.cls]||0)+x.amount; });
+  realExpenses(offset).forEach(x=>{ const c=catById(x.cat); if(c) t[c.cls]=(t[c.cls]||0)+x.amount; });
+  S.charges.filter(c=>c.scope==='commune' && c.cls).forEach(c=>{ t[c.cls]=(t[c.cls]||0)+c.amount; });
+  S.projects.filter(p=>p.status==='actif').forEach(p=>{
+    const contrib=(p.history||[]).filter(h=>inMonth(h.date,offset)).reduce((s,h)=>s+Math.max(0,h.amount),0);
+    if(contrib>0) t[p.cls]=(t[p.cls]||0)+contrib;
+  });
   return t;
 }
-// Versements réels effectués vers les projets ce mois-ci (contributions manuelles, surplus transférés, etc.)
-// — remplace un ancien forfait fictif : ceci reflète les vrais mouvements enregistrés dans p.history.
-function projectContribsThisMonth(offset=0){
-  return S.projects.reduce((sum,p)=>sum+(p.history||[]).filter(h=>inMonth(h.date,offset)).reduce((s,h)=>s+Math.max(0,h.amount),0),0);
-}
-// Répartition réelle des dépenses du mois entre les 4 natures (besoin/envie/protection/épargne),
-// en %, en tenant compte des versements projets pour la part épargne.
+// Répartition réelle des dépenses du mois entre les 4 natures (besoin/envie/investissement/protection), en %.
 function realitySplit(offset=0){
-  const real=clsTotalsReality(offset);
-  const besoin=real.besoin||0, envie=real.envie||0, protection=real.protection||0;
-  const invest=(real.invest||0)+projectContribsThisMonth(offset);
+  const t=clsTotalsReality(offset);
+  const besoin=t.besoin||0, envie=t.envie||0, protection=t.protection||0, invest=t.invest||0;
   const tot=besoin+envie+protection+invest||1;
   const bP=Math.round(besoin/tot*100), eP=Math.round(envie/tot*100), pP=Math.round(protection/tot*100);
   return {besoin:bP, envie:eP, protection:pP, invest:100-bP-eP-pP};
@@ -1543,7 +1545,7 @@ function renderAnalyse(){
 
   <div class="grid2" style="margin-top:14px">
     ${donutCard("Votre idéal", ideal.besoin, ideal.envie, ideal.invest, ideal.protection, 'editIdealBtn')}
-    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection, null, true)}
+    ${donutCard("Votre réalité", real.besoin, real.envie, real.invest, real.protection)}
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1559,7 +1561,7 @@ function renderAnalyse(){
       const grandTotal=grandAllocationTotal();
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
       const open=!!analyseUI[cls];
-      return `<div id="anacls-${cls}" style="padding:12px 0; border-top:1px solid var(--line)">
+      return `<div style="padding:12px 0; border-top:1px solid var(--line)">
         <div class="between" data-anacls="${cls}" style="cursor:pointer">
           <div class="row" style="gap:6px"><b class="small">${clsLabel(cls)}</b><span class="chev" style="transition:transform .2s; transform:rotate(${open?'180deg':'0deg'})">▾</span></div>
           <b class="small" style="color:var(--terra)">${pct}% · ${fmt0(clsTotal)}</b>
@@ -1588,10 +1590,7 @@ function renderAnalyse(){
   </div>
   `;
 }
-function donutCard(title,b,e,inv,pr,editableId,linkable){
-  const li=(cls,color,label,val)=>linkable
-    ?`<div class="li" data-anacls="${cls}" style="cursor:pointer"><span class="sw" style="background:var(${color})"></span>${label} <span class="r">${val}%</span></div>`
-    :`<div class="li"><span class="sw" style="background:var(${color})"></span>${label} <span class="r">${val}%</span></div>`;
+function donutCard(title,b,e,inv,pr,editableId){
   return `<div class="card" style="padding:16px">
     <div class="between" style="margin-bottom:10px">
       <div class="small" style="font-weight:800">${title}</div>
@@ -1603,10 +1602,10 @@ function donutCard(title,b,e,inv,pr,editableId,linkable){
       </div>
     </div>
     <div class="legend">
-      ${li('besoin','--besoin','Besoins',b)}
-      ${li('envie','--envie','Envies',e)}
-      ${li('invest','--invest','Investissement',inv)}
-      ${li('protection','--protection','Protection',pr)}
+      <div class="li"><span class="sw" style="background:var(--besoin)"></span>Besoins <span class="r">${b}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--envie)"></span>Envies <span class="r">${e}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--invest)"></span>Investissement <span class="r">${inv}%</span></div>
+      <div class="li"><span class="sw" style="background:var(--protection)"></span>Protection <span class="r">${pr}%</span></div>
     </div>
   </div>`;
 }
@@ -2806,11 +2805,7 @@ function bindAnalyse(){
   if(n) n.onclick=()=>{ if(S.ui.analyMonth<0){S.ui.analyMonth++; save(); go('analyse');} };
   const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
   document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
-    const cls=b.dataset.anacls;
-    const fromLegend=b.classList.contains('li');
-    if(fromLegend) analyseUI[cls]=true; else analyseUI[cls]=!analyseUI[cls];
-    go('analyse');
-    if(fromLegend) requestAnimationFrame(()=>{ const el=document.getElementById('anacls-'+cls); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); });
+    const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
   }));
 }
 function openEditIdeal(){
