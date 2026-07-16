@@ -501,7 +501,7 @@ function migrate(s){
   // Anciennement une simple case à cocher (booléen) : on force un nouveau choix explicite
   // maintenant que c'est une décision à 2 issues ('ok' / 'modifier').
   Object.values(s.moneyDate.checklist).forEach(ch=>{ if(typeof ch.projets_alignes==='boolean') delete ch.projets_alignes; });
-  s.projects.forEach(p=>{ if(!p.history) p.history=[]; });
+  s.projects.forEach(p=>{ if(!p.history) p.history=[]; if(p.mensuel===undefined) p.mensuel = p.months>0 ? Math.max(0,(p.target-p.saved)/p.months) : 0; });
   return s;
 }
 function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
@@ -677,7 +677,7 @@ function totalRevenuFoyer(){
   return S.settings.salaries.lui+S.settings.salaries.elle;
 }
 function chargesCommunes(){ return S.charges.filter(c=>c.scope==="commune").reduce((s,c)=>s+c.amount,0); }
-function epargneProjetsMensuelle(excludeId){ return S.projects.filter(p=>p.status==="actif" && p.id!==excludeId).reduce((s,p)=>s+Math.max(0,(p.target-p.saved)/p.months),0); }
+function epargneProjetsMensuelle(excludeId){ return S.projects.filter(p=>p.status==="actif" && p.id!==excludeId).reduce((s,p)=>s+(p.mensuel||0),0); }
 // Ce qu'il reste chaque mois une fois charges communes et catégories couvertes — base de
 // l'allocation projets. Les charges perso sont déjà déduites dans totalRevenuFoyer() pour
 // le mode "net" (pas la peine de les redéduire ici, sinon on les compterait deux fois).
@@ -1401,10 +1401,7 @@ function renderProjets(){
   <div style="margin-top:20px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
     <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">👛 Cagnotte commune</div>
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
-      <div class="between">
-        <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Solde actuel</div><div style="font-family:var(--serif); font-size:32px; font-weight:600; color:var(--terra); margin-top:4px">${fmt(S.cagnotte.balance)}</div></div>
-        <div class="emoji-badge">👛</div>
-      </div>
+      <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Solde actuel</div><div style="font-family:var(--serif); font-size:32px; font-weight:600; color:var(--terra); margin-top:4px">${fmt(S.cagnotte.balance)}</div></div>
       <div class="pilot-collapse-hdr ${cagUI.histOpen?'open':''}" id="cagHistHdr" style="margin-top:14px; background:var(--cream-2); border-radius:14px; padding:12px 16px">
         <span class="small" style="font-weight:800">Historique des entrées / sorties</span><span class="chev">▼</span>
       </div>
@@ -1416,17 +1413,14 @@ function renderProjets(){
   <div style="margin-top:18px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
     <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">🎯 Vos projets <span style="opacity:.85; font-weight:700">(utilisation ${pctUse}%)</span></div>
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
-      <div class="between">
-        <div>
-          <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div>
-          <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt(dispo)}</span></div>
-          ${used>dispo?`<p class="small" style="color:var(--danger); margin-top:4px">⚠️ Budget dépassé de ${fmt0(used-dispo)}</p>`:''}
-        </div>
-        <div class="emoji-badge">✨</div>
+      <div>
+        <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div>
+        <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt(dispo)}</span></div>
+        ${used>dispo?`<p class="small" style="color:var(--danger); margin-top:4px">⚠️ Budget dépassé de ${fmt0(used-dispo)}</p>`:''}
       </div>
       ${(()=>{
         // Classement par priorité = montant mensuel nécessaire, du plus gros au plus petit
-        const active=S.projects.filter(p=>p.status==='actif').map(p=>({p, mens:p.months>0?Math.max(0,(p.target-p.saved)/p.months):0})).sort((a,b)=>b.mens-a.mens);
+        const active=S.projects.filter(p=>p.status==='actif').map(p=>({p, mens:p.mensuel||0})).sort((a,b)=>b.mens-a.mens);
         const others=S.projects.filter(p=>p.status!=='actif');
         const rankMap={}; active.forEach((x,i)=>rankMap[x.p.id]=i+1);
         return [...active.map(x=>x.p), ...others].map(p=>projectCard(p, rankMap[p.id])).join('');
@@ -1444,7 +1438,7 @@ function renderProjets(){
 function projectCard(p, rank){
   const pct=Math.min(100,Math.round(p.saved/p.target*100));
   const reste=p.target-p.saved;
-  const mens=p.months>0?reste/p.months:0;
+  const mens=p.mensuel||0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
   const ui=projUIState(p.id);
   return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); position:relative; overflow:hidden" data-proj="${p.id}">
@@ -1695,7 +1689,11 @@ function renderMoneyDate(){
   </div>
   `;
 }
-function projectEtaLabel(p){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(p.months||0)); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`; }
+function projectEtaLabel(p){
+  const remaining=Math.max(0,p.target-p.saved);
+  const monthsLeft = p.mensuel>0 ? Math.ceil(remaining/p.mensuel) : (p.months||0);
+  const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+monthsLeft); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`;
+}
 function mdSurplusRows(offset){
   return S.categories.filter(c=>c.budget>0).map(c=>{
     const surplus=Math.max(0, c.budget-spentByCat(c.id,offset));
@@ -1965,7 +1963,7 @@ function initPilotSim(){
   S.projects.filter(p=>p.status==="actif").forEach(p=>{
     if(pilotSim[p.id]===undefined){
       const remaining=Math.max(0,p.target-p.saved);
-      pilotSim[p.id] = p.months>0 ? Math.round(remaining/p.months) : 0;
+      pilotSim[p.id] = p.mensuel!==undefined ? Math.round(p.mensuel) : (p.months>0 ? Math.round(remaining/p.months) : 0);
     }
   });
 }
@@ -2625,8 +2623,8 @@ function openEditProject(id, returnTo){
       const dispo=disponiblePourProjets();
       if(otherTotal+mens>dispo+0.5){ toast(`Budget dépassé : ${fmt0(otherTotal+mens)} / ${fmt0(dispo)} disponibles pour vos projets`,"⚠️"); return; }
     }
-    if(id){ p.name=nm; p.target=t; p.saved=sv; p.months=mo; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; }
-    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:sv,months:mo,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
+    if(id){ p.name=nm; p.target=t; p.saved=sv; p.months=mo; p.mensuel=mens; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; delete pilotSim[id]; }
+    else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:sv,months:mo,mensuel:mens,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
     save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
   const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
@@ -3090,10 +3088,11 @@ function onProjectInput(el){
   else if(numEl) numEl.value=val;
   pilotSim[id]=val;
   // Comme les charges/catégories/salaires, la mensualité choisie s'enregistre immédiatement
-  // (au lieu d'être une simulation en mémoire seulement validée plus tard) : on la traduit
-  // tout de suite en nombre de mois pour atteindre l'objectif, et on sauvegarde.
+  // (au lieu d'être une simulation en mémoire seulement validée plus tard). C'est la mensualité
+  // fixe du projet : elle ne bouge plus tant que le couple ne revient pas ici pour la changer
+  // (un simple versement ponctuel sur le projet ne doit jamais la modifier).
   const p=S.projects.find(x=>x.id===id);
-  if(p){ const remaining=Math.max(0,p.target-p.saved); if(remaining>0 && val>0) p.months=Math.max(1,Math.ceil(remaining/val)); save(); }
+  if(p){ p.mensuel=val; const remaining=Math.max(0,p.target-p.saved); if(remaining>0 && val>0) p.months=Math.max(1,Math.ceil(remaining/val)); save(); }
   recalcPilotage();
 }
 function bindPilotage(){
