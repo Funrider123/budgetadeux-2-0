@@ -1558,9 +1558,8 @@ function grandAllocationTotal(){ return ['besoin','envie','invest','protection']
    5 · ANALYSE (50/30/20)
    ============================================================ */
 let analyseUI={};
-let annualTab='ens';   // 'ens' = vue d'ensemble | 'suivi' = suivi par poste
-let annualMonth=0;     // offset du mois sélectionné (vue d'ensemble)
-let annualSel=null;    // poste sélectionné (suivi) : 'besoin'|'envie'|'invest'|'protection' ou 'cat:<id>'
+let annualMonth=0;     // offset du mois sélectionné (Vue d'ensemble)
+let annualSel=null;    // catégorie suivie : 'cat:<id>'
 
 function annualMonthKey(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return `${d.getFullYear()}-${d.getMonth()}`; }
 // Instantané du budget de chaque catégorie pour le mois d'effet — mémorisé à chaque validation,
@@ -1580,11 +1579,6 @@ function posteMeta(sel){
 }
 function posteActualAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? spentByCat(sel.slice(4), offset) : (spentByClsMonth(offset)[sel]||0); }
 function posteBudgetAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? catBudgetAt(sel.slice(4), offset) : clsBudgetAt(sel, offset); }
-function defaultAnnualSel(){
-  let best='besoin', bestV=-1;
-  ['besoin','envie','invest','protection'].forEach(cl=>{ let v=0; for(let o=-11;o<=0;o++) v+=spentByClsMonth(o)[cl]||0; if(v>bestV){bestV=v; best=cl;} });
-  return best;
-}
 // VUE D'ENSEMBLE : barres empilées par nature (12 mois) + panneau de détail du mois sélectionné.
 function annualOverviewHtml(){
   const budget = totalBudget();
@@ -1644,15 +1638,12 @@ function annualOverviewHtml(){
     ${sel.total>0?`${dRow('besoin','--besoin','Besoins')}${dRow('envie','--envie','Envies')}${dRow('invest','--invest','Investissement')}${dRow('protection','--protection','Protection')}`:`<p class="small muted" style="padding:12px 0; text-align:center">Aucune dépense enregistrée ce mois-ci.</p>`}
   </div>`;
 }
-// SUIVI PAR POSTE : courbe dépensé vs budget d'un poste (nature ou catégorie) choisi par les puces.
+// SUIVI PAR CATÉGORIE : courbe dépensé vs budget d'une catégorie choisie par les puces.
 function annualSuiviHtml(){
-  if(!annualSel) annualSel=defaultAnnualSel();
-  const natChip=(k,label,color)=>`<button class="cat-pill ${annualSel===k?'on':''}" data-poste="${k}" style="flex:0 0 auto"><span style="width:9px;height:9px;border-radius:3px;background:var(${color}); display:inline-block; margin-right:4px; vertical-align:middle"></span>${label}</button>`;
+  if(!S.categories.length) return `<div class="card"><p class="small muted" style="text-align:center; padding:20px 0">Ajoutez des catégories dans Simulation et validation budgétaire pour suivre leur évolution ici.</p></div>`;
+  if(!annualSel || !annualSel.startsWith('cat:') || !S.categories.some(c=>'cat:'+c.id===annualSel)) annualSel='cat:'+S.categories[0].id;
   const catChip=(c)=>`<button class="cat-pill ${annualSel==='cat:'+c.id?'on':''}" data-poste="cat:${c.id}" style="flex:0 0 auto">${c.emoji} ${escapeHtml(c.name)}</button>`;
-  const chips=`<div style="margin-bottom:6px"><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px; margin-bottom:6px">Grandes masses</div>
-    <div class="row" style="gap:8px; overflow-x:auto; padding-bottom:2px; flex-wrap:nowrap">${natChip('besoin','Besoins','--besoin')}${natChip('envie','Envies','--envie')}${natChip('invest','Investis.','--invest')}${natChip('protection','Protec.','--protection')}</div></div>
-    ${S.categories.length?`<div style="margin-bottom:12px"><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px; margin:8px 0 6px">Catégories</div>
-    <div class="row" style="gap:8px; overflow-x:auto; padding-bottom:2px; flex-wrap:nowrap">${S.categories.map(catChip).join('')}</div></div>`:''}`;
+  const chips=`<div class="row" style="gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; flex-wrap:nowrap">${S.categories.map(catChip).join('')}</div>`;
   const actual=[], budg=[];
   for(let off=-11; off<=0; off++){ actual.push(posteActualAt(annualSel,off)); budg.push(posteBudgetAt(annualSel,off)); }
   const meta=posteMeta(annualSel);
@@ -1711,31 +1702,20 @@ function annualSuiviHtml(){
     ${Object.keys(S.budgetTimeline).length<2?`<p class="small muted" style="margin-top:12px; text-align:center">💡 La ligne de budget s'affinera au fil des mois : à chaque « Valider le budget », on mémorise vos montants pour suivre leur évolution.</p>`:''}`;
 }
 function renderAnalyse(){
-  const off=S.ui.analyMonth;
   const ideal=S.settings.idealSplit;
   const real=realitySplit();
   return `
   ${prevScreen==='moneydate'?`<div style="padding-top:10px"><button class="btn btn-ghost btn-sm" id="analyseBack">← Retour</button></div>`:''}
-  <div class="section-title" style="margin-top:6px">Vue annuelle</div>
-  <div class="seg" style="display:flex; width:100%; margin-bottom:14px">
-    <button class="${annualTab==='ens'?'on':''}" data-annualtab="ens" style="flex:1">Vue d'ensemble</button>
-    <button class="${annualTab==='suivi'?'on':''}" data-annualtab="suivi" style="flex:1">Suivi par poste</button>
-  </div>
-  ${annualTab==='ens'?annualOverviewHtml():annualSuiviHtml()}
 
-  <div style="padding-top:6px"><span class="pill">Votre équilibre</span>
-    <div class="between" style="margin-top:10px">
-      <h1 class="hero-title" style="font-size:24px">Idéal vs réalité</h1>
-      <div class="row" style="gap:4px">
-        <button class="icon-btn" id="aPrev">‹</button>
-        <span class="small" style="font-weight:800; white-space:nowrap">${monthLabel(off)}</span>
-        <button class="icon-btn" id="aNext" ${off>=0?'style="opacity:.3"':''}>›</button>
-      </div>
+  <div style="padding-top:8px">
+    <div class="between">
+      <h1 class="hero-title" style="font-size:23px">Idéal vs réalité</h1>
+      <button class="icon-btn" id="adviceBtn" style="width:30px; height:30px; font-size:16px" title="Notre conseil">💡</button>
     </div>
-    <p class="hero-sub">Votre idéal face à votre réalité, en toute bienveillance.</p>
+    <p class="hero-sub">Votre idéal face à votre réalité — défini lors d'un Money Date, consultable ici.</p>
   </div>
 
-  <div style="position:relative; margin-top:22px">
+  <div style="position:relative; margin-top:20px">
     ${donutUnitToggleHtml()}
     <div class="grid2" style="align-items:stretch">
       ${donutCard("Votre idéal", ideal, idealEur(), 'editIdealBtn')}
@@ -1743,11 +1723,6 @@ function renderAnalyse(){
     </div>
   </div>
   <div style="text-align:center; margin:8px 0 -2px"><span class="small muted">↓ Le détail de votre répartition actuelle, juste en dessous</span></div>
-
-  <div class="card" style="margin-top:14px">
-    <div class="between"><b>Votre verdict</b>${verdictBadge(real,ideal)}</div>
-    <p class="small muted" style="margin-top:6px">${verdictText(real,ideal)}</p>
-  </div>
 
   <div class="section-title">Détail de votre répartition actuelle</div>
   <div class="card">
@@ -1774,6 +1749,12 @@ function renderAnalyse(){
       </div>`;
     }).join('')}
   </div>
+
+  <div class="section-title" style="margin-top:24px">📊 Vue d'ensemble</div>
+  ${annualOverviewHtml()}
+
+  <div class="section-title" style="margin-top:24px">📈 Suivi par catégorie</div>
+  ${annualSuiviHtml()}
   `;
 }
 let donutUnit='pct'; // 'pct' ou 'eur' — bascule l'affichage des camemberts Idéal/Réalité
@@ -3041,18 +3022,22 @@ function mdCategoriesDetailHtml(offset){
 
 function bindAnalyse(){
   const ab=$('#analyseBack'); if(ab) ab.onclick=()=>go(prevScreen||'vue');
-  const p=$('#aPrev'), n=$('#aNext');
-  if(p) p.onclick=()=>{S.ui.analyMonth--; save(); go('analyse');};
-  if(n) n.onclick=()=>{ if(S.ui.analyMonth<0){S.ui.analyMonth++; save(); go('analyse');} };
   const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
+  const adv=$('#adviceBtn'); if(adv) adv.onclick=openAnalyseAdvice;
   document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
     const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
   }));
   document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('analyse'); }));
-  document.querySelectorAll('[data-annualtab]').forEach(b=>b.addEventListener('click',()=>{ annualTab=b.dataset.annualtab; go('analyse'); }));
   document.querySelectorAll('[data-anamonth]').forEach(b=>b.addEventListener('click',()=>{ annualMonth=+b.dataset.anamonth; go('analyse'); }));
   document.querySelectorAll('[data-anastep]').forEach(b=>b.addEventListener('click',()=>{ const nx=annualMonth+(+b.dataset.anastep); if(nx>=-11 && nx<=0){ annualMonth=nx; go('analyse'); } }));
   document.querySelectorAll('[data-poste]').forEach(b=>b.addEventListener('click',()=>{ annualSel=b.dataset.poste; go('analyse'); }));
+}
+// Petit conseil (l'ancien "verdict"), désormais accessible via l'icône 💡.
+function openAnalyseAdvice(){
+  const ideal=S.settings.idealSplit, real=realitySplit();
+  openModal(`<h3>💡 Notre conseil</h3>
+    <div class="between" style="margin-bottom:10px"><b class="small">Votre équilibre</b>${verdictBadge(real,ideal)}</div>
+    <p class="small muted" style="line-height:1.6">${verdictText(real,ideal)}</p>`, true);
 }
 function openEditIdeal(){
   const id=S.settings.idealSplit;
