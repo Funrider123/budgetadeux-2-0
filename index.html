@@ -443,6 +443,7 @@ const EMAILJS_PUBLIC_KEY = "SY3nTF1pENQhnmOw9";
 const EMAILJS_SERVICE_ID = "service_m998ctj";
 const EMAILJS_TEMPLATE_ID = "template_uup9bv1";
 if(window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+const SUPPORT_EMAIL = "jbpruvost@wanadoo.fr"; // contact éditeur (mentions légales / RGPD)
 
 /* ============================================================
    ÉTAT & PERSISTANCE
@@ -878,6 +879,7 @@ function authSignup(){
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr"></div>
     <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe"></div>
     <button class="btn btn-primary" id="doSignup">Continuer</button>
+    <div style="text-align:center; margin-top:14px"><span class="link-text small" id="goLegalSignup">Mentions légales & confidentialité</span></div>
   </div>`, 'signup');
 }
 function authForgot(){
@@ -959,6 +961,7 @@ function bindAuth(){
   on('tabLogin','click',()=>{authStep="login"; renderAuth();});
   on('tabSignup','click',()=>{authStep="signup"; renderAuth();});
   on('goForgot','click',()=>{authStep="forgot"; renderAuth();});
+  on('goLegalSignup','click',()=>openLegal());
   busy('doLogin','Connexion…',async ()=>{
     const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
     if(!em||!pw){ toast("Email et mot de passe requis","✉️"); return; }
@@ -2425,10 +2428,41 @@ function openProfile(){
     <p class="small muted" style="margin:12px 0 16px">Votre profil et votre session.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="pmLegal"><div class="mi">📄</div><div class="grow"><div class="nm">Mentions légales & confidentialité</div><div class="sub">Données, RGPD, CGU</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`, true);
   $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
+  $('#pmLegal').onclick=()=>{ closeModal(); openLegal(); };
   $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
+}
+
+/* ============================================================
+   MENTIONS LÉGALES / CONFIDENTIALITÉ / CGU
+   ============================================================ */
+function openLegal(){
+  openModal(`<h3>Mentions légales & confidentialité</h3>
+    <p class="small muted" style="margin-bottom:16px">Dernière mise à jour : 11 août 2026</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Éditeur</p>
+    <p class="small muted">Budget à Deux est un projet personnel édité par [Ton nom complet], contact : ${escapeHtml(SUPPORT_EMAIL)}. Hébergement de l'application (fichiers) : Netlify. Hébergement des données : Supabase (Frankfort, Allemagne — UE).</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Quelles données sont collectées, et pourquoi</p>
+    <p class="small muted">Pour faire fonctionner votre espace à deux : votre email et mot de passe (compte), votre prénom et votre profil (elle/lui), et l'ensemble des données de budget que vous saisissez (charges fixes, catégories, dépenses, projets, cagnotte, historique) — partagées uniquement avec la personne reliée au même code couple. Si vous nous signalez un bug via le formulaire dédié, votre nom, email et le message envoyé nous sont transmis.</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Base légale et durée de conservation</p>
+    <p class="small muted">Ces données sont traitées pour exécuter le service que vous avez demandé en créant votre compte (exécution contractuelle). Elles sont conservées tant que votre compte existe, et supprimées définitivement dès que vous demandez la suppression de votre compte (voir « Supprimer mon compte » dans le menu — action immédiate et irréversible).</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Qui accède aux données</p>
+    <p class="small muted">Personne d'autre que vous et votre partenaire relié au même code couple. Deux prestataires techniques interviennent pour faire tourner le service : <b>Supabase</b> (base de données et authentification, UE) et <b>EmailJS</b> (envoi de l'email uniquement si vous signalez un bug volontairement). Aucune donnée n'est vendue, ni utilisée à des fins publicitaires.</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Cookies et traceurs</p>
+    <p class="small muted">Aucun traceur publicitaire ni analytique. L'application utilise uniquement le stockage local de votre appareil (localStorage) pour votre session et vos préférences — strictement nécessaire au fonctionnement, sans consentement requis.</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Vos droits</p>
+    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez la suppression directement depuis l'app (menu → Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
+
+    <p style="font-weight:800; margin:14px 0 6px">Conditions d'utilisation</p>
+    <p class="small muted">Budget à Deux est fourni tel quel, en phase de test privée, sans garantie de disponibilité continue. Un compte est personnel ; le code couple ne doit être partagé qu'avec votre partenaire. Vous restez responsable de l'exactitude des données financières que vous saisissez.</p>`);
 }
 
 /* ============================================================
