@@ -2428,12 +2428,32 @@ function openProfile(){
     <p class="small muted" style="margin:12px 0 16px">Votre profil et votre session.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="pmExport"><div class="mi">📦</div><div class="grow"><div class="nm">Exporter mes données</div><div class="sub">Télécharger un fichier avec toutes vos données</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmLegal"><div class="mi">📄</div><div class="grow"><div class="nm">Mentions légales & confidentialité</div><div class="sub">Données, RGPD, CGU</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`, true);
   $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
+  $('#pmExport').onclick=()=>{ closeModal(); exportMyData(); };
   $('#pmLegal').onclick=()=>{ closeModal(); openLegal(); };
   $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
+}
+
+// Export RGPD (portabilité) : toutes les données de l'utilisateur + du couple,
+// en JSON téléchargeable — pas besoin du serveur, tout est déjà dans S côté client.
+function exportMyData(){
+  const payload = {
+    export_le: new Date().toISOString(),
+    compte: { nom: S.auth.name, email: S.auth.email, profil: S.auth.profile, code_couple: S.auth.coupleCode },
+    partenaire: S.auth.partnerLinked ? { nom: S.partner.name, profil: S.partner.profile } : null,
+    budget: sharedSnapshot(),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `budget-a-deux-export-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast("Export téléchargé 📦","✓");
 }
 
 /* ============================================================
@@ -2459,7 +2479,7 @@ function openLegal(){
     <p class="small muted">Aucun traceur publicitaire ni analytique. L'application utilise uniquement le stockage local de votre appareil (localStorage) pour votre session et vos préférences — strictement nécessaire au fonctionnement, sans consentement requis.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Vos droits</p>
-    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez la suppression directement depuis l'app (menu → Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
+    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez tout directement depuis l'app (menu → Exporter mes données pour récupérer un fichier de toutes vos données, ou Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Conditions d'utilisation</p>
     <p class="small muted">Budget à Deux est fourni tel quel, en phase de test privée, sans garantie de disponibilité continue. Un compte est personnel ; le code couple ne doit être partagé qu'avec votre partenaire. Vous restez responsable de l'exactitude des données financières que vous saisissez.</p>`);
@@ -2499,7 +2519,7 @@ function openDeleteAccount(){
       <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Réinitialiser mes données</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. Votre connexion reste active.</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer définitivement mon compte</div><div class="sub">Nom, email, connexion et tout le budget.</div></div><span class="chev">→</span></button>`;
   openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
-    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>.</p>
+    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos données avant (menu → Exporter mes données).</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">${rows}</div>
     <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
   $('#daCancel').onclick=()=>closeModal();
