@@ -750,8 +750,8 @@ function randCode(){ let s=""; for(let i=0;i<6;i++) s+=CODE_ALPHABET[Math.floor(
 async function generateUniqueCode(){
   for(let t=0;t<8;t++){
     const code=randCode();
-    const {data,error}=await sb.from('couples').select('code').eq('code',code).maybeSingle();
-    if(!error && !data) return code;
+    const {data:exists,error}=await sb.rpc('couple_code_exists',{p_code:code});
+    if(!error && !exists) return code;
   }
   return randCode();
 }
@@ -783,7 +783,6 @@ async function ensureProfile(user){
     if(code && gender && name){
       if(intent==='join'){
         if((await coupleMemberCount(code))>=2) throw new Error("couple-full");
-        await sb.from('couple_names').update(gender==='lui'?{him:name}:{her:name}).eq('couple_code',code);
       }
       await sb.from('profiles').insert({ user_id:uid, email:user.email, gender, name, couple_code:code });
       prof={ user_id:uid, email:user.email, gender, name, couple_code:code };
@@ -829,8 +828,7 @@ async function finalizeSignup(){
   });
   if(error){ toast(authError(error),"⚠️"); return; }
   if(intent==='create'){
-    await sb.from('couples').upsert({code:coupleCode});
-    await sb.from('couple_names').upsert({ couple_code:coupleCode, him: profile==='lui'?name:'Partenaire', her: profile==='elle'?name:'Partenaire' });
+    await sb.rpc('couple_ensure',{p_code:coupleCode});
   }
   if(data.session){ await enterWithSession(data.session.user); }
   else { authStep="confirm"; renderAuth(); }
@@ -1007,8 +1005,8 @@ function bindAuth(){
   busy('doJoin','Un instant…',async ()=>{
     const entered=[...document.querySelectorAll('.ci')].map(i=>i.value.trim().toUpperCase()).join('');
     if(entered.length<6){ toast("Le code couple fait 6 caractères","🔢"); return; }
-    const {data:couple}=await sb.from('couples').select('code').eq('code',entered).maybeSingle();
-    if(!couple){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
+    const {data:exists}=await sb.rpc('couple_code_exists',{p_code:entered});
+    if(!exists){ toast("Ce code couple n'est pas connu, vérifie-le 🔍","🔍"); return; }
     if((await coupleMemberCount(entered))>=2){ toast("Ce code couple est déjà complet : 2 personnes y sont reliées 🔒","🔒"); return; }
     tmp.profile='elle'; tmp.coupleCode=entered;
     await finalizeSignup();
