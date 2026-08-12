@@ -460,8 +460,8 @@ const DEFAULT = {
   ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   projectsFrozen:false, // idem mais pour les mensualités de projets ajustées depuis "Vos projets"
-  pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler mes changements"
-  projectsSnapshot:null, // dernier état validé des mensualités de projets pour "Annuler mes changements"
+  pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler nos changements"
+  projectsSnapshot:null, // dernier état validé des mensualités de projets pour "Annuler nos changements"
   settings:{
     salaries:{lui:0, elle:0},
     mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0},
@@ -499,7 +499,7 @@ function migrate(s){
   if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
   if(s.projectsFrozen===undefined) s.projectsFrozen = false;
-  // Comptes déjà existants avant "Annuler mes changements" : pas d'instantané encore enregistré.
+  // Comptes déjà existants avant "Annuler nos changements" : pas d'instantané encore enregistré.
   // On en crée un dès maintenant à partir de l'état actuel, sinon le bouton n'apparaîtrait
   // qu'après un premier clic sur Valider (ce qui, vu de l'utilisateur, ressemble à un bug).
   if(s.pilotSnapshot===undefined || s.pilotSnapshot===null){
@@ -1428,7 +1428,9 @@ function histRow(x, editable=true){
    ============================================================ */
 let cagUI={histOpen:false};
 let projUI={};
-function projUIState(id){ return projUI[id] || (projUI[id]={histOpen:false, addOpen:false, who:'lui', amt:''}); }
+// adjOpen : tiroir « Ajuster ce projet ». Tout ce qui modifie le projet (mensualité,
+// versement, historique, réglages) vit dedans — la carte repliée reste une simple lecture.
+function projUIState(id){ return projUI[id] || (projUI[id]={adjOpen:false, histOpen:false, addOpen:false, who:'lui', amt:''}); }
 function historyRowsHtml(list){
   if(!list || !list.length) return `<p class="small muted" style="padding:10px 2px">Aucun mouvement enregistré pour l'instant.</p>`;
   const sorted=list.slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -1479,7 +1481,7 @@ function renderProjets(){
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
       <div>
         <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div>
-        <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span id="vpUsedLbl" style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt(dispo)}</span></div>
+        <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span id="vpUsedLbl" style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt0(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt0(dispo)}</span></div>
         <p class="small" id="vpDeficit" style="color:var(--danger); margin-top:4px; display:${used>dispo?'block':'none'}">⚠️ Budget dépassé de <span id="vpDeficitAmt">${fmt0(Math.max(0,used-dispo))}</span></p>
       </div>
       <div style="${S.projectsFrozen?'pointer-events:none; opacity:.5; filter:grayscale(.4); transition:opacity .2s':''}">
@@ -1494,7 +1496,7 @@ function renderProjets(){
       </div>
       ${!S.projectsFrozen?`<div class="row" style="gap:10px; margin-top:16px">
         <button class="btn btn-soft" id="validProjects" style="flex:1; width:auto">Valider les mensualités ✓</button>
-        ${S.projectsSnapshot?`<button class="btn btn-soft" id="cancelProjects" style="flex:1; width:auto">Annuler mes changements</button>`:''}
+        ${S.projectsSnapshot?`<button class="btn btn-soft" id="cancelProjects" style="flex:1; width:auto">Annuler nos changements</button>`:''}
       </div>`:''}
     </div>
   </div>
@@ -1515,35 +1517,41 @@ function projectCard(p, rank){
     ${paused?`<div style="position:absolute; top:16px; right:-38px; transform:rotate(35deg); background:var(--muted); color:#fff; font-size:11px; font-weight:800; letter-spacing:.5px; padding:3px 42px; z-index:2; pointer-events:none">EN PAUSE</div>`:''}
     <div style="${aband?'opacity:.6':''} ${paused?'opacity:.55; filter:grayscale(.6)':''}">
     <div class="between" style="margin-bottom:8px; gap:10px">
-      <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name} (${pct}%)</div>
+      <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name}</div>
       <b data-menslabel="${p.id}" style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
-    <div class="sub" style="margin-bottom:12px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
-    ${(!paused && !aband)?`<div class="pilot-row" style="padding:0 0 10px">
-      <input type="range" class="mini-slider" min="0" max="${sliderMax(mens, Math.max(disponiblePourProjets(),100))}" step="1" value="${mens}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
-      <input type="number" class="pamt-input" style="width:74px" value="${Math.round(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
-    </div>`:''}
+    <div class="sub" style="margin-bottom:11px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
-    <div class="between" style="margin-top:9px">
-      <span class="small muted" data-etalabel="${p.id}">${reste>0?`Échéance ${projectEtaLabel(p)}`:''}</span>
-      <span class="small" style="font-weight:700; color:var(--terra-d)">${reste>0?`${fmt0(p.saved)} / ${fmt0(p.target)}`:'Objectif atteint ! 🎉'}</span>
+    <div class="between" style="margin-top:8px">
+      <span class="small muted">${reste>0?`${fmt0(p.saved)} sur ${fmt0(p.target)}`:'Objectif atteint ! 🎉'}</span>
+      <b class="small" style="color:var(--terra-d)">${pct}%</b>
     </div>
-    ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
-      <div class="row" style="gap:8px; margin-bottom:8px">
-        <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
-        <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
+    <div class="pilot-collapse-hdr ${ui.adjOpen?'open':''}" data-projadj="${p.id}" style="margin-top:12px; background:var(--cream-2); border-radius:12px; padding:10px 14px">
+      <span class="small" style="font-weight:800">${ui.adjOpen?'Replier':'Ajuster ce projet'}</span><span class="chev">▾</span>
+    </div>
+    ${ui.adjOpen?`<div style="padding-top:12px">
+      ${(!paused && !aband)?`
+      <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px; margin-bottom:4px">Mensualité</div>
+      <div class="pilot-row" style="padding:0 0 8px">
+        <input type="range" class="mini-slider" min="0" max="${sliderMax(mens, Math.max(disponiblePourProjets(),100))}" step="1" value="${mens}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
+        <input type="number" class="pamt-input" style="width:74px" value="${Math.round(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
       </div>
-      <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
-      <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
+      <p class="small muted" data-etalabel="${p.id}" style="margin:0 0 4px">${reste>0?`Objectif atteint en ${projectEtaLabel(p)}`:''}</p>`:''}
+      <div class="row" style="gap:7px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
+        <button class="btn btn-soft btn-sm" data-projhist="${p.id}" style="flex:1; width:auto">Historique ${ui.histOpen?'▴':'▾'}</button>
+        ${!aband?`<button class="btn btn-soft btn-sm" data-projadd="${p.id}" style="flex:1; width:auto">+ Versement</button>`:''}
+        ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:36px; height:36px; flex-shrink:0; border:1px solid var(--line); border-radius:10px">⚙️</button>`:''}
+      </div>
+      ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
+        <div class="row" style="gap:8px; margin-bottom:8px">
+          <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
+          <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
+        </div>
+        <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
+        <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
+      </div>`:''}
+      ${ui.histOpen?historyRowsHtml(p.history):''}
     </div>`:''}
-    <div class="between" style="margin-top:12px; padding:8px 0; border-top:1px solid var(--line)">
-      <div class="row" style="gap:6px; cursor:pointer" data-projhist="${p.id}">
-        <span class="small link" style="font-weight:800">Historique des mouvements</span>
-        <span class="chev" style="transition:transform .2s; transform:rotate(${ui.histOpen?'180deg':'0deg'})">▾</span>
-      </div>
-      ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:28px; height:28px; flex-shrink:0">⚙️</button>`:''}
-    </div>
-    ${ui.histOpen?historyRowsHtml(p.history):''}
     </div>
   </div>`;
 }
@@ -2400,7 +2408,7 @@ function renderPilotage(){
 
   <div class="row" style="gap:10px; margin-top:16px">
     <button class="btn btn-soft" id="validBudget" style="flex:1; width:auto">Valider le budget du mois ✓</button>
-    ${S.pilotSnapshot?`<button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto">Annuler mes changements</button>`:''}
+    ${S.pilotSnapshot?`<button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto">Annuler nos changements</button>`:''}
   </div>
   </div>
   `;
@@ -2734,8 +2742,16 @@ function bindProjets(){
   const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
   const cat=$('#cagAddToggle'); if(cat) cat.onclick=openCagnotteAddLine;
   document.querySelectorAll('[data-caghist]').forEach(b=>b.addEventListener('click',()=>openEditCagnotteEntry(+b.dataset.caghist)));
+  document.querySelectorAll('[data-projadj]').forEach(b=>b.addEventListener('click',()=>{
+    const ui=projUIState(b.dataset.projadj); ui.adjOpen=!ui.adjOpen;
+    if(!ui.adjOpen){ ui.histOpen=false; ui.addOpen=false; } // on repart propre au prochain dépliage
+    go('projets');
+  }));
   document.querySelectorAll('[data-projhist]').forEach(b=>b.addEventListener('click',()=>{
     const ui=projUIState(b.dataset.projhist); ui.histOpen=!ui.histOpen; go('projets');
+  }));
+  document.querySelectorAll('[data-projadd]').forEach(b=>b.addEventListener('click',()=>{
+    const ui=projUIState(b.dataset.projadd); ui.addOpen=!ui.addOpen; go('projets');
   }));
   document.querySelectorAll('[data-projmenu]').forEach(b=>b.addEventListener('click',ev=>{
     ev.stopPropagation(); const p=S.projects.find(x=>x.id===b.dataset.projmenu); if(p) openProjectMenu(p);
@@ -2752,7 +2768,7 @@ function bindProjets(){
     if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
     p.saved+=amt; if(!p.history) p.history=[];
     p.history.unshift({date:iso(0), label:nameOf(ui.who), amount:+amt, who:ui.who});
-    projUI[id]={histOpen:true, addOpen:false, who:'lui', amt:''};
+    projUI[id]={adjOpen:true, histOpen:true, addOpen:false, who:'lui', amt:''};
     save(); go('projets'); toast("Versement ajouté ✓");
   }));
 }
@@ -2764,7 +2780,7 @@ function openProjectMenu(p){
     <button class="btn btn-ghost" id="pmPause" style="margin-bottom:8px; justify-content:flex-start">${paused?'▶ Reprendre':'⏸ Mettre en pause'}</button>
     <button class="btn btn-ghost" id="pmRealloc" style="margin-bottom:8px; justify-content:flex-start">↪ Réaffecter l'épargne</button>
     <button class="btn btn-ghost" id="pmDelete" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); justify-content:flex-start">🗑 Supprimer le projet</button>`, true);
-  $('#pmAddVers').onclick=()=>{ closeModal(); const ui=projUIState(p.id); ui.addOpen=true; go('projets'); };
+  $('#pmAddVers').onclick=()=>{ closeModal(); const ui=projUIState(p.id); ui.adjOpen=true; ui.addOpen=true; go('projets'); };
   $('#pmDate').onclick=()=>{ closeModal(); openEditProjectDay(p); };
   $('#pmPause').onclick=()=>{
     if(paused){
@@ -3376,9 +3392,9 @@ function onProjectMensInput(el){
   const remaining=Math.max(0,p.target-p.saved);
   if(remaining>0 && val>0) p.months=Math.max(1,Math.ceil(remaining/val));
   const amtLbl=card.querySelector(`[data-menslabel="${id}"]`); if(amtLbl) amtLbl.textContent=`${fmt0(val)} / mois`;
-  const etaLbl=card.querySelector(`[data-etalabel="${id}"]`); if(etaLbl) etaLbl.textContent = remaining>0?`Échéance ${projectEtaLabel(p)}`:'';
+  const etaLbl=card.querySelector(`[data-etalabel="${id}"]`); if(etaLbl) etaLbl.textContent = remaining>0?`Objectif atteint en ${projectEtaLabel(p)}`:'';
   const used=epargneProjetsMensuelle(), dispo=disponiblePourProjets();
-  const usedLbl=$('#vpUsedLbl'); if(usedLbl){ usedLbl.textContent=fmt(used); usedLbl.style.color=used>dispo?'var(--danger)':'var(--terra)'; }
+  const usedLbl=$('#vpUsedLbl'); if(usedLbl){ usedLbl.textContent=fmt0(used); usedLbl.style.color=used>dispo?'var(--danger)':'var(--terra)'; }
   const utilPct=$('#vpUtilPct'); if(utilPct) utilPct.textContent=`(utilisation ${dispo>0?Math.round(used/dispo*100):(used>0?100:0)}%)`;
   const defRow=$('#vpDeficit'); if(defRow) defRow.style.display = used>dispo?'block':'none';
   const defAmt=$('#vpDeficitAmt'); if(defAmt) defAmt.textContent=fmt0(Math.max(0,used-dispo));
