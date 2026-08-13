@@ -1475,7 +1475,7 @@ function renderProjets(){
   <div style="margin-top:18px; border-radius:26px; overflow:hidden; box-shadow:0 20px 40px -22px var(--terra)">
     <div style="background:var(--terra); color:#fff; padding:13px 18px; font-weight:800; font-size:13px; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; gap:8px">🎯 Vos projets <span id="vpUtilPct" style="opacity:.85; font-weight:700">(utilisation ${pctUse}%)</span></div>
     ${S.projectsFrozen?`<div class="panel-terra" style="padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
-      <span style="font-weight:800; font-size:13px; position:relative; z-index:1">✓ Mensualités validées</span>
+      <span style="font-weight:800; font-size:13px; position:relative; z-index:1">🔒 Mensualités validées</span>
       <span class="link" id="unfreezeProjects" style="color:#fff; text-decoration:underline; font-weight:700; position:relative; z-index:1">Modifier</span>
     </div>`:''}
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
@@ -1512,11 +1512,13 @@ function projectCard(p, rank){
   const reste=p.target-p.saved;
   const mens=p.mensuel||0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
+  const locked=S.projectsFrozen && !paused && !aband; // mensualité figée : pastille en coin, cf. le ruban "EN PAUSE"
   const ui=projUIState(p.id);
-  return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); position:relative; overflow:hidden" data-proj="${p.id}">
+  return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); position:relative; overflow:hidden; ${locked?'padding-top:16px':''}" data-proj="${p.id}">
     ${paused?`<div style="position:absolute; top:16px; right:-38px; transform:rotate(35deg); background:var(--muted); color:#fff; font-size:11px; font-weight:800; letter-spacing:.5px; padding:3px 42px; z-index:2; pointer-events:none">EN PAUSE</div>`:''}
+    ${locked?`<div title="Mensualité validée" style="position:absolute; top:10px; right:10px; width:24px; height:24px; border-radius:50%; background:var(--terra); color:#fff; display:grid; place-items:center; font-size:11px; box-shadow:0 3px 8px -2px rgba(80,40,20,.4); z-index:2">🔒</div>`:''}
     <div style="${aband?'opacity:.6':''} ${paused?'opacity:.55; filter:grayscale(.6)':''}">
-    <div class="between" style="margin-bottom:8px; gap:10px">
+    <div class="between" style="margin-bottom:8px; gap:10px; ${locked?'padding-right:26px':''}">
       <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name}</div>
       <b data-menslabel="${p.id}" style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
     </div>
