@@ -1376,23 +1376,19 @@ function renderHistorique(){
   // onglet Mouvements (les 2 cas où "répartir par catégorie" ne veut plus rien dire).
   const recap={};
   list.filter(x=>x.type==="depense"&&!x.prevision).forEach(x=>recap[x.cat]=(recap[x.cat]||0)+x.amount);
-  const anyFilterActive = histFilter.type!=='all' || histFilter.who!=='all' || histFilter.cat!=='all';
   const breakdownMoot = histFilter.type==='transfert' || histFilter.cat!=='all';
   const showCatBreakdown = !breakdownMoot && Object.keys(recap).length>0;
   const depTotal = Object.values(recap).reduce((a,b)=>a+b,0);
   const transferTotal = list.filter(x=>x.type==='transfert').reduce((s,x)=>s+x.amount,0);
-  // Un transfert n'est jamais une dépense (juste un mouvement d'argent entre budgets/cagnotte).
-  // Sur l'onglet "Tout", la liste peut mélanger les deux : on affiche alors les deux totaux
-  // séparément plutôt qu'un seul chiffre qui exclurait silencieusement ce qu'on voit en dessous.
-  let totalsLine='';
-  if(histFilter.type==='transfert'){ if(transferTotal>0) totalsLine=`Total transféré : ${fmt(transferTotal)}`; }
-  else if(histFilter.type==='depense'){ if(depTotal>0) totalsLine=`Total dépensé : ${fmt(depTotal)}`; }
-  else{
-    const parts=[];
-    if(depTotal>0) parts.push(`${fmt(depTotal)} dépensés`);
-    if(transferTotal>0) parts.push(`${fmt(transferTotal)} transférés`);
-    totalsLine=parts.join(' · ');
-  }
+  // Un transfert n'est jamais une dépense (juste un mouvement d'argent entre budgets/cagnotte),
+  // donc jamais compté dans le récapitulatif par catégorie ci-dessus. Sans cette ligne, son
+  // montant ne s'affichait NULLE PART dès qu'aucun filtre n'était actif (vue par défaut).
+  // On affiche donc le total transféré dès qu'il existe, et le total dépensé seulement quand
+  // le récapitulatif par catégorie n'est pas déjà là pour le montrer (pas de doublon).
+  const totalsParts=[];
+  if(depTotal>0 && !showCatBreakdown) totalsParts.push(`${fmt(depTotal)} dépensés`);
+  if(transferTotal>0) totalsParts.push(`${fmt(transferTotal)} transférés`);
+  const totalsLine=totalsParts.join(' · ');
   return `
   ${prevScreen==='moneydate'?`<div style="padding-top:10px"><button class="btn btn-ghost btn-sm" id="histBack">← Retour</button></div>`:''}
   <div style="padding-top:6px"><span class="pill">Historique</span>
@@ -1426,7 +1422,7 @@ function renderHistorique(){
 
   <div class="section-title">
     <span>${list.length} mouvement${list.length>1?'s':''}</span>
-    ${(anyFilterActive && totalsLine)?`<span style="text-transform:none; letter-spacing:0; font-family:var(--sans); color:var(--terra)">${totalsLine}</span>`:''}
+    ${totalsLine?`<span style="text-transform:none; letter-spacing:0; font-family:var(--sans); color:var(--terra)">${totalsLine}</span>`:''}
   </div>
   ${list.length? `<div class="card">${list.map(x=>histRow(x)).join('')}</div>` : `<div class="card empty"><div class="e">🍃</div><p>Aucun mouvement ce mois-ci avec ces filtres.</p></div>`}
   `;
