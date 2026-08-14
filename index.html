@@ -1196,6 +1196,7 @@ function renderVue(){
       <span class="pill" style="background:rgba(255,255,255,.9); color:${onTrack?'var(--ok)':'var(--terra-d)'}">${onTrack?'✅ En avance':'⚠️ En retard'}</span>
     </div>
     <div class="big">${fmt(remainingScoped)}</div>
+    <div style="font-size:11px; opacity:.75; margin-top:-6px">Catégories du quotidien — hors charges fixes et projets</div>
     <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${usedPct}%; background:#fff"></i></div>
     <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
       <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetScoped)} prévu</span>
