@@ -2315,6 +2315,20 @@ function recapVirementsCard(rep, totVerser, activeProjects){
     ${personBlock(nameOf('elle'), 'recapElleCommun', 'recapElleProjet', 'recapElleTotal', elleCommun, elleProjet)}
   </div>`;
 }
+// "Annuler nos changements" ne doit apparaître que si quelque chose a réellement changé
+// depuis le dernier budget validé — pas juste parce qu'on a cliqué sur "Modifier".
+function pilotHasChanges(){
+  const snap=S.pilotSnapshot; if(!snap) return false;
+  if(S.settings.mode!==snap.mode) return true;
+  if(S.settings.fixed.lui!==snap.fixed.lui || S.settings.fixed.elle!==snap.fixed.elle) return true;
+  if(S.settings.custom.lui!==snap.custom.lui || S.settings.custom.elle!==snap.custom.elle) return true;
+  if(S.settings.salaries.lui!==snap.salaries.lui || S.settings.salaries.elle!==snap.salaries.elle) return true;
+  if(S.charges.length!==snap.charges.length) return true;
+  if(snap.charges.some(sc=>{ const c=S.charges.find(x=>x.id===sc.id); return !c || c.amount!==sc.amount; })) return true;
+  if(S.categories.length!==snap.categories.length) return true;
+  if(snap.categories.some(sc=>{ const c=S.categories.find(x=>x.id===sc.id); return !c || c.budget!==sc.budget; })) return true;
+  return false;
+}
 function renderPilotage(){
   initPilotSim();
   const rep=repartition();
@@ -2423,15 +2437,16 @@ function renderPilotage(){
   ${recapVirementsCard(rep, totVerser, activeProjects)}
   <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.</p>
 
+  ${!S.pilotFrozen?`
   <div class="card-soft" style="margin-top:14px">
     <b class="small">📅 Date d'effet des changements</b>
-    <div class="seg" style="display:flex; width:100%; margin-top:8px; ${S.pilotFrozen?'opacity:.5; cursor:not-allowed':''}"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
+    <div class="seg" style="display:flex; width:100%; margin-top:8px"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
   </div>
 
   <div class="row" style="gap:10px; margin-top:16px">
     <button class="btn btn-soft" id="validBudget" style="flex:1; width:auto">Valider le budget du mois ✓</button>
-    ${S.pilotSnapshot?`<button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto">Annuler nos changements</button>`:''}
-  </div>
+    <button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto; display:${pilotHasChanges()?'':'none'}">Annuler nos changements</button>
+  </div>`:''}
   </div>
   `;
 }
@@ -3344,6 +3359,7 @@ function recalcPilotage(){
     fw.style.display=fixedShortfall>0?'block':'none';
     fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
   }
+  const cb=$('#cancelBudget'); if(cb) cb.style.display=pilotHasChanges()?'':'none';
 
   // Récapitulatif "Vue d'ensemble du mois"
   const totalMensuel=totalRevenuFoyer(), chgRecap=chargesCommunes(), catRecap=totalBudget();
