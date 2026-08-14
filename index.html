@@ -687,11 +687,27 @@ function totalBudget(){ return S.categories.reduce((s,c)=>s+c.budget,0); }
 // projets) — pas sur les dépenses réelles : c'est au couple de tenir son budget et d'ajuster
 // son idéal en fonction de cette réalité, pas l'inverse. Même source que "Détail classification".
 function realitySplit(){
-  const besoin=classAllocationTotal('besoin'), envie=classAllocationTotal('envie'),
-        invest=classAllocationTotal('invest'), protection=classAllocationTotal('protection');
-  const tot=besoin+envie+protection+invest||1;
-  const bP=Math.round(besoin/tot*100), eP=Math.round(envie/tot*100), pP=Math.round(protection/tot*100);
-  return {besoin:bP, envie:eP, protection:pP, invest:100-bP-eP-pP};
+  const vals={besoin:classAllocationTotal('besoin'), envie:classAllocationTotal('envie'),
+              invest:classAllocationTotal('invest'), protection:classAllocationTotal('protection')};
+  return roundPctTo100(vals);
+}
+// Arrondit 4 valeurs en % qui doivent sommer à exactement 100, sans jamais produire de
+// négatif (ce qui arrivait avant quand les 3 premiers arrondis "mangeaient" plus de 100%,
+// laissant le 4e — calculé par soustraction — passer sous 0). Méthode du plus grand reste :
+// on arrondit tout le monde à l'entier inférieur, puis on distribue les points manquants
+// aux valeurs dont la partie décimale perdue était la plus grande.
+function roundPctTo100(vals){
+  const keys=Object.keys(vals);
+  const rawTot=keys.reduce((s,k)=>s+vals[k],0);
+  if(rawTot<=0){ const zero={}; keys.forEach(k=>zero[k]=0); return zero; } // rien à répartir encore
+  const tot=rawTot;
+  const exact=keys.map(k=>vals[k]/tot*100);
+  const floors=exact.map(Math.floor);
+  let missing=100-floors.reduce((a,b)=>a+b,0);
+  const order=keys.map((k,i)=>i).sort((a,b)=>(exact[b]-floors[b])-(exact[a]-floors[a]));
+  const result={}; keys.forEach((k,i)=>result[k]=floors[i]);
+  for(let j=0;j<missing;j++) result[keys[order[j]]]++;
+  return result;
 }
 // Montants (€) derrière le camembert "Votre réalité", pour l'affichage en €.
 function realityEur(){
