@@ -1372,24 +1372,34 @@ function renderHistorique(){
   if(histFilter.who!=="all") list=list.filter(x=>x.who===histFilter.who);
   if(histFilter.cat!=="all") list=list.filter(x=>x.cat===histFilter.cat);
   list=list.sort((a,b)=>b.date.localeCompare(a.date));
-  // recap by cat — utile seulement en vue non filtrée par catégorie ; sinon un total suffit
+  // recap by cat — utile tant qu'on n'a pas déjà choisi une seule catégorie ou le seul
+  // onglet Mouvements (les 2 cas où "répartir par catégorie" ne veut plus rien dire).
   const recap={};
   list.filter(x=>x.type==="depense"&&!x.prevision).forEach(x=>recap[x.cat]=(recap[x.cat]||0)+x.amount);
   const anyFilterActive = histFilter.type!=='all' || histFilter.who!=='all' || histFilter.cat!=='all';
-  const showCatBreakdown = !anyFilterActive && Object.keys(recap).length>0;
+  const breakdownMoot = histFilter.type==='transfert' || histFilter.cat!=='all';
+  const showCatBreakdown = !breakdownMoot && Object.keys(recap).length>0;
   const depTotal = Object.values(recap).reduce((a,b)=>a+b,0);
   const transferTotal = list.filter(x=>x.type==='transfert').reduce((s,x)=>s+x.amount,0);
-  // Un transfert n'est jamais une dépense (juste un mouvement d'argent entre budgets/cagnotte) :
-  // le total dépensé l'exclut toujours ; l'onglet Mouvements affiche son propre total à part.
-  const totalLabel = histFilter.type==='transfert' ? 'Total transféré' : 'Total dépensé';
-  const totalValue = histFilter.type==='transfert' ? transferTotal : depTotal;
+  // Un transfert n'est jamais une dépense (juste un mouvement d'argent entre budgets/cagnotte).
+  // Sur l'onglet "Tout", la liste peut mélanger les deux : on affiche alors les deux totaux
+  // séparément plutôt qu'un seul chiffre qui exclurait silencieusement ce qu'on voit en dessous.
+  let totalsLine='';
+  if(histFilter.type==='transfert'){ if(transferTotal>0) totalsLine=`Total transféré : ${fmt(transferTotal)}`; }
+  else if(histFilter.type==='depense'){ if(depTotal>0) totalsLine=`Total dépensé : ${fmt(depTotal)}`; }
+  else{
+    const parts=[];
+    if(depTotal>0) parts.push(`${fmt(depTotal)} dépensés`);
+    if(transferTotal>0) parts.push(`${fmt(transferTotal)} transférés`);
+    totalsLine=parts.join(' · ');
+  }
   return `
   ${prevScreen==='moneydate'?`<div style="padding-top:10px"><button class="btn btn-ghost btn-sm" id="histBack">← Retour</button></div>`:''}
   <div style="padding-top:6px"><span class="pill">Historique</span>
     <div class="between" style="margin-top:10px">
       <button class="icon-btn" id="hPrev">‹</button>
       <h1 class="hero-title" style="font-size:24px; text-align:center; flex:1">${monthLabel(off)}</h1>
-      <button class="icon-btn" id="hNext" ${off>=0?'style="opacity:.3"':''}>›</button>
+      <button class="icon-btn" id="hNext">›</button>
     </div>
   </div>
 
@@ -1416,7 +1426,7 @@ function renderHistorique(){
 
   <div class="section-title">
     <span>${list.length} mouvement${list.length>1?'s':''}</span>
-    ${(anyFilterActive && totalValue>0)?`<span style="text-transform:none; letter-spacing:0; font-family:var(--sans); color:var(--terra)">${totalLabel} : ${fmt(totalValue)}</span>`:''}
+    ${(anyFilterActive && totalsLine)?`<span style="text-transform:none; letter-spacing:0; font-family:var(--sans); color:var(--terra)">${totalsLine}</span>`:''}
   </div>
   ${list.length? `<div class="card">${list.map(x=>histRow(x)).join('')}</div>` : `<div class="card empty"><div class="e">🍃</div><p>Aucun mouvement ce mois-ci avec ces filtres.</p></div>`}
   `;
@@ -2723,7 +2733,9 @@ function bindHistorique(){
   const hb=$('#histBack'); if(hb) hb.onclick=()=>go(prevScreen||'vue');
   const p=$('#hPrev'), n=$('#hNext');
   if(p) p.onclick=()=>{S.ui.histMonth--; save(); go('historique');};
-  if(n) n.onclick=()=>{ if(S.ui.histMonth<0){S.ui.histMonth++; save(); go('historique');} };
+  // Pas de plafond au mois courant : une dépense "prévision" peut être datée dans plusieurs
+  // mois, il faut pouvoir naviguer jusque-là pour la consulter (même logique que hPrev, sans limite).
+  if(n) n.onclick=()=>{S.ui.histMonth++; save(); go('historique');};
   document.querySelectorAll('[data-htype]').forEach(b=>b.addEventListener('click',()=>{histFilter.type=b.dataset.htype; go('historique');}));
   const w=$('#hWho'); if(w) w.onchange=ev=>{histFilter.who=ev.target.value; go('historique');};
   const c=$('#hCat'); if(c) c.onchange=ev=>{histFilter.cat=ev.target.value; go('historique');};
