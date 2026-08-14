@@ -162,6 +162,18 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .pilot-collapse-hdr .chev{transition:transform .2s; color:var(--muted); font-size:12px; margin-left:6px;}
 .pilot-collapse-hdr.open .chev{transform:rotate(180deg);}
 
+/* Budget validé : champs "lecture seule" — texte en pleine lisibilité, juste le curseur
+   et un léger fond qui disent "figé", au lieu d'assombrir toute la carte comme avant. */
+.pamt-input:disabled, .mini-slider:disabled, .rep-inline-col input:disabled{
+  cursor:not-allowed; opacity:1; -webkit-text-fill-color:currentColor;
+}
+.pamt-input:disabled{background:var(--cream-2); color:var(--ink-2);}
+.mini-slider:disabled{opacity:.6;}
+.mini-slider:disabled::-webkit-slider-thumb{cursor:not-allowed;}
+.rep-inline-col input:disabled{background:rgba(255,255,255,.12); color:#fff;}
+.rep-opt.ro{cursor:not-allowed;}
+.pers-pct-edit input:disabled, .pers-sal-edit input:disabled{cursor:not-allowed; opacity:1; -webkit-text-fill-color:var(--ink); color:var(--ink);}
+
 /* sync chip */
 .sync{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--ok); padding:5px 10px; border-radius:20px; background:color-mix(in srgb,var(--ok) 12%, transparent);}
 .sync .dot{width:7px;height:7px;border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
@@ -2166,16 +2178,17 @@ function projectEta(p, mensuel){
 function pilotRow(opts){
   // Ligne compacte réutilisée pour charges fixes / catégories : nom (+ classification), tag optionnel, input€ + slider.
   const {id,name,sub,cls,amount,max,onInputAttr,delAttr,editAttr}=opts;
+  const ro=S.pilotFrozen; // budget validé : montant et curseur en lecture seule, actions masquées
   return `<div class="pilot-row">
-    ${delAttr?`<button class="pdel" ${delAttr}>✕</button>`:''}
+    ${delAttr&&!ro?`<button class="pdel" ${delAttr}>✕</button>`:''}
     <div class="pmain">
       <div class="pnm-row">
         <span class="pnm">${name}${cls?` <span class="small muted" style="font-weight:500">(${cls})</span>`:''}${sub?` <span class="small muted" style="font-weight:500">${sub}</span>`:''}</span>
-        <input class="pamt-input" type="number" value="${Math.round(amount)}" data-id="${id}" ${onInputAttr}>
+        <input class="pamt-input" type="number" value="${Math.round(amount)}" data-id="${id}" ${onInputAttr} ${ro?'disabled':''}>
       </div>
-      <input type="range" class="mini-slider" min="0" max="${max}" step="1" value="${amount}" data-id="${id}" ${onInputAttr}>
+      <input type="range" class="mini-slider" min="0" max="${max}" step="1" value="${amount}" data-id="${id}" ${onInputAttr} ${ro?'disabled':''}>
     </div>
-    ${editAttr?`<button class="pdel" ${editAttr}>✎</button>`:''}
+    ${editAttr&&!ro?`<button class="pdel" ${editAttr}>✎</button>`:''}
   </div>`;
 }
 // Carte "personne" (salaire + charges perso + contribution) — affichée pour tous les
@@ -2196,12 +2209,12 @@ function personCard(who){
   if(mode!=='net'){
     const idPct=who==='lui'?'prepHim':'prepHer';
     const pctField = mode==='custom'
-      ? `<div class="pers-pct-edit"><input type="number" min="0" max="100" id="${idPct}" value="${rep[who]}"><span>%</span></div>`
+      ? `<div class="pers-pct-edit"><input type="number" min="0" max="100" id="${idPct}" value="${rep[who]}" ${S.pilotFrozen?'disabled':''}><span>%</span></div>`
       : `<span class="pct" id="persPct_${who}">${rep[who]}%</span>`;
     return `<div class="pers-card pers-compact">
       <div class="who">👤 ${escapeHtml(name)}</div>
       ${pctField}
-      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}"><span>€</span></div>
+      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
     </div>`;
   }
 
@@ -2214,7 +2227,7 @@ function personCard(who){
     </div>
     <div class="pers-sal-row">
       <b>Salaire</b>
-      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}"><span>€</span></div>
+      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
     </div>
     <div class="pers-perso-hdr" data-toggleperso="${who}" style="pointer-events:auto">
       <b>Total charges fixes perso <span class="chev">${open?'▲':'▼'}</span></b>
@@ -2227,7 +2240,7 @@ function personCard(who){
         onInputAttr:`data-charge oninput="onChargeInput(this)"`,
         delAttr:`data-delcharge="${c.id}"`
       })).join(''):'<p class="small muted" style="padding:8px 4px">Aucune charge perso pour le moment.</p>'}
-      <div style="padding:6px 4px 2px"><span class="link" data-addpersocharge="${who}">+ Ajouter une charge perso</span></div>
+      <div style="padding:6px 4px 2px"><span class="link" data-addpersocharge="${who}" style="${S.pilotFrozen?'opacity:.5; cursor:not-allowed':''}">+ Ajouter une charge perso</span></div>
     </div>
   </div>`;
 }
@@ -2319,16 +2332,16 @@ function renderPilotage(){
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   ${S.pilotFrozen?`<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
-    <span style="font-weight:800; font-size:13px; position:relative; z-index:1">✓ Budget validé</span>
+    <span style="font-weight:800; font-size:13px; position:relative; z-index:1">🔒 Budget validé</span>
     <span class="link" id="unfreezeBudget" style="color:#fff; text-decoration:underline; font-weight:700; position:relative; z-index:1">Modifier</span>
   </div>`:''}
-  <div style="${S.pilotFrozen?'pointer-events:none; opacity:.5; filter:grayscale(.4); transition:opacity .2s':''}">
+  <div>
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
   ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
     <div class="rep-inline" onclick="event.stopPropagation()">
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" id="fixLui" value="${S.settings.fixed.lui}"></div>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" id="fixLui" value="${S.settings.fixed.lui}" ${S.pilotFrozen?'disabled':''}></div>
       <span class="rep-inline-sep">+</span>
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" id="fixElle" value="${S.settings.fixed.elle}"></div>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" id="fixElle" value="${S.settings.fixed.elle}" ${S.pilotFrozen?'disabled':''}></div>
       <span class="rep-inline-unit">€/mois</span>
     </div>`,true)}
   ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires")}
@@ -2350,7 +2363,7 @@ function renderPilotage(){
       onInputAttr:`data-charge oninput="onChargeInput(this)"`,
       delAttr:`data-delcharge="${c.id}"`
     })).join(''):'<p class="small muted" style="padding:10px 4px">Aucune charge fixe commune pour le moment.</p>'; })()}
-    <div style="padding:8px 4px 2px"><span class="link" data-addpersocharge="commune">+ Ajouter une charge fixe</span></div>
+    <div style="padding:8px 4px 2px"><span class="link" data-addpersocharge="commune" style="${S.pilotFrozen?'opacity:.5; cursor:not-allowed':''}">+ Ajouter une charge fixe</span></div>
   </div>
 
   <div class="pilot-collapse-hdr ${pilotOpen.categories?'open':''}" id="catHdr" style="margin-top:18px; pointer-events:auto">
@@ -2364,7 +2377,7 @@ function renderPilotage(){
       onInputAttr:`data-cat oninput="onCatInput(this)"`,
       editAttr:`data-editcat="${c.id}"`
     })).join('')}
-    <div style="padding:8px 4px 2px"><span class="link" id="addCat">+ Ajouter une catégorie</span></div>
+    <div style="padding:8px 4px 2px"><span class="link" id="addCat" style="${S.pilotFrozen?'opacity:.5; cursor:not-allowed':''}">+ Ajouter une catégorie</span></div>
   </div>
 
   ${disponibleProjetsCard(reste)}
@@ -2412,7 +2425,7 @@ function renderPilotage(){
 
   <div class="card-soft" style="margin-top:14px">
     <b class="small">📅 Date d'effet des changements</b>
-    <div class="seg" style="display:flex; width:100%; margin-top:8px"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
+    <div class="seg" style="display:flex; width:100%; margin-top:8px; ${S.pilotFrozen?'opacity:.5; cursor:not-allowed':''}"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
   </div>
 
   <div class="row" style="gap:10px; margin-top:16px">
@@ -2424,7 +2437,8 @@ function renderPilotage(){
 }
 function repOption(id,title,sub,extra,first){
   const on=S.settings.mode===id;
-  return `<div class="rep-opt ${on?'on':''}" data-mode="${id}" ${first?'style="margin-top:0"':''}>
+  const ro=S.pilotFrozen;
+  return `<div class="rep-opt ${on?'on':''} ${ro?'ro':''}" data-mode="${id}" ${first?'style="margin-top:0"':''}>
     <div class="rep-opt-hdr">
       <div class="txt"><b>${title}</b><span>(${sub})</span></div>
       <div class="radio">${on?'<i></i>':''}</div>
@@ -3426,7 +3440,10 @@ function bindPilotage(){
   if(sl) sl.oninput=()=>syncSalary('lui',+sl.value);
   if(se) se.oninput=()=>syncSalary('elle',+se.value);
 
-  document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{S.settings.mode=b.dataset.mode; save(); go('pilotage');}));
+  document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
+    if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; }
+    S.settings.mode=b.dataset.mode; save(); go('pilotage');
+  }));
 
   // Mode "Personnalisé aux revenus" : les 2 % sont complémentaires (toujours 100 au total).
   const ph=$('#prepHim'), pr=$('#prepHer');
@@ -3455,8 +3472,14 @@ function bindPilotage(){
   document.querySelectorAll('[data-toggleperso]').forEach(b=>b.addEventListener('click',()=>{
     const who=b.dataset.toggleperso; pilotOpen['perso_'+who]=!pilotOpen['perso_'+who]; go('pilotage');
   }));
-  document.querySelectorAll('[data-addpersocharge]').forEach(b=>b.addEventListener('click',()=>openAddCharge(b.dataset.addpersocharge)));
-  const acat=$('#addCat'); if(acat) acat.onclick=()=>openEditCat(null);
+  document.querySelectorAll('[data-addpersocharge]').forEach(b=>b.addEventListener('click',()=>{
+    if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; }
+    openAddCharge(b.dataset.addpersocharge);
+  }));
+  const acat=$('#addCat'); if(acat) acat.onclick=()=>{
+    if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; }
+    openEditCat(null);
+  };
   document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat)));
   const apr=$('#addProjPilot'); if(apr) apr.onclick=()=>openEditProject(null,'pilotage');
   document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
@@ -3465,8 +3488,8 @@ function bindPilotage(){
   document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
 
   const en=$('#effNow'), enx=$('#effNext');
-  if(en) en.onclick=()=>{en.classList.add('on'); enx.classList.remove('on');};
-  if(enx) enx.onclick=()=>{enx.classList.add('on'); en.classList.remove('on');};
+  if(en) en.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } en.classList.add('on'); enx.classList.remove('on');};
+  if(enx) enx.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } enx.classList.add('on'); en.classList.remove('on');};
 
   const vb=$('#validBudget'); if(vb) vb.onclick=()=>{
     // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
