@@ -1097,9 +1097,11 @@ function renderSetupBanner(){
   // on ne doit jamais pouvoir croire une seule seconde que c'est son vrai budget.
   if(demoMode){
     el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2)">
-      <span>\ud83c\udfad Mode d\u00e9monstration \u2014 donn\u00e9es fictives</span>
+      <span>\ud83c\udfad Mode d\u00e9monstration</span>
+      <span class="cta" id="demoPilotage" style="margin-left:auto">Voir la r\u00e9partition \u2192</span>
       <span class="cta" id="demoQuit">Quitter \u2192</span>
     </div>`;
+    $('#demoPilotage').onclick=()=>go('pilotage');
     $('#demoQuit').onclick=()=>exitDemo();
     return;
   }
@@ -1205,21 +1207,25 @@ function buildDemoState(){
   const d=JSON.parse(JSON.stringify(DEFAULT));
   d.auth={loggedIn:true, email:"demo@budgetadeux.fr", name:"Camille", profile:"elle", coupleCode:"DEMO24", partnerLinked:true};
   d.partner={name:"Thomas", profile:"lui"};
+  // Modele calibre pour que Votre realite tombe pile sur 45/25/25/5% (id\u00e9al 40/30/20/10%),
+  // que les projets actifs consomment exactement 100% du disponible, et que le recap
+  // "Vue d'ensemble du mois" affiche un budget a l'equilibre (solde 0\u20ac) : charges (1130)
+  // + categories (770) + projets actifs (1100) = 3000\u20ac = fixed.lui + fixed.elle (50/50).
   d.settings={ salaries:{lui:2600, elle:2300}, mode:"fixe", custom:{lui:50,elle:50},
-               fixed:{lui:1450, elle:1350}, idealSplit:{besoin:50, envie:30, protection:0, invest:20} };
+               fixed:{lui:1500, elle:1500}, idealSplit:{besoin:40, envie:30, protection:10, invest:20} };
   d.charges=[
     {id:"d_loyer", name:"Loyer",                 amount:950, cls:"besoin",     scope:"commune"},
     {id:"d_elec",  name:"\u00c9lectricit\u00e9",     amount:85,  cls:"besoin",     scope:"commune"},
     {id:"d_eau",   name:"Eau",                   amount:35,  cls:"besoin",     scope:"commune"},
     {id:"d_net",   name:"Internet",              amount:30,  cls:"besoin",     scope:"commune"},
-    {id:"d_ass",   name:"Assurance habitation",  amount:22,  cls:"protection", scope:"commune"}
+    {id:"d_ass",   name:"Assurance habitation",  amount:30,  cls:"protection", scope:"commune"}
   ];
   d.categories=[
-    {id:"courses",    emoji:"\ud83d\uded2", name:"Courses",     budget:450, cls:"besoin"},
-    {id:"resto",      emoji:"\ud83c\udf7d\ufe0f", name:"Restaurants", budget:150, cls:"envie"},
-    {id:"loisirs",    emoji:"\ud83c\udf89", name:"Loisirs",     budget:120, cls:"envie"},
-    {id:"transports", emoji:"\ud83d\ude97", name:"Transports",  budget:90,  cls:"besoin"},
-    {id:"sante",      emoji:"\ud83d\udc8a", name:"Sant\u00e9",       budget:40,  cls:"protection"}
+    {id:"courses",    emoji:"\ud83d\uded2", name:"Courses",     budget:200, cls:"besoin"},
+    {id:"resto",      emoji:"\ud83c\udf7d\ufe0f", name:"Restaurants", budget:220, cls:"envie"},
+    {id:"loisirs",    emoji:"\ud83c\udf89", name:"Loisirs",     budget:180, cls:"envie"},
+    {id:"transports", emoji:"\ud83d\ude97", name:"Transports",  budget:50,  cls:"besoin"},
+    {id:"sante",      emoji:"\ud83d\udc8a", name:"Sant\u00e9",       budget:120, cls:"protection"}
   ];
   d.merchants=[
     {id:"m1", emoji:"\ud83d\uded2", name:"Carrefour", cat:"courses"},
@@ -1264,20 +1270,23 @@ function buildDemoState(){
   const iso0=new Date().toISOString().slice(0,10);
   // Un projet de chaque grande nature (envie / investissement) + un en pause : sans ca la
   // demo affichait "Investissement 0%" et la comparaison ideal vs realite tombait a plat.
+  // Mensualites (350 + 750 = 1100\u20ac) calibrees pour consommer exactement les 1100\u20ac
+  // disponibles pour les projets une fois charges et categories couvertes (100% d'utilisation).
   d.projects=[
     {id:"dp1", name:"Voyage Guadeloupe", emoji:"\ud83c\udfdd\ufe0f", target:3500, saved:1400, months:6, mensuel:350,
      day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif",
      history:[{date:iso0, label:"Thomas", amount:350, who:"lui"},{date:iso0, label:"Camille", amount:350, who:"elle"}]},
-    {id:"dp2", name:"\u00c9pargne de pr\u00e9caution", emoji:"\ud83d\udee1\ufe0f", target:6000, saved:2400, months:18, mensuel:200,
+    {id:"dp2", name:"Apport locatif", emoji:"\ud83c\udfe0", target:15000, saved:3750, months:15, mensuel:750,
      day:5, split:{lui:50,elle:50}, cls:"invest", status:"actif",
-     history:[{date:iso0, label:"Thomas", amount:200, who:"lui"}]},
+     history:[{date:iso0, label:"Thomas", amount:375, who:"lui"},{date:iso0, label:"Camille", amount:375, who:"elle"}]},
     {id:"dp3", name:"Nouvelle literie", emoji:"\ud83d\udecf\ufe0f", target:1500, saved:900, months:3, mensuel:200,
      day:5, split:{lui:50,elle:50}, cls:"besoin", status:"pause",
      history:[{date:iso0, label:"Camille", amount:300, who:"elle"}]}
   ];
-  d.cagnotte={ balance:340, history:[
+  d.cagnotte={ balance:490, history:[
     {date:iso0, label:"Remboursement mutuelle", amount:120},
-    {date:iso0, label:"Vente vide-grenier",     amount:220}
+    {date:iso0, label:"Vente vide-grenier",     amount:220},
+    {date:iso0, label:"Trop per\u00e7u \u00e9lectricit\u00e9", amount:150}
   ]};
 
   // Budget memorise mois par mois : sans ca, la ligne "budget" de la vue annuelle
@@ -3350,7 +3359,7 @@ function openAnnualMonthDetail(offset){
   const cls=spentByClsMonth(offset);
   const total=cls.besoin+cls.envie+cls.invest+cls.protection;
   const over=budget>0 && total>budget, diff=total-budget;
-  const row=(k,color,label)=>{ const v=cls[k]||0; if(v<=0 && total>0) return ''; const pct=total>0?Math.round(v/total*100):0;
+  const row=(k,color,label)=>{ const v=cls[k]||0; const pct=total>0?Math.round(v/total*100):0;
     return `<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><div class="row" style="gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:var(${color})"></span><b class="small">${label}</b><span class="small muted">${pct}%</span></div><b class="small mono-num">${fmt0(v)}</b></div>`;
   };
   openModal(`<h3>${monthLabel(offset)}</h3>
