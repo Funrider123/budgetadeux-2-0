@@ -180,6 +180,8 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 @keyframes blinkDeficit{0%,100%{transform:scale(1); box-shadow:0 0 0 0 rgba(200,85,59,0)}50%{transform:scale(1.035); box-shadow:0 0 0 7px rgba(200,85,59,.35)}}
 .blink-danger{animation:blinkDeficit .9s ease-in-out infinite;}
+@keyframes blinkCta{0%,100%{transform:scale(1); box-shadow:0 0 0 0 rgba(255,255,255,0)}50%{transform:scale(1.05); box-shadow:0 0 0 6px rgba(255,255,255,.35)}}
+.blink-cta{animation:blinkCta 1s ease-in-out infinite;}
 
 /* ---------- Generic ---------- */
 .pill{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--terra); background:var(--blush); padding:6px 13px; border-radius:20px;}
@@ -559,6 +561,9 @@ function migrate(s){
 // Mode demonstration : tout vit en memoire uniquement. Rien n'est ecrit dans le stockage
 // local (donc aucun risque d'ecraser le vrai budget de quelqu'un) ni pousse vers Supabase.
 let demoMode=false;
+// Le raccourci "Voir la répartition" du bandeau démo clignote tant qu'il n'a pas été
+// remarqué/cliqué au moins une fois pendant la session de démo en cours.
+let demoPilotageSeen=false;
 function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){} }
   document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
   schedulePush(); }
@@ -1098,10 +1103,10 @@ function renderSetupBanner(){
   if(demoMode){
     el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2)">
       <span>\ud83c\udfad Mode d\u00e9monstration</span>
-      <span class="cta" id="demoPilotage" style="margin-left:auto">Voir la r\u00e9partition \u2192</span>
+      <span class="cta ${demoPilotageSeen?'':'blink-cta'}" id="demoPilotage" style="margin-left:auto">Voir la r\u00e9partition \u2192</span>
       <span class="cta" id="demoQuit">Quitter \u2192</span>
     </div>`;
-    $('#demoPilotage').onclick=()=>go('pilotage');
+    $('#demoPilotage').onclick=()=>{ demoPilotageSeen=true; go('pilotage'); };
     $('#demoQuit').onclick=()=>exitDemo();
     return;
   }
@@ -1276,7 +1281,7 @@ function buildDemoState(){
     {id:"dp1", name:"Voyage Guadeloupe", emoji:"\ud83c\udfdd\ufe0f", target:3500, saved:1400, months:6, mensuel:350,
      day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif",
      history:[{date:iso0, label:"Thomas", amount:350, who:"lui"},{date:iso0, label:"Camille", amount:350, who:"elle"}]},
-    {id:"dp2", name:"Apport locatif", emoji:"\ud83c\udfe0", target:15000, saved:3750, months:15, mensuel:750,
+    {id:"dp2", name:"Constitution apport locatif", emoji:"\ud83c\udfe0", target:15000, saved:3750, months:15, mensuel:750,
      day:5, split:{lui:50,elle:50}, cls:"invest", status:"actif",
      history:[{date:iso0, label:"Thomas", amount:375, who:"lui"},{date:iso0, label:"Camille", amount:375, who:"elle"}]},
     {id:"dp3", name:"Nouvelle literie", emoji:"\ud83d\udecf\ufe0f", target:1500, saved:900, months:3, mensuel:200,
@@ -1310,6 +1315,7 @@ function buildDemoState(){
 }
 function enterDemo(){
   demoMode=true;
+  demoPilotageSeen=false;
   S=buildDemoState();
   pilotSim={}; projUI={}; analyseUI={}; annualSel=null;
   document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
@@ -1794,6 +1800,20 @@ function grandAllocationTotal(){ return ['besoin','envie','invest','protection']
    ============================================================ */
 let analyseUI={};
 let annualSel=null;    // catégorie suivie : 'cat:<id>'
+// Périmètre du bloc "Vue d'ensemble" (barres + détail mensuel) : 'with' inclut charges fixes
+// et mensualités de projets en plus des dépenses réelles (même périmètre que les camemberts
+// idéal/réalité, actif par défaut) ; 'without' ne montre que les dépenses réellement
+// enregistrées ce mois-ci (charges et projets ne sont jamais des transactions datées).
+let annualScope='with';
+function chargesByCls(cls){ return S.charges.filter(c=>c.cls===cls).reduce((s,c)=>s+c.amount,0); }
+function activeProjectsByCls(cls){ return S.projects.filter(p=>p.status==='actif' && p.cls===cls).reduce((s,p)=>s+(p.mensuel||0),0); }
+function clsMonthTotal(offset=0){
+  const base=spentByClsMonth(offset);
+  if(annualScope!=='with') return base;
+  const r={};
+  ['besoin','envie','invest','protection'].forEach(cls=>{ r[cls]=(base[cls]||0)+chargesByCls(cls)+activeProjectsByCls(cls); });
+  return r;
+}
 
 function annualMonthKey(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return `${d.getFullYear()}-${d.getMonth()}`; }
 // Instantané du budget de chaque catégorie pour le mois d'effet — mémorisé à chaque validation,
@@ -1815,11 +1835,12 @@ function posteActualAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? sp
 function posteBudgetAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? catBudgetAt(sel.slice(4), offset) : clsBudgetAt(sel, offset); }
 // VUE D'ENSEMBLE : barres empilées par nature (12 mois). Détail d'un mois au clic (modale).
 function annualOverviewHtml(){
-  const budget = totalBudget();
+  const withScope = annualScope==='with';
+  const budget = withScope ? grandAllocationTotal() : totalBudget();
   const months = [];
   for(let off=-11; off<=0; off++){
     const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+off);
-    const cls=spentByClsMonth(off);
+    const cls=clsMonthTotal(off);
     const total=cls.besoin+cls.envie+cls.invest+cls.protection;
     months.push({off, ini:MOIS[d.getMonth()][0], cls, total, cur:off===0, over:budget>0 && total>budget});
   }
@@ -1827,8 +1848,13 @@ function annualOverviewHtml(){
   const avg = withData.length ? withData.reduce((s,m)=>s+m.total,0)/withData.length : 0;
   const max = Math.max(...months.map(m=>m.total), budget, 1);
   const H = 176;
+  const scopeToggle = `<div class="seg" style="margin:10px 0 12px">
+    <button data-annualscope="with" class="${withScope?'on':''}" style="padding:8px 14px; font-size:12.5px">Vue complète</button>
+    <button data-annualscope="without" class="${!withScope?'on':''}" style="padding:8px 14px; font-size:12.5px">Dépenses seules</button>
+  </div>`;
   if(max<=1){
     return `<div class="card"><div class="between" style="margin-bottom:6px"><b class="small">Dépenses par nature</b></div>
+    ${scopeToggle}
     <p class="small muted" style="margin-top:10px; text-align:center; padding:20px 0">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p></div>`;
   }
   const seg = (v,color) => v>0 ? `<div style="height:${(v/max*H).toFixed(1)}px; background:var(${color}); margin-bottom:1.5px"></div>` : '';
@@ -1846,7 +1872,10 @@ function annualOverviewHtml(){
   const nOver = months.filter(m=>m.over).length;
   return `<div class="card">
     <div class="between" style="margin-bottom:2px"><b class="small">Dépenses par nature</b><span class="muted small">moy. ${fmt0(avg)}/mois</span></div>
-    <p class="small muted" style="margin:0 0 16px">Vos dépenses réelles de chaque mois et <b>sur quoi</b> elles sont parties — hors charges fixes et projets. La ligne = budget de vos catégories.</p>
+    ${scopeToggle}
+    <p class="small muted" style="margin:0 0 16px">${withScope
+      ? `Vos dépenses réelles <b>et</b> vos charges fixes et mensualités de projets — même périmètre que « Votre répartition actuelle ». La ligne = tout votre budget engagé.`
+      : `Vos dépenses réellement enregistrées chaque mois — hors charges fixes et projets. La ligne = budget de vos catégories.`}</p>
     <div style="position:relative">
       <div style="display:flex; align-items:flex-end; gap:5px; height:${H}px">${bars}</div>
       ${budget>0?`<div style="position:absolute; left:0; right:0; bottom:${budgetY.toFixed(1)}px; border-top:2px dashed var(--ink-2); opacity:.5; pointer-events:none"></div>
@@ -3344,6 +3373,7 @@ function bindAnalyse(){
   }));
   document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('analyse'); }));
   document.querySelectorAll('[data-anamonth]').forEach(b=>b.addEventListener('click',()=>openAnnualMonthDetail(+b.dataset.anamonth)));
+  document.querySelectorAll('[data-annualscope]').forEach(b=>b.addEventListener('click',()=>{ annualScope=b.dataset.annualscope; go('analyse'); }));
   document.querySelectorAll('[data-poste]').forEach(b=>b.addEventListener('click',()=>{ annualSel=b.dataset.poste; go('analyse'); }));
 }
 // Petit conseil (l'ancien "verdict"), désormais accessible via l'icône 💡.
@@ -3355,8 +3385,9 @@ function openAnalyseAdvice(){
 }
 // Détail d'un mois de la Vue d'ensemble (au clic sur une barre) : total vs budget + ventilation.
 function openAnnualMonthDetail(offset){
-  const budget=totalBudget();
-  const cls=spentByClsMonth(offset);
+  const withScope = annualScope==='with';
+  const budget = withScope ? grandAllocationTotal() : totalBudget();
+  const cls=clsMonthTotal(offset);
   const total=cls.besoin+cls.envie+cls.invest+cls.protection;
   const over=budget>0 && total>budget, diff=total-budget;
   const row=(k,color,label)=>{ const v=cls[k]||0; const pct=total>0?Math.round(v/total*100):0;
@@ -3364,7 +3395,7 @@ function openAnnualMonthDetail(offset){
   };
   openModal(`<h3>${monthLabel(offset)}</h3>
     <div class="card-soft" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px">
-      <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px">Total dépensé</div>
+      <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px">${withScope?'Total engagé':'Total dépensé'}</div>
       <div style="font-family:var(--serif); font-size:26px; color:${over?'var(--danger)':'var(--terra)'}">${fmt0(total)}</div></div>
       ${budget>0?`<div style="text-align:right"><div class="small muted">budget ${fmt0(budget)}</div>
       <span class="tag" style="margin-top:4px; color:${over?'var(--danger)':'var(--ok)'}; background:color-mix(in srgb,${over?'var(--danger)':'var(--ok)'} 14%,transparent)">${over?`+${fmt0(diff)}`:`${fmt0(Math.abs(diff))} sous le budget`}</span></div>`:''}
