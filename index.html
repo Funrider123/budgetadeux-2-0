@@ -843,6 +843,11 @@ async function ensureProfile(user){
       }
       await sb.from('profiles').insert({ user_id:uid, email:user.email, gender, name, couple_code:code });
       prof={ user_id:uid, email:user.email, gender, name, couple_code:code };
+      // Compte réellement neuf (première ligne "profiles" pour cet utilisateur) : on repart
+      // d'un état vierge plutôt que de garder ce qui traînait en local sur cet appareil —
+      // sinon un ancien compte testé/supprimé sur le même navigateur "fuite" dans le nouveau
+      // (et se retrouve même poussé vers le cloud si ce nouveau couple n'a encore aucune donnée).
+      S = JSON.parse(JSON.stringify(DEFAULT));
     }
   }
   if(!prof) throw new Error("no-profile");
