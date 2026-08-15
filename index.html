@@ -480,14 +480,17 @@ const DEFAULT = {
   projectsSnapshot:null, // dernier état validé des mensualités de projets pour "Annuler nos changements"
   settings:{
     salaries:{lui:0, elle:0},
-    // Contribution fixe par defaut : un couple qui demarre n'a pas envie de saisir ses
-    // salaires des la premiere seconde. Il ajuste ces 2 montants dans Simulation budgetaire.
-    mode:"fixe", custom:{lui:50, elle:50}, fixed:{lui:1000, elle:1000},
+    // Rien de préempli : le mode démo (accessible depuis l'écran de connexion) joue
+    // maintenant le rôle de "montrer à quoi ça ressemble rempli". Un vrai compte neuf
+    // part à 0 et s'appuie sur le bandeau "À configurer" pour guider la vraie saisie.
+    mode:"fixe", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0},
     idealSplit:{besoin:50, envie:30, protection:0, invest:20}
   },
+  // Catégories suggérées comme structure de départ (la plupart des couples en ont besoin),
+  // mais à 0€ — on ne devine pas un montant qui serait faux pour ce couple précis.
   categories:[
-    {id:"courses", emoji:"🛒", name:"Courses", budget:400, cls:"besoin"},
-    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:300, cls:"envie"}
+    {id:"courses", emoji:"🛒", name:"Courses", budget:0, cls:"besoin"},
+    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:0, cls:"envie"}
   ],
   // Squelette de charges fixes : les lignes que presque tout le monde a, a 0 EUR.
   // On ne devine pas les montants (ce serait faux), mais on dit quoi chercher — le vrai
@@ -501,12 +504,9 @@ const DEFAULT = {
   merchants:[],
   expenses:[],
   cagnotte:{ balance:0, history:[] },
-  // mensuel/history explicites : DEFAULT ne passe pas par migrate(), donc sans eux les
-  // projets d'un compte neuf s'affichaient a "0 EUR / mois" au lieu de leur vraie mensualite.
-  projects:[
-    {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3500, saved:0, months:10, mensuel:350, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif", history:[]},
-    {id:"p2", name:"Nouvelle literie", emoji:"🛏️", target:1500, saved:0, months:6, mensuel:250, day:5, split:{lui:50,elle:50}, cls:"besoin", status:"actif", history:[]}
-  ],
+  // Aucun projet fictif préempli — voir le commentaire sur "settings" plus haut. Le couple
+  // ajoute ses vrais projets depuis "Vos projets".
+  projects:[],
   moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
   budgetHistory:[],
   budgetTimeline:{} // instantané du budget de chaque catégorie par mois (clé "YYYY-M"), pour la vue annuelle
@@ -1119,7 +1119,9 @@ function renderSetupBanner(){
   }
   if(current==='pilotage'){ el.innerHTML=''; return; }
   if(needsSetup()){
-    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
+    // Le tout premier réglage d'un compte neuf : on le fait clignoter, c'est la base sans
+    // laquelle rien d'autre dans l'app n'a de sens (pas de budget = pas de suivi possible).
+    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn">
       <span>⚙️ À configurer : revenus, catégories...</span>
       <span class="cta">Configurer →</span>
     </div>`;
@@ -1431,7 +1433,7 @@ function renderVue(){
 
   <div class="section-title">Budgets par catégorie <span class="link" data-go="historique">Détail →</span></div>
   <div class="card">
-    ${(()=>{ const weekExp = weekly ? expensesInWeek() : null; return S.categories.filter(c=>c.budget>0).map(c=>{
+    ${S.categories.every(c=>c.budget<=0) ? `<div class="empty"><div class="e">🧭</div><p>Vos catégories n'ont pas encore de budget — <span class="link" data-go="pilotage">à définir dans Simulation budgétaire</span>.</p></div>` : (()=>{ const weekExp = weekly ? expensesInWeek() : null; return S.categories.filter(c=>c.budget>0).map(c=>{
       const budgetC = weekly ? c.budget*(w.weekDays/w.daysInMonth) : c.budget;
       const sp = weekly ? weekExp.filter(x=>x.cat===c.id).reduce((s,x)=>s+x.amount,0) : spentByCat(c.id);
       const pct = budgetC>0 ? Math.round(sp/budgetC*100) : 0;
