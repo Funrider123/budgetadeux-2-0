@@ -1119,7 +1119,9 @@ function renderSetupBanner(){
   }
   if(current==='pilotage'){ el.innerHTML=''; return; }
   if(needsSetup()){
-    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
+    // Le tout premier réglage d'un compte neuf : on le fait clignoter, c'est la base sans
+    // laquelle rien d'autre dans l'app n'a de sens (pas de budget = pas de suivi possible).
+    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn">
       <span>⚙️ À configurer : revenus, catégories...</span>
       <span class="cta">Configurer →</span>
     </div>`;
