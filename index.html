@@ -476,20 +476,32 @@ const DEFAULT = {
   projectsSnapshot:null, // dernier état validé des mensualités de projets pour "Annuler nos changements"
   settings:{
     salaries:{lui:0, elle:0},
-    mode:"salaire", custom:{lui:50, elle:50}, fixed:{lui:0, elle:0},
+    // Contribution fixe par defaut : un couple qui demarre n'a pas envie de saisir ses
+    // salaires des la premiere seconde. Il ajuste ces 2 montants dans Simulation budgetaire.
+    mode:"fixe", custom:{lui:50, elle:50}, fixed:{lui:1000, elle:1000},
     idealSplit:{besoin:50, envie:30, protection:0, invest:20}
   },
   categories:[
-    {id:"courses", emoji:"🛒", name:"Courses", budget:300, cls:"besoin"},
-    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:100, cls:"envie"}
+    {id:"courses", emoji:"🛒", name:"Courses", budget:400, cls:"besoin"},
+    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:300, cls:"envie"}
   ],
-  charges:[],
+  // Squelette de charges fixes : les lignes que presque tout le monde a, a 0 EUR.
+  // On ne devine pas les montants (ce serait faux), mais on dit quoi chercher — le vrai
+  // blocage d'un debutant n'est pas l'ecran vide, c'est "je ne sais pas quoi lister".
+  charges:[
+    {id:"c_loyer", name:"Loyer", amount:0, cls:"besoin", scope:"commune"},
+    {id:"c_elec",  name:"\u00c9lectricit\u00e9", amount:0, cls:"besoin", scope:"commune"},
+    {id:"c_eau",   name:"Eau", amount:0, cls:"besoin", scope:"commune"},
+    {id:"c_net",   name:"Internet", amount:0, cls:"besoin", scope:"commune"}
+  ],
   merchants:[],
   expenses:[],
   cagnotte:{ balance:0, history:[] },
+  // mensuel/history explicites : DEFAULT ne passe pas par migrate(), donc sans eux les
+  // projets d'un compte neuf s'affichaient a "0 EUR / mois" au lieu de leur vraie mensualite.
   projects:[
-    {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3000, saved:0, months:10, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif"},
-    {id:"p2", name:"Apport maison", emoji:"🏡", target:20000, saved:0, months:36, day:2, split:{lui:50,elle:50}, cls:"invest", status:"actif"}
+    {id:"p1", name:"Voyage Guadeloupe", emoji:"🏝️", target:3500, saved:0, months:10, mensuel:350, day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif", history:[]},
+    {id:"p2", name:"Nouvelle literie", emoji:"🛏️", target:1500, saved:0, months:6, mensuel:250, day:5, split:{lui:50,elle:50}, cls:"besoin", status:"actif", history:[]}
   ],
   moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
   budgetHistory:[],
@@ -544,7 +556,10 @@ function migrate(s){
   if(!s.budgetTimeline) s.budgetTimeline = {};
   return s;
 }
-function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){}
+// Mode demonstration : tout vit en memoire uniquement. Rien n'est ecrit dans le stockage
+// local (donc aucun risque d'ecraser le vrai budget de quelqu'un) ni pousse vers Supabase.
+let demoMode=false;
+function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){} }
   document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
   schedulePush(); }
 
@@ -557,7 +572,7 @@ function save(){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_)
 const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
-function syncActive(){ return !!(S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
+function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
 function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
 // On ne signale une erreur de synchro qu'une fois par session, pour ne pas spammer.
@@ -894,7 +909,13 @@ function authShell(inner, activeTab){
       <div class="brand">Budget à Deux <span class="v">2.0</span></div>
       <p class="quote" style="margin-top:4px">« L'argent n'est qu'un outil pour<br>construire la vie que nous aimons ensemble. »</p>
       ${tabs}
-    </div>${inner}`;
+    </div>${inner}
+    ${activeTab?`<div class="card fade" style="margin-top:12px; text-align:center; background:linear-gradient(135deg,var(--blush),var(--card))">
+      <div style="font-size:24px; line-height:1">\ud83c\udfad</div>
+      <div style="font-family:var(--serif); font-size:16px; font-weight:600; margin:6px 0 4px">Juste voir \u00e0 quoi \u00e7a ressemble ?</div>
+      <p class="muted small" style="margin-bottom:12px">Un couple d'exemple avec 12 mois d'historique. Sans inscription, rien n'est enregistr\u00e9.</p>
+      <button class="btn btn-soft" id="tryDemo" style="width:100%">Essayer la d\u00e9monstration \u2192</button>
+    </div>`:''}`;
 }
 function authLogin(){
   return authShell(`<div class="card fade">
@@ -996,6 +1017,7 @@ function bindAuth(){
   on('tabSignup','click',()=>{authStep="signup"; renderAuth();});
   on('goForgot','click',()=>{authStep="forgot"; renderAuth();});
   on('goLegalSignup','click',()=>openLegal());
+  on('tryDemo','click',()=>enterDemo());
   busy('doLogin','Connexion…',async ()=>{
     const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
     if(!em||!pw){ toast("Email et mot de passe requis","✉️"); return; }
@@ -1062,9 +1084,25 @@ function enterApp(){
   $('#bugBtn').onclick=()=>openBugModal();
   initSync();
 }
-function needsSetup(){ return !S.settings.salaries.lui && !S.settings.salaries.elle; }
+function needsSetup(){
+  // En mode "contribution fixe" les salaires ne servent pas : c'est le montant verse par
+  // chacun qui fait foi. Sans ca, un compte neuf (qui demarre en mode fixe) affichait
+  // "a configurer" alors que tout etait deja renseigne.
+  if(S.settings.mode==='fixe') return !((S.settings.fixed.lui||0) || (S.settings.fixed.elle||0));
+  return !S.settings.salaries.lui && !S.settings.salaries.elle;
+}
 function renderSetupBanner(){
   const el=$('#setupBanner'); if(!el) return;
+  // Le bandeau demo passe avant tout le reste et sur TOUS les ecrans (pilotage compris) :
+  // on ne doit jamais pouvoir croire une seule seconde que c'est son vrai budget.
+  if(demoMode){
+    el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2)">
+      <span>\ud83c\udfad Mode d\u00e9monstration \u2014 donn\u00e9es fictives</span>
+      <span class="cta" id="demoQuit">Quitter \u2192</span>
+    </div>`;
+    $('#demoQuit').onclick=()=>exitDemo();
+    return;
+  }
   if(current==='pilotage'){ el.innerHTML=''; return; }
   if(needsSetup()){
     el.innerHTML=`<div class="setup-banner" id="setupBannerBtn">
@@ -1151,6 +1189,128 @@ function openProjectionInfo(){
     <p class="small muted" style="line-height:1.6">C'est une projection simple : votre dépense moyenne par jour depuis le début de la période, multipliée par le nombre de jours total.</p>
     <p class="small muted" style="line-height:1.6; margin-top:10px">Elle suppose que vous continuez au même rythme jusqu'au bout — donc plus fiable à partir de la 2ᵉ semaine. Au tout début, une seule grosse dépense (ou son absence) peut fortement la fausser.</p>`, true);
 }
+/* ============================================================
+   MODE DEMONSTRATION
+   Un couple fictif complet (12 mois d'historique) pour decouvrir l'app
+   sans inscription. Tout est genere en memoire : rien n'est enregistre,
+   rien n'est synchronise. On en sort en rechargeant la page.
+   ============================================================ */
+function buildDemoState(){
+  // Generateur pseudo-aleatoire a graine fixe : la demo est identique a chaque
+  // ouverture (plus simple a montrer, a filmer et a comparer d'une fois sur l'autre).
+  let seed=20260812;
+  const rnd=()=>{ seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296; };
+  const pick=arr=>arr[Math.floor(rnd()*arr.length)];
+
+  const d=JSON.parse(JSON.stringify(DEFAULT));
+  d.auth={loggedIn:true, email:"demo@budgetadeux.fr", name:"Camille", profile:"elle", coupleCode:"DEMO24", partnerLinked:true};
+  d.partner={name:"Thomas", profile:"lui"};
+  d.settings={ salaries:{lui:2600, elle:2300}, mode:"fixe", custom:{lui:50,elle:50},
+               fixed:{lui:1450, elle:1350}, idealSplit:{besoin:50, envie:30, protection:0, invest:20} };
+  d.charges=[
+    {id:"d_loyer", name:"Loyer",                 amount:950, cls:"besoin",     scope:"commune"},
+    {id:"d_elec",  name:"\u00c9lectricit\u00e9",     amount:85,  cls:"besoin",     scope:"commune"},
+    {id:"d_eau",   name:"Eau",                   amount:35,  cls:"besoin",     scope:"commune"},
+    {id:"d_net",   name:"Internet",              amount:30,  cls:"besoin",     scope:"commune"},
+    {id:"d_ass",   name:"Assurance habitation",  amount:22,  cls:"protection", scope:"commune"}
+  ];
+  d.categories=[
+    {id:"courses",    emoji:"\ud83d\uded2", name:"Courses",     budget:450, cls:"besoin"},
+    {id:"resto",      emoji:"\ud83c\udf7d\ufe0f", name:"Restaurants", budget:150, cls:"envie"},
+    {id:"loisirs",    emoji:"\ud83c\udf89", name:"Loisirs",     budget:120, cls:"envie"},
+    {id:"transports", emoji:"\ud83d\ude97", name:"Transports",  budget:90,  cls:"besoin"},
+    {id:"sante",      emoji:"\ud83d\udc8a", name:"Sant\u00e9",       budget:40,  cls:"protection"}
+  ];
+  d.merchants=[
+    {id:"m1", emoji:"\ud83d\uded2", name:"Carrefour", cat:"courses"},
+    {id:"m2", emoji:"\ud83e\uddc0", name:"Biocoop",   cat:"courses"},
+    {id:"m3", emoji:"\ud83c\udf7d\ufe0f", name:"Le Bistrot", cat:"resto"}
+  ];
+
+  // 12 mois de depenses credibles : chaque categorie oscille autour de son budget,
+  // avec quelques mois volontairement au-dessus pour que les alertes soient visibles.
+  const LABELS={
+    courses:["Carrefour","Lidl","Biocoop","March\u00e9","Monoprix"],
+    resto:["Le Bistrot","Pizzeria","Brunch","Sushi","Cr\u00eaperie"],
+    loisirs:["Cin\u00e9ma","Concert","Piscine","Livres","Mus\u00e9e"],
+    transports:["Essence","P\u00e9age","Train","Bus"],
+    sante:["Pharmacie","M\u00e9decin","Opticien"]
+  };
+  const exp=[];
+  for(let off=-11; off<=0; off++){
+    const base=new Date(); base.setDate(1); base.setMonth(base.getMonth()+off);
+    const dim=new Date(base.getFullYear(), base.getMonth()+1, 0).getDate();
+    const maxDay = off===0 ? Math.min(new Date().getDate(), dim) : dim;
+    d.categories.forEach(c=>{
+      // facteur 0.72 -> 1.18 : la plupart des mois tiennent le budget, certains debordent.
+      // Le mois en cours est proratise au nombre de jours ecoules, sinon la demo s'ouvre
+      // sur un mois deja "depense a 100%" alors qu'on n'en est qu'a la moitie.
+      const factor=(0.72+rnd()*0.46) * (off===0 ? maxDay/dim : 1);
+      let rest=Math.round(c.budget*factor);
+      const n=2+Math.floor(rnd()*3);
+      for(let i=0;i<n && rest>0;i++){
+        const amt = (i===n-1) ? rest : Math.max(5, Math.round(rest*(0.25+rnd()*0.45)));
+        rest-=amt;
+        const day=1+Math.floor(rnd()*maxDay);
+        const dt=new Date(base.getFullYear(), base.getMonth(), Math.min(day,maxDay));
+        exp.push({ id:"dx"+exp.length, type:"depense", prevision:false, amount:amt,
+                   cat:c.id, who: rnd()<0.5?"lui":"elle", desc:pick(LABELS[c.id]||["D\u00e9pense"]),
+                   date:dt.toISOString().slice(0,10), note:"" });
+      }
+    });
+  }
+  d.expenses=exp;
+
+  const iso0=new Date().toISOString().slice(0,10);
+  // Un projet de chaque grande nature (envie / investissement) + un en pause : sans ca la
+  // demo affichait "Investissement 0%" et la comparaison ideal vs realite tombait a plat.
+  d.projects=[
+    {id:"dp1", name:"Voyage Guadeloupe", emoji:"\ud83c\udfdd\ufe0f", target:3500, saved:1400, months:6, mensuel:350,
+     day:5, split:{lui:50,elle:50}, cls:"envie", status:"actif",
+     history:[{date:iso0, label:"Thomas", amount:350, who:"lui"},{date:iso0, label:"Camille", amount:350, who:"elle"}]},
+    {id:"dp2", name:"\u00c9pargne de pr\u00e9caution", emoji:"\ud83d\udee1\ufe0f", target:6000, saved:2400, months:18, mensuel:200,
+     day:5, split:{lui:50,elle:50}, cls:"invest", status:"actif",
+     history:[{date:iso0, label:"Thomas", amount:200, who:"lui"}]},
+    {id:"dp3", name:"Nouvelle literie", emoji:"\ud83d\udecf\ufe0f", target:1500, saved:900, months:3, mensuel:200,
+     day:5, split:{lui:50,elle:50}, cls:"besoin", status:"pause",
+     history:[{date:iso0, label:"Camille", amount:300, who:"elle"}]}
+  ];
+  d.cagnotte={ balance:340, history:[
+    {date:iso0, label:"Remboursement mutuelle", amount:120},
+    {date:iso0, label:"Vente vide-grenier",     amount:220}
+  ]};
+
+  // Budget memorise mois par mois : sans ca, la ligne "budget" de la vue annuelle
+  // serait plate et l'ecran Analyse perdrait tout son interet en demo.
+  d.budgetTimeline={};
+  for(let off=-11; off<=0; off++){
+    const dt=new Date(); dt.setDate(1); dt.setMonth(dt.getMonth()+off);
+    const snap={}; d.categories.forEach(c=>{ snap[c.id]= off<-6 ? Math.round(c.budget*0.9) : c.budget; });
+    d.budgetTimeline[dt.getFullYear()+"-"+dt.getMonth()]=snap;
+  }
+  const nd=new Date(); nd.setDate(nd.getDate()+9);
+  d.moneyDate={ doneSteps:[], nextDate:nd.toISOString().slice(0,10), notes:[], surplusDecisions:{}, checklist:{} };
+  d.pilotFrozen=true; d.projectsFrozen=true;
+  d.pilotSnapshot={ salaries:{...d.settings.salaries}, mode:d.settings.mode, custom:{...d.settings.custom},
+                    fixed:{...d.settings.fixed}, charges:d.charges.map(c=>({id:c.id, amount:c.amount})),
+                    categories:d.categories.map(c=>({id:c.id, budget:c.budget})) };
+  d.projectsSnapshot={}; d.projects.forEach(p=>{ d.projectsSnapshot[p.id]={mensuel:p.mensuel, months:p.months}; });
+  d.budgetHistory=[{date:iso0, label:"Budget valid\u00e9 pour "+monthLabel(0), effect:"immediate"}];
+  d.ui={ dark:S.ui.dark, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true };
+  return d;
+}
+function enterDemo(){
+  demoMode=true;
+  S=buildDemoState();
+  pilotSim={}; projUI={}; analyseUI={}; annualSel=null;
+  document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
+  enterApp();
+  toast("Mode d\u00e9monstration \u2014 rien n'est enregistr\u00e9","\ud83c\udfad");
+}
+// Rien n'ayant ete enregistre, un simple rechargement restaure l'etat reel de l'appareil
+// (session existante ou ecran de connexion).
+function exitDemo(){ location.reload(); }
+
 /* ============================================================
    1 · VUE (Dashboard)
    ============================================================ */
@@ -2516,10 +2676,15 @@ function openProfile(){
       <button class="menu-row" id="pmLegal"><div class="mi">📄</div><div class="grow"><div class="nm">Mentions légales & confidentialité</div><div class="sub">Données, RGPD, CGU</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`, true);
-  $('#pmLogout').onclick=()=>{ closeModal(); openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
+  $('#pmLogout').onclick=()=>{ closeModal();
+    // En demo il n'y a aucune session Supabase a fermer : on recharge simplement.
+    if(demoMode){ exitDemo(); return; }
+    openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
   $('#pmExport').onclick=()=>{ closeModal(); exportMyData(); };
   $('#pmLegal').onclick=()=>{ closeModal(); openLegal(); };
-  $('#pmDelete').onclick=()=>{ closeModal(); openDeleteAccount(); };
+  $('#pmDelete').onclick=()=>{ closeModal();
+    if(demoMode){ toast("Indisponible en d\u00e9monstration \u2014 aucun compte n'existe","\ud83c\udfad"); return; }
+    openDeleteAccount(); };
 }
 
 // Export RGPD (portabilité) : toutes les données de l'utilisateur + du couple,
