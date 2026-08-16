@@ -473,7 +473,7 @@ const PHOTO = "assets/objectif-cible.jpg";
 const DEFAULT = {
   auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
   partner:{ name:"Marc", profile:"lui" },
-  ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true, welcomeSeen:false },
+  ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true, welcomeSeen:false, natureHelpSeen:false },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   projectsFrozen:false, // idem mais pour les mensualités de projets ajustées depuis "Vos projets"
   pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler nos changements"
@@ -527,6 +527,7 @@ function migrate(s){
   // ensureProfile) : un compte déjà existant qui n'a pas encore ce champ ne doit pas le voir
   // apparaître rétroactivement.
   if(s.ui.welcomeSeen===undefined) s.ui.welcomeSeen = true;
+  if(s.ui.natureHelpSeen===undefined) s.ui.natureHelpSeen = true;
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
   if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
@@ -1099,7 +1100,13 @@ function enterApp(){
   renderAppbar(); renderSetupBanner(); renderTab(); go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
   initSync();
-  if(!demoMode && !S.ui.welcomeSeen) openWelcomeModal();
+  // Deux pop-ups au premier arrivage, jamais empilés : bienvenue d'abord, puis (au tour
+  // suivant — soit tout de suite si on reste sur son compte, soit au retour de la démo)
+  // l'explication des 4 natures, avec un rappel qu'on la retrouve dans le menu.
+  if(!demoMode){
+    if(!S.ui.welcomeSeen) openWelcomeModal();
+    else if(!S.ui.natureHelpSeen){ S.ui.natureHelpSeen=true; save(); openNatureHelp(true); }
+  }
 }
 // Message de bienvenue, affiché une seule fois au tout premier arrivage sur un compte neuf
 // (voir DEFAULT.ui.welcomeSeen + le reset dans ensureProfile). Propose la démo sans favoriser
@@ -1117,7 +1124,10 @@ function openWelcomeModal(){
       <button class="btn btn-ghost btn-sm" id="welcomeClose" style="flex:1">Non merci, j'ai la possibilité de la consulter plus tard dans le menu</button>
     </div>`, true);
   $('#welcomeDemo').onclick=()=>{ S.ui.welcomeSeen=true; save(); closeModal(); enterDemo(); };
-  $('#welcomeClose').onclick=()=>{ S.ui.welcomeSeen=true; save(); closeModal(); };
+  $('#welcomeClose').onclick=()=>{
+    S.ui.welcomeSeen=true; save(); closeModal();
+    if(!S.ui.natureHelpSeen) setTimeout(()=>{ S.ui.natureHelpSeen=true; save(); openNatureHelp(true); }, 260);
+  };
 }
 function needsSetup(){
   // En mode "contribution fixe" les salaires ne servent pas : c'est le montant verse par
@@ -1837,7 +1847,7 @@ function classAllocationTotal(cls){ return classAllocationItems(cls).reduce((s,x
 function grandAllocationTotal(){ return ['besoin','envie','invest','protection'].reduce((s,cls)=>s+classAllocationTotal(cls),0); }
 
 /* ============================================================
-   5 · ANALYSE (50/30/20)
+   5 · ANALYSE
    ============================================================ */
 let analyseUI={};
 let annualSel=null;    // catégorie suivie : 'cat:<id>'
@@ -2750,10 +2760,12 @@ function openMenu(){
       <button class="menu-row" data-menu="moneydate"><div class="mi" style="background:var(--blush)">❤️</div><div class="grow"><div class="nm">Money Date</div><div class="sub">Votre bilan mensuel à deux</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="reglages"><div class="mi">⚙️</div><div class="grow"><div class="nm">Réglages</div><div class="sub">Préférences, synchro, données</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Simulation et validation budgétaire</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
+      <button class="menu-row" id="menuNatureHelp"><div class="mi">❓</div><div class="grow"><div class="nm">Comprendre les 4 natures</div><div class="sub">Besoin, Envie, Protection, Investissement</div></div><span class="chev">→</span></button>
       ${!demoMode?`<button class="menu-row" id="menuDemo"><div class="mi" style="background:var(--blush)">🎭</div><div class="grow"><div class="nm">Essayer la démonstration</div><div class="sub">Un couple d'exemple avec 12 mois d'historique</div></div><span class="chev">→</span></button>`:''}
     </div>`, true);
   document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>{ closeModal(); if(b.dataset.menu==='moneydate'){mdStep=0;} go(b.dataset.menu); }));
   const md=$('#menuDemo'); if(md) md.onclick=()=>{ closeModal(); enterDemo(); };
+  $('#menuNatureHelp').onclick=()=>openNatureHelp();
 }
 function openProfile(){
   openModal(`<div class="row" style="gap:12px; align-items:center">
@@ -3443,9 +3455,11 @@ function openAnalyseAdvice(){
     <p class="small muted" style="line-height:1.6">${verdictText(real,ideal)}</p>`, true);
 }
 // Explique les 4 natures (Besoin/Envie/Protection/Investissement) et pourquoi l'épargne
-// n'en est pas une 5ᵉ — rappelée depuis les 4 endroits où le couple classe ou consulte
-// une nature (Analyse, Votre idéal, Money Date, et les formulaires charge/catégorie/projet).
-function openNatureHelp(){
+// n'en est pas une 5ᵉ — rappelée depuis les points d'entrée où le couple classe ou consulte
+// une nature (Analyse, Votre idéal, Money Date, menu, et les formulaires charge/catégorie/projet).
+// showMenuHint : uniquement pour l'ouverture automatique au premier arrivage, pour indiquer
+// où retrouver cette explication ensuite (sinon redondant à chaque ouverture manuelle).
+function openNatureHelp(showMenuHint){
   const row=(icon,name,text)=>`<div style="background:var(--card); border:1px solid var(--line); border-radius:12px 12px 12px 3px; padding:10px 13px; margin-bottom:8px">
     <b class="small">${icon} ${name} :</b>
     <p class="small muted" style="margin-top:2px; line-height:1.5">${text}</p>
@@ -3457,8 +3471,9 @@ function openNatureHelp(){
     ${row('💰','Investissement',"« Qu'est-ce que vous construisez ? » Immobilier locatif, portefeuille d'actions : un capital ou un projet financier que vous construisez, délibérément.")}
     <div style="padding:9px 11px; background:var(--blush); border-radius:10px">
       <b class="small" style="color:var(--terra-d)">Et l'épargne, dans tout ça ?</b>
-      <p class="small" style="color:var(--ink-2); margin-top:2px; line-height:1.5">Vous vous demandez peut-être pourquoi ce n'est pas une 5ᵉ case ? En effet, une épargne, seule, ne sert à rien ; elle prend toujours la nature de son but. Une épargne peut servir une envie (un voyage), une protection (une épargne de précaution) ou un investissement (un apport locatif). Jamais un besoin : par définition, un besoin se joue maintenant, une épargne se joue toujours plus tard.</p>
-    </div>`, true);
+      <p class="small" style="color:var(--ink-2); margin-top:2px; line-height:1.5">On nous pose souvent la question : pourquoi ce n'est pas une 5ᵉ case ? En effet, une épargne, seule, ne sert à rien ; elle prend toujours la nature de son but. Une épargne peut servir une envie (un voyage), une protection (une épargne de précaution) ou un investissement (un apport locatif). Jamais un besoin : par définition, un besoin se joue maintenant, une épargne se joue toujours plus tard.</p>
+    </div>
+    ${showMenuHint===true?`<p class="small muted" style="text-align:center; margin-top:12px">Vous retrouverez ce détail à tout moment dans le menu ☰.</p>`:''}`, true);
 }
 // Détail d'un mois de la Vue d'ensemble (au clic sur une barre) : total vs budget + ventilation.
 function openAnnualMonthDetail(offset){
@@ -3860,12 +3875,12 @@ function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
   // Le scope est déjà déterminé par le contexte (carte de la personne ou section
   // "communes") : pas besoin de le redemander. Formulaire réduit au strict utile.
-  // La classification (règle 50/30/20) n'a de sens que pour les charges communes.
+  // La classification n'a de sens que pour les charges communes.
   const isCommune=scope==='commune';
   openModal(`<h3>${isCommune?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="chN" placeholder="Ex : Netflix"></div>
     <div class="field"><label>Montant /mois</label><input class="input" type="number" id="chA" placeholder="15"></div>
-    ${isCommune?`<div class="field"><label>Classification (règle 50/30/20) <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
+    ${isCommune?`<div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
       </div>
@@ -3888,7 +3903,7 @@ function openEditCat(id, returnTo){
     <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
     <div class="field"><label>Budget mensuel</label><input class="input" type="number" id="ceB" value="${c.budget}"></div>
     <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmt0((c.budget||0)/4)} / semaine</b></p>
-    <div class="field"><label>Classification (règle 50/30/20) <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
+    <div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick ${c.cls===cl?'on':''}" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
       </div>
