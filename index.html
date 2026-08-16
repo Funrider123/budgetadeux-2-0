@@ -2017,10 +2017,7 @@ function renderAnalyse(){
   <div style="padding-top:8px">
     <div class="between">
       <h1 class="hero-title" style="font-size:23px">Idéal vs réalité</h1>
-      <div class="row" style="gap:6px">
-        <button class="icon-btn" id="adviceBtn" style="width:30px; height:30px; font-size:16px" title="Notre conseil">💡</button>
-        <button class="icon-btn" id="natureHelpBtn" style="width:30px; height:30px; font-size:14px" title="Qu'est-ce que ces natures veulent dire ?">❓</button>
-      </div>
+      <button class="icon-btn" id="natureHelpBtn" style="width:30px; height:30px; font-size:14px" title="Qu'est-ce que ces natures veulent dire ?">❓</button>
     </div>
     <p class="hero-sub">Votre idéal face à votre réalité — défini lors d'un Money Date, consultable ici.</p>
   </div>
@@ -2029,7 +2026,7 @@ function renderAnalyse(){
     ${donutUnitToggleHtml()}
     <div class="grid2" style="align-items:stretch">
       ${donutCard("Votre idéal", ideal, idealEur(), 'editIdealBtn')}
-      ${donutCard("Votre répartition actuelle", real, realityEur())}
+      ${donutCard("Votre répartition actuelle", real, realityEur(), null, true)}
     </div>
   </div>
   <div style="text-align:center; margin:8px 0 -2px"><span class="small muted">↓ Le détail de votre répartition actuelle, juste en dessous</span></div>
@@ -2077,12 +2074,14 @@ function donutUnitToggleHtml(){
     <span class="small" data-unit="eur" style="cursor:pointer; padding:3px 8px; border-radius:99px; font-weight:800; ${unit==='eur'?'background:var(--terra); color:#fff':'color:var(--muted)'}">€</span>
   </div>`;
 }
-function donutCard(title,pct,eur,editableId){
+function donutCard(title,pct,eur,editableId,advice){
   const {besoin:b,envie:e,invest:inv,protection:pr}=pct;
   const unit=donutUnit;
   const disp=k=>unit==='eur'?fmt0(eur[k]):`${pct[k]}%`;
   return `<div class="card" style="padding:16px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; margin-top:0">
-    <div class="small" style="font-weight:800; text-align:center; margin-bottom:10px">${title}</div>
+    <div class="small" style="font-weight:800; text-align:center; margin-bottom:10px; position:relative">${title}
+      ${advice?`<button class="icon-btn" id="adviceBtn" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:24px; height:24px; font-size:13px" title="Notre conseil">💡</button>`:''}
+    </div>
     <div style="display:flex; justify-content:center; margin-bottom:12px">
       <div class="donut" style="width:108px;height:108px;background:conic-gradient(var(--besoin) 0 ${b}%, var(--envie) ${b}% ${b+e}%, var(--invest) ${b+e}% ${b+e+inv}%, var(--protection) ${b+e+inv}% 100%)">
         <div class="hole" style="width:74px;height:74px"></div>
