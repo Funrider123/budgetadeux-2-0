@@ -2007,7 +2007,10 @@ function renderAnalyse(){
   <div style="padding-top:8px">
     <div class="between">
       <h1 class="hero-title" style="font-size:23px">Idéal vs réalité</h1>
-      <button class="icon-btn" id="adviceBtn" style="width:30px; height:30px; font-size:16px" title="Notre conseil">💡</button>
+      <div class="row" style="gap:6px">
+        <button class="icon-btn" id="natureHelpBtn" style="width:30px; height:30px; font-size:14px" title="Qu'est-ce que ces natures veulent dire ?">❓</button>
+        <button class="icon-btn" id="adviceBtn" style="width:30px; height:30px; font-size:16px" title="Notre conseil">💡</button>
+      </div>
     </div>
     <p class="hero-sub">Votre idéal face à votre réalité — défini lors d'un Money Date, consultable ici.</p>
   </div>
@@ -2252,7 +2255,8 @@ function mdContent(step){
     const ideal=S.settings.idealSplit;
     const real=realitySplit();
     const decision=mdChecklist(offset).ideal_alignes;
-    return `${decision?`<div class="between" style="padding:2px 0 14px">
+    return `<div style="text-align:right; margin-bottom:6px"><span class="link" id="mdNatureHelp" style="font-size:12px">❓ Besoin, Envie, Protection, Investissement ?</span></div>
+    ${decision?`<div class="between" style="padding:2px 0 14px">
         <span class="small" style="color:var(--ok); font-weight:700">${decision==='ok'?'✓ Tout est ok, on ne change rien':decision==='ideal'?'✏️ On revoit notre idéal':'✏️ On revoit nos budgets'}</span>
         <span class="link" id="mdIdealUndo" style="font-size:12px">Modifier</span>
       </div>`
@@ -3188,7 +3192,7 @@ function openEditProject(id, returnTo){
     <div class="field"><label>Nom du projet</label><input class="input" id="npName" value="${p?escapeHtml(p.name):''}" placeholder="Ex : Cabane en bord de mer"></div>
     <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="number" id="npTarget" value="${p?p.target:''}" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="${p?p.saved:0}"></div></div>
     <div class="grid2"><div class="field"><label>Nombre de mois pour atteindre l'objectif</label><input class="input" type="number" id="npMonths" value="${p?p.months:''}" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="${p?p.day:5}" min="1" max="28"></div></div>
-    <div class="field"><label>Classification</label><select class="select" id="npCls">
+    <div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label><select class="select" id="npCls">
       <option value="besoin" ${p&&p.cls==='besoin'?'selected':''}>Besoin</option>
       <option value="envie" ${!p||p.cls==='envie'?'selected':''}>Envie</option>
       <option value="invest" ${p&&p.cls==='invest'?'selected':''}>Investissement</option>
@@ -3201,6 +3205,7 @@ function openEditProject(id, returnTo){
   const calc=()=>{ const t=+$('#npTarget').value||0, s=+$('#npSaved').value||0, m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
   ['npTarget','npSaved','npMonths'].forEach(fid=>$('#'+fid).oninput=calc);
   calc();
+  document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
@@ -3417,6 +3422,7 @@ function bindAnalyse(){
   const ab=$('#analyseBack'); if(ab) ab.onclick=()=>go(prevScreen||'vue');
   const ei=$('#editIdealBtn'); if(ei) ei.onclick=openEditIdeal;
   const adv=$('#adviceBtn'); if(adv) adv.onclick=openAnalyseAdvice;
+  const nh=$('#natureHelpBtn'); if(nh) nh.onclick=openNatureHelp;
   document.querySelectorAll('[data-anacls]').forEach(b=>b.addEventListener('click',()=>{
     const cls=b.dataset.anacls; analyseUI[cls]=!analyseUI[cls]; go('analyse');
   }));
@@ -3435,6 +3441,24 @@ function openAnalyseAdvice(){
   openModal(`<h3>💡 Notre conseil</h3>
     <div class="between" style="margin-bottom:10px"><b class="small">Votre équilibre</b>${verdictBadge(real,ideal)}</div>
     <p class="small muted" style="line-height:1.6">${verdictText(real,ideal)}</p>`, true);
+}
+// Explique les 4 natures (Besoin/Envie/Protection/Investissement) et pourquoi l'épargne
+// n'en est pas une 5ᵉ — rappelée depuis les 4 endroits où le couple classe ou consulte
+// une nature (Analyse, Votre idéal, Money Date, et les formulaires charge/catégorie/projet).
+function openNatureHelp(){
+  const row=(icon,name,text)=>`<div style="background:var(--card); border:1px solid var(--line); border-radius:12px 12px 12px 3px; padding:10px 13px; margin-bottom:8px">
+    <b class="small">${icon} ${name} :</b>
+    <p class="small muted" style="margin-top:2px; line-height:1.5">${text}</p>
+  </div>`;
+  openModal(`<h3>Détails sur les classifications</h3>
+    ${row('🏠','Besoin',"Comme son nom l'indique, c'est ce qui vous permet de vivre. « Si vous ne payez pas ce mois-ci ? » Électricité, internet, alimentation : ça s'arrête tout de suite.")}
+    ${row('✨','Envie',"Ce sont les plaisirs que vous vous offrez : voyage, shopping, sorties, resto.")}
+    ${row('🛡️','Protection',"« Et si ça tournait mal ? » Assurance habitation, épargne de précaution : ça ne sert que le jour où le risque arrive.")}
+    ${row('💰','Investissement',"« Qu'est-ce que vous construisez ? » Immobilier locatif, portefeuille d'actions : un capital ou un projet financier que vous construisez, délibérément.")}
+    <div style="padding:9px 11px; background:var(--blush); border-radius:10px">
+      <b class="small" style="color:var(--terra-d)">Et l'épargne, dans tout ça ?</b>
+      <p class="small" style="color:var(--ink-2); margin-top:2px; line-height:1.5">Vous vous demandez peut-être pourquoi ce n'est pas une 5ᵉ case ? En effet, une épargne, seule, ne sert à rien ; elle prend toujours la nature de son but. Une épargne peut servir une envie (un voyage), une protection (une épargne de précaution) ou un investissement (un apport locatif). Jamais un besoin : par définition, un besoin se joue maintenant, une épargne se joue toujours plus tard.</p>
+    </div>`, true);
 }
 // Détail d'un mois de la Vue d'ensemble (au clic sur une barre) : total vs budget + ventilation.
 function openAnnualMonthDetail(offset){
@@ -3458,7 +3482,7 @@ function openAnnualMonthDetail(offset){
 }
 function openEditIdeal(){
   const id=S.settings.idealSplit;
-  openModal(`<h3>🎯 Votre idéal</h3>
+  openModal(`<div class="between" style="margin-bottom:2px"><h3>🎯 Votre idéal</h3><span class="link" id="idealHelp" style="font-size:12px">❓ Ces natures ?</span></div>
     <p class="small muted" style="margin-bottom:14px">Définissez ensemble la répartition qui vous ressemble. Le total doit faire 100%.</p>
     <div class="grid2">
       <div class="field"><label>Besoins %</label><input class="input" type="number" id="idBesoin" value="${id.besoin}"></div>
@@ -3476,6 +3500,7 @@ function openEditIdeal(){
   };
   ['idBesoin','idEnvie','idProtection','idInvest'].forEach(fid=>$('#'+fid).oninput=upd);
   upd();
+  $('#idealHelp').onclick=openNatureHelp;
   $('#idealSave').onclick=()=>{
     const b=+$('#idBesoin').value||0, ev=+$('#idEnvie').value||0, pr=+$('#idProtection').value||0, inv=+$('#idInvest').value||0;
     if(b+ev+pr+inv!==100){ toast("Le total doit faire 100%","🎯"); return; }
@@ -3489,6 +3514,7 @@ function bindMoneyDate(){
     const a=document.activeElement;
     if(a && (a.tagName==='TEXTAREA' || a.tagName==='INPUT')) a.blur();
   });
+  const mnh=$('#mdNatureHelp'); if(mnh) mnh.onclick=openNatureHelp;
   document.querySelectorAll('[data-unit]').forEach(b=>b.addEventListener('click',()=>{ donutUnit=b.dataset.unit; go('moneydate'); }));
   const ex=$('#mdExit'); if(ex) ex.onclick=()=>go('vue');
   const bk=$('#mdBack'); if(bk) bk.onclick=()=>{mdStep--; go('moneydate');};
@@ -3839,7 +3865,7 @@ function openAddCharge(defaultScope){
   openModal(`<h3>${isCommune?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="chN" placeholder="Ex : Netflix"></div>
     <div class="field"><label>Montant /mois</label><input class="input" type="number" id="chA" placeholder="15"></div>
-    ${isCommune?`<div class="field"><label>Classification (règle 50/30/20)</label>
+    ${isCommune?`<div class="field"><label>Classification (règle 50/30/20) <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
       </div>
@@ -3847,6 +3873,7 @@ function openAddCharge(defaultScope){
     <button class="btn btn-primary" id="chSave" style="margin-top:6px">Ajouter</button>`, true);
   let cls=null;
   document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
+  document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#chSave').onclick=()=>{
     const n=$('#chN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
     if(isCommune && !cls){ toast("Choisissez une classification","🏷️"); return; }
@@ -3861,7 +3888,7 @@ function openEditCat(id, returnTo){
     <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
     <div class="field"><label>Budget mensuel</label><input class="input" type="number" id="ceB" value="${c.budget}"></div>
     <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmt0((c.budget||0)/4)} / semaine</b></p>
-    <div class="field"><label>Classification (règle 50/30/20)</label>
+    <div class="field"><label>Classification (règle 50/30/20) <span class="link" data-natureshelp style="font-size:11px; font-weight:400">❓</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick ${c.cls===cl?'on':''}" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
       </div>
@@ -3870,6 +3897,7 @@ function openEditCat(id, returnTo){
     ${id?`<button class="btn btn-ghost btn-sm" id="ceDel" style="color:var(--danger)">🗑</button>`:''}</div>`, true);
   let cls=c.cls;
   document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
+  document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#ceSave').onclick=()=>{ const n=$('#ceN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
     if(!cls){ toast("Choisissez une classification","🏷️"); return; }
     if(id){ c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls; }
