@@ -1251,8 +1251,11 @@ function buildDemoState(){
   d.partner={name:"Thomas", profile:"lui"};
   // Modele calibre pour que Votre realite tombe pile sur 45/25/25/5% (id\u00e9al 40/30/20/10%),
   // que les projets actifs consomment exactement 100% du disponible, et que le recap
-  // "Vue d'ensemble du mois" affiche un budget a l'equilibre (solde 0\u20ac) : charges (1130)
-  // + categories (770) + projets actifs (1100) = 3000\u20ac = fixed.lui + fixed.elle (50/50).
+  // "Vue d'ensemble du mois" affiche un budget a l'equilibre (solde 0\u20ac) : charges (1250)
+  // + categories (650) + projets actifs (1100) = 3000\u20ac = fixed.lui + fixed.elle (50/50).
+  // Sante (frais courants : pharmacie, medecin) classee en Besoin \u2014 si on ne paie pas, ca
+  // s'arrete tout de suite. La Mutuelle (qui couvre le jour ou ca tourne mal) est la vraie
+  // Protection : les deux illustrent la distinction dans un meme domaine.
   d.settings={ salaries:{lui:2600, elle:2300}, mode:"fixe", custom:{lui:50,elle:50},
                fixed:{lui:1500, elle:1500}, idealSplit:{besoin:40, envie:30, protection:10, invest:20} };
   d.charges=[
@@ -1260,14 +1263,15 @@ function buildDemoState(){
     {id:"d_elec",  name:"\u00c9lectricit\u00e9",     amount:85,  cls:"besoin",     scope:"commune"},
     {id:"d_eau",   name:"Eau",                   amount:35,  cls:"besoin",     scope:"commune"},
     {id:"d_net",   name:"Internet",              amount:30,  cls:"besoin",     scope:"commune"},
-    {id:"d_ass",   name:"Assurance habitation",  amount:30,  cls:"protection", scope:"commune"}
+    {id:"d_ass",   name:"Assurance habitation",  amount:30,  cls:"protection", scope:"commune"},
+    {id:"d_mut",   name:"Mutuelle",              amount:120, cls:"protection", scope:"commune"}
   ];
   d.categories=[
-    {id:"courses",    emoji:"\ud83d\uded2", name:"Courses",     budget:200, cls:"besoin"},
+    {id:"courses",    emoji:"\ud83d\uded2", name:"Courses",     budget:170, cls:"besoin"},
     {id:"resto",      emoji:"\ud83c\udf7d\ufe0f", name:"Restaurants", budget:220, cls:"envie"},
     {id:"loisirs",    emoji:"\ud83c\udf89", name:"Loisirs",     budget:180, cls:"envie"},
     {id:"transports", emoji:"\ud83d\ude97", name:"Transports",  budget:50,  cls:"besoin"},
-    {id:"sante",      emoji:"\ud83d\udc8a", name:"Sant\u00e9",       budget:120, cls:"protection"}
+    {id:"sante",      emoji:"\ud83d\udc8a", name:"Sant\u00e9",       budget:30,  cls:"besoin"}
   ];
   d.merchants=[
     {id:"m1", emoji:"\ud83d\uded2", name:"Carrefour", cat:"courses"},
