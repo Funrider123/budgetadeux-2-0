@@ -1180,11 +1180,15 @@ function renderSetupBanner(){
   // n'est pas validé là-bas, on le rappelle partout (sauf sur l'écran Vos projets lui-même,
   // où l'état est déjà visible directement).
   if(!S.projectsFrozen && current!=='projets'){
-    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Mensualités de projets non validées</span>
-      <span class="cta">Valider →</span>
+      <div style="display:flex; gap:8px; margin-left:auto">
+        ${S.projectsSnapshot?`<span class="cta" id="bannerCancelProjects" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        <span class="cta" id="bannerValidProjects">Valider →</span>
+      </div>
     </div>`;
-    $('#setupBannerBtn').onclick=()=>go('projets');
+    $('#bannerValidProjects').onclick=()=>go('projets');
+    const bcp=$('#bannerCancelProjects'); if(bcp) bcp.onclick=()=>cancelProjectsChanges();
     return;
   }
   el.innerHTML='';
@@ -3061,6 +3065,17 @@ function openMoneyDateSchedule(){
     S.moneyDate.nextDate=val; save(); closeModal(); go('vue'); toast(cur?"Date mise à jour ✓":"Rendez-vous programmé ✓","📅");
   };
 }
+// Restaure les mensualités au dernier état validé (S.projectsSnapshot) — appelé depuis le
+// bouton "Annuler nos changements" sur l'écran Vos projets ET depuis le bandeau d'alerte
+// affiché sur tous les autres écrans, pour ne pas obliger à naviguer d'abord.
+function cancelProjectsChanges(){
+  const snap=S.projectsSnapshot; if(!snap) return;
+  Object.keys(snap).forEach(id=>{
+    const p=S.projects.find(x=>x.id===id);
+    if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
+  });
+  S.projectsFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+}
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>{
     // Créer un projet fixe une nouvelle mensualité : impossible tant que le budget projets
@@ -3074,14 +3089,7 @@ function bindProjets(){
     S.projectsFrozen=true; save(); go('projets'); toast("Mensualités validées ✓ — vous êtes prêts !","❤️");
   };
   const uvp=$('#unfreezeProjects'); if(uvp) uvp.onclick=()=>{ S.projectsFrozen=false; save(); go('projets'); };
-  const cp=$('#cancelProjects'); if(cp) cp.onclick=()=>{
-    const snap=S.projectsSnapshot; if(!snap) return;
-    Object.keys(snap).forEach(id=>{
-      const p=S.projects.find(x=>x.id===id);
-      if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
-    });
-    S.projectsFrozen=true; save(); go('projets'); toast("Modifications annulées ↩","✓");
-  };
+  const cp=$('#cancelProjects'); if(cp) cp.onclick=()=>cancelProjectsChanges();
   const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
   const cat=$('#cagAddToggle'); if(cat) cat.onclick=openCagnotteAddLine;
   document.querySelectorAll('[data-caghist]').forEach(b=>b.addEventListener('click',()=>openEditCagnotteEntry(+b.dataset.caghist)));
