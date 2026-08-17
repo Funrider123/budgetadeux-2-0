@@ -1551,7 +1551,6 @@ function ajouterHint(){
   return missing.length ? `Ajoutez ${missing.join(', ')}` : '';
 }
 function updateAjouterValidity(){
-  const btn=$('#dSave'); if(btn) btn.disabled=ajouterMissing().length>0||ajouterCagnotteExceeded();
   const hint=$('#dMissingHint');
   if(hint){ const txt=ajouterHint(); hint.textContent=txt; hint.style.display=txt?'block':'none'; }
 }
@@ -1559,8 +1558,6 @@ function renderAjouter(){
   const c = draft.cat && draft.cat!=='__cagnotte__' ? catById(draft.cat) : null;
   const isCagnotte = draft.cat==='__cagnotte__';
   const isTransfer=/transfert|virement/i.test(draft.desc);
-  const missing=ajouterMissing();
-  const disabled = missing.length>0||ajouterCagnotteExceeded();
   const whoSel = draft.who||me();
   return `
   <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
@@ -1592,7 +1589,7 @@ function renderAjouter(){
       </div>
     </div>`:''}
 
-    <div class="field"><label>Description</label>
+    <div class="field"><label>Description <span class="muted" style="font-weight:600">(facultatif si un commerce est sélectionné)</span></label>
       <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
     </div>
 
@@ -1615,7 +1612,7 @@ function renderAjouter(){
       </div>
     </div>`:''}
 
-    <button class="btn btn-primary" id="dSave" ${disabled?'disabled':''}>${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
+    <button class="btn btn-primary" id="dSave">${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
   </div>
   `;
 }
