@@ -2045,7 +2045,7 @@ function renderAnalyse(){
   <div class="section-title">Détail de votre répartition actuelle</div>
   <div class="card">
     ${['besoin','envie','invest','protection'].map(cls=>{
-      const items=classAllocationItems(cls);
+      const items=classAllocationItems(cls).sort((a,b)=>b.amount-a.amount);
       const clsTotal=items.reduce((s,x)=>s+x.amount,0);
       const grandTotal=grandAllocationTotal();
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
