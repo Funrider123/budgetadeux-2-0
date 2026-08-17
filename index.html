@@ -1583,7 +1583,7 @@ function renderAjouter(){
       ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
 
-    ${S.merchants.length?`<div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
+    ${S.merchants.length?`<div class="field"><label>Commerce</label>
       <div class="merch">
         ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
       </div>
@@ -2244,7 +2244,7 @@ function mdContent(step){
   if(step===2){
     const rows=mdSurplusRows(offset);
     const rebalanceNote=`<div class="card-soft" style="margin-bottom:14px; text-align:left">
-      <p class="small muted" style="margin:0">Un surplus ne peut être transféré que vers la cagnotte commune ou un projet — pas directement vers une autre catégorie de dépense. Pour rééquilibrer durablement vos budgets (ex. baisser Courses au profit de Loisirs), rendez-vous dans <span class="link" id="mdGoPilotage">Simulation budgétaire →</span>.</p>
+      <p class="small muted" style="margin:0">Un surplus ne peut être transféré que vers la cagnotte commune ou un projet ; pas directement vers une autre catégorie de dépense. Pour rééquilibrer durablement vos budgets (ex. baisser Courses au profit de Loisirs), rendez-vous dans <span class="link" id="mdGoPilotage">Simulation budgétaire →</span>.</p>
     </div>`;
     if(!rows.length) return `<p class="empty">Aucun surplus ce mois-ci, tout a été utilisé 💪</p>`;
     return rebalanceNote + rows.map(({c,surplus})=>{
