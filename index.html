@@ -346,6 +346,7 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 /* merchant chips */
 .merch{display:flex; gap:9px; overflow-x:auto; padding:4px 0 6px; scrollbar-width:none;}
 .merch::-webkit-scrollbar{height:0;}
+.merch-wrap{display:flex; gap:9px; flex-wrap:wrap; padding:4px 0 6px;}
 .chip{flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:5px; width:64px;}
 .chip .ci{width:54px;height:54px;border-radius:18px; background:var(--card); border:1.5px solid var(--line); display:grid; place-items:center; font-size:24px; transition:.15s;}
 .chip:hover .ci, .chip.on .ci{border-color:var(--terra); background:var(--blush);}
@@ -1575,7 +1576,7 @@ function renderAjouter(){
       <span style="font-size:20px">🔁</span><div class="small" style="font-weight:700; color:var(--invest)">Mouvement interne détecté — sera classé en « Transfert » et non en dépense.</div></div>`:''}
 
     <div class="field"><label>Catégorie</label>
-      <div class="merch">
+      <div class="merch-wrap">
         ${S.categories.map(cc=>`<button class="cat-pill ${draft.cat===cc.id?'on':''}" data-catpick="${cc.id}">${escapeHtml(cc.name)}</button>`).join('')}
         <button class="cat-pill" data-catpick="__cagnotte__" style="border-style:dashed; border-color:var(--invest); color:${isCagnotte?'#fff':'var(--invest)'}; background:${isCagnotte?'var(--invest)':'var(--card)'}">Cagnotte commune · ${fmt0(S.cagnotte.balance)}</button>
       </div>
@@ -1584,7 +1585,7 @@ function renderAjouter(){
     </div>
 
     ${S.merchants.length?`<div class="field"><label>Commerce</label>
-      <div class="merch">
+      <div class="merch-wrap">
         ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
       </div>
     </div>`:''}
