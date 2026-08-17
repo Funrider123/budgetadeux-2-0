@@ -1576,14 +1576,13 @@ function renderAjouter(){
     ${isTransfer?`<div class="card-soft" style="display:flex; gap:10px; align-items:center; margin-bottom:14px; background:color-mix(in srgb,var(--invest) 8%,transparent); border-color:color-mix(in srgb,var(--invest) 25%,transparent)">
       <span style="font-size:20px">🔁</span><div class="small" style="font-weight:700; color:var(--invest)">Mouvement interne détecté — sera classé en « Transfert » et non en dépense.</div></div>`:''}
 
-    <div class="field"><label>Catégorie</label>
+    <div class="field" style="${isCagnotte?'opacity:.45; pointer-events:none':''}"><label>Catégorie</label>
       <div class="merch-wrap">
         ${S.categories.map(cc=>`<button class="cat-pill ${draft.cat===cc.id?'on':''}" data-catpick="${cc.id}">${escapeHtml(cc.name)}</button>`).join('')}
-        <button class="cat-pill" data-catpick="__cagnotte__" style="border-style:dashed; border-color:var(--invest); color:${isCagnotte?'#fff':'var(--invest)'}; background:${isCagnotte?'var(--invest)':'var(--card)'}">Cagnotte commune · ${fmt0(S.cagnotte.balance)}</button>
       </div>
       ${c?`<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${(c.budget-spentByCat(c.id))<0?'var(--danger)':'var(--terra)'}">${fmt0(c.budget-spentByCat(c.id))}</b> / mois</div>`:''}
-      ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
+    ${isCagnotte?`<div class="small muted" style="margin:-10px 2px 14px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
 
     ${catMerchants.length?`<div class="field"><label>Commerce</label>
       <div class="merch-wrap">
@@ -1606,6 +1605,10 @@ function renderAjouter(){
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
       <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
       <div class="switch ${draft.prevision?'on':''}" id="dPrev"></div>
+    </div>
+    <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
+      <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Cagnotte commune</div><div class="small muted">Prélevé sur la cagnotte plutôt qu'une catégorie · ${fmt0(S.cagnotte.balance)}</div></div></div>
+      <div class="switch ${isCagnotte?'on':''}" id="dCagnotteToggle"></div>
     </div>
     <div class="field" style="margin-bottom:16px"><label>Dépense effectuée par</label>
       <div class="row" style="gap:8px">
@@ -2042,7 +2045,7 @@ function renderAnalyse(){
   <div class="section-title">Détail de votre répartition actuelle</div>
   <div class="card">
     ${['besoin','envie','invest','protection'].map(cls=>{
-      const items=classAllocationItems(cls);
+      const items=classAllocationItems(cls).sort((a,b)=>b.amount-a.amount);
       const clsTotal=items.reduce((s,x)=>s+x.amount,0);
       const grandTotal=grandAllocationTotal();
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
@@ -2984,6 +2987,7 @@ function bindAjouter(){
   const dt=$('#dDate'); if(dt) dt.onchange=ev=>{draft.date=ev.target.value; go('ajouter');};
   const mo=$('#dMoreToggle'); if(mo) mo.onclick=()=>{draft._showMore=!draft._showMore; go('ajouter');};
   const p=$('#dPrev'); if(p) p.onclick=()=>{draft.prevision=!draft.prevision; go('ajouter');};
+  const ct=$('#dCagnotteToggle'); if(ct) ct.onclick=()=>{ draft.cat = draft.cat==='__cagnotte__' ? '' : '__cagnotte__'; go('ajouter'); };
   document.querySelectorAll('[data-whopick]').forEach(b=>b.addEventListener('click',()=>{draft.who=b.dataset.whopick; go('ajouter');}));
   document.querySelectorAll('[data-catpick]').forEach(b=>b.addEventListener('click',()=>{
     draft.cat=b.dataset.catpick;
