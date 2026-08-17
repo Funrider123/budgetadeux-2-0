@@ -1578,15 +1578,18 @@ function renderAjouter(){
       ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
 
-    <div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
+    <div class="field" style="border:1px solid var(--line-2); border-radius:16px; padding:14px 14px 4px">
+      <div style="margin-bottom:12px">
+        <label style="margin-bottom:2px">Commerce et/ou description</label>
+        <p class="small muted" style="margin:0">Au moins l'un des deux, pour retrouver cette dépense plus tard.</p>
+      </div>
+      <label class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.05em; font-size:10.5px; margin-bottom:7px">Commerce</label>
       <div class="merch">
         ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
         ${S.merchants.length<8?`<button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter</button>`:''}
       </div>
-    </div>
-
-    <div class="field"><label>Description <span class="muted" style="font-weight:600">(optionnel)</span></label>
-      <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
+      <label class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.05em; font-size:10.5px; margin:14px 0 7px; display:block">Description</label>
+      <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}" style="margin-bottom:14px">
     </div>
 
     <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
