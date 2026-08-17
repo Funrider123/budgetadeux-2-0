@@ -1586,20 +1586,23 @@ function renderAjouter(){
       ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
 
+    ${S.merchants.length?`<div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
+      <div class="merch">
+        ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
+      </div>
+    </div>`:''}
+
     <div class="field"><label>Description</label>
       <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
     </div>
 
     <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
 
-    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (ajouter un commerce, date, prévision, qui a payé) ▾"}</span></div>
+    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (nouveau commerce, date, prévision, qui a payé) ▾"}</span></div>
     ${draft._showMore?`
-    <div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
-      <div class="merch">
-        ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
-        ${S.merchants.length<8?`<button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter</button>`:''}
-      </div>
-    </div>
+    ${S.merchants.length<8?`<div class="field"><label>Nouveau commerce</label>
+      <button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter un commerce</button>
+    </div>`:''}
     <div class="field"><label>Date</label><input class="input" id="dDate" type="date" value="${draft.date}"></div>
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
       <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
