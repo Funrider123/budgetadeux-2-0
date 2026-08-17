@@ -1169,7 +1169,7 @@ function renderSetupBanner(){
   // Rappel persistant tant que le couple n'a pas cliqué sur "Valider le budget du mois" :
   // évite de croire que des chiffres ajustés sont déjà officiels alors qu'ils ne le sont pas.
   if(!S.pilotFrozen){
-    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
       <span>⚠️ Budget non validé — vos ajustements ne sont pas encore officiels</span>
       <span class="cta">Valider →</span>
     </div>`;
@@ -1180,7 +1180,7 @@ function renderSetupBanner(){
   // n'est pas validé là-bas, on le rappelle partout (sauf sur l'écran Vos projets lui-même,
   // où l'état est déjà visible directement).
   if(!S.projectsFrozen && current!=='projets'){
-    el.innerHTML=`<div class="setup-banner" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
       <span>⚠️ Mensualités de projets non validées</span>
       <span class="cta">Valider →</span>
     </div>`;
@@ -1805,7 +1805,6 @@ function projectCard(p, rank){
       ${(!paused && !aband)?(S.projectsFrozen?`
       <div class="between" style="background:var(--cream-2); border-radius:12px; padding:10px 13px">
         <span class="small" style="font-weight:800; color:var(--ink-2)">🔒 Mensualité validée</span>
-        <span class="link small" data-projunlock="${p.id}" style="font-weight:700; white-space:nowrap">Modifier</span>
       </div>
       <p class="small muted" style="margin:8px 0 0">${reste>0?`Objectif atteint en ${projectEtaLabel(p)}`:''}</p>`:`
       <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px; margin-bottom:4px">Mensualité</div>
@@ -1817,7 +1816,7 @@ function projectCard(p, rank){
       <div class="row" style="gap:7px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
         <button class="btn btn-soft btn-sm" data-projhist="${p.id}" style="flex:1; width:auto">Historique ${ui.histOpen?'▴':'▾'}</button>
         ${!aband?`<button class="btn btn-soft btn-sm" data-projadd="${p.id}" style="flex:1; width:auto">+ Versement</button>`:''}
-        ${!aband?`<button class="icon-btn" data-projmenu="${p.id}" style="width:36px; height:36px; flex-shrink:0; border:1px solid var(--line); border-radius:10px">⚙️</button>`:''}
+        ${(!aband && !S.projectsFrozen)?`<button class="icon-btn" data-projmenu="${p.id}" style="width:36px; height:36px; flex-shrink:0; border:1px solid var(--line); border-radius:10px">⚙️</button>`:''}
       </div>
       ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
         <div class="row" style="gap:8px; margin-bottom:8px">
@@ -2615,6 +2614,8 @@ function pilotHasChanges(){
   if(snap.charges.some(sc=>{ const c=S.charges.find(x=>x.id===sc.id); return !c || c.amount!==sc.amount; })) return true;
   if(S.categories.length!==snap.categories.length) return true;
   if(snap.categories.some(sc=>{ const c=S.categories.find(x=>x.id===sc.id); return !c || c.budget!==sc.budget; })) return true;
+  const psnap=S.projectsSnapshot;
+  if(psnap && S.projects.some(p=>psnap[p.id] && (psnap[p.id].mensuel!==(p.mensuel||0) || psnap[p.id].months!==(p.months||0)))) return true;
   return false;
 }
 function renderPilotage(){
@@ -2688,11 +2689,7 @@ function renderPilotage(){
   </div>
 
   <div class="section-title" style="margin-top:18px">🚀 Nos projets</div>
-  ${S.projectsFrozen?`<div class="between" style="padding:6px 4px 10px">
-    <span class="small" style="color:var(--ok); font-weight:700">🔒 Mensualités validées depuis Vos projets</span>
-    <span class="link" id="unfreezeProjectsPilot" style="font-size:12px">Modifier</span>
-  </div>`:''}
-  <div class="card" style="${S.projectsFrozen?'pointer-events:none':''}">
+  <div class="card" style="${S.pilotFrozen?'pointer-events:none':''}">
     ${reste<0?`<p class="small" style="color:var(--danger)" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`:`<p class="small" style="display:none" id="pilDeficit">⚠️ Budget déficitaire — réduisez certains postes</p>`}
     ${activeProjects.length?`
     <div style="margin-top:12px">
@@ -3068,9 +3065,6 @@ function bindProjets(){
     if(S.projectsFrozen){ toast("Mensualités validées — touchez Modifier pour les ajuster","🔒"); return; }
     openEditProject(null,'projets');
   };
-  document.querySelectorAll('[data-projunlock]').forEach(b=>b.addEventListener('click',()=>{
-    S.projectsFrozen=false; save(); go('projets');
-  }));
   const vp=$('#validProjects'); if(vp) vp.onclick=()=>{
     S.projectsSnapshot={};
     S.projects.forEach(p=>{ S.projectsSnapshot[p.id]={mensuel:p.mensuel||0, months:p.months||0}; });
@@ -3856,17 +3850,23 @@ function bindPilotage(){
       charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
       categories:S.categories.map(c=>({id:c.id, budget:c.budget}))
     };
-    S.pilotFrozen=true;
+    // Un seul "Modifier" pour toute la page : valider le budget verrouille aussi les
+    // mensualités de projets, plutôt que de laisser un deuxième cadenas indépendant.
+    S.projectsSnapshot={};
+    S.projects.forEach(p=>{ S.projectsSnapshot[p.id]={mensuel:p.mensuel||0, months:p.months||0}; });
+    S.pilotFrozen=true; S.projectsFrozen=true;
     save(); toast("Budget validé ✓ — vous êtes prêts !","❤️");
     go('pilotage');
   };
-  const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; save(); go('pilotage'); };
-  const ufp=$('#unfreezeProjectsPilot'); if(ufp) ufp.onclick=()=>{ S.projectsFrozen=false; save(); go('pilotage'); };
+  const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
   const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>{
     const snap=S.pilotSnapshot; if(!snap) return;
     S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
     snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
     snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
+    const psnap=S.projectsSnapshot;
+    if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
+    S.projectsFrozen=true;
     S.pilotFrozen=true; save(); go('pilotage'); toast("Modifications annulées ↩","✓");
   };
 }
