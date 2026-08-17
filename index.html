@@ -1169,11 +1169,15 @@ function renderSetupBanner(){
   // Rappel persistant tant que le couple n'a pas cliqué sur "Valider le budget du mois" :
   // évite de croire que des chiffres ajustés sont déjà officiels alors qu'ils ne le sont pas.
   if(!S.pilotFrozen){
-    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Budget non validé — vos ajustements ne sont pas encore officiels</span>
-      <span class="cta">Valider →</span>
+      <div style="display:flex; gap:8px; margin-left:auto">
+        ${pilotHasChanges()?`<span class="cta" id="bannerCancelBudget" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        <span class="cta" id="bannerValidBudget">Valider →</span>
+      </div>
     </div>`;
-    $('#setupBannerBtn').onclick=()=>go('pilotage');
+    $('#bannerValidBudget').onclick=()=>go('pilotage');
+    const bcb=$('#bannerCancelBudget'); if(bcb) bcb.onclick=()=>cancelBudgetChanges();
     return;
   }
   // Même logique pour les mensualités de projets ajustées depuis "Vos projets" : tant que ce
@@ -3866,16 +3870,20 @@ function bindPilotage(){
     go('pilotage');
   };
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
-  const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>{
-    const snap=S.pilotSnapshot; if(!snap) return;
-    S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
-    snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
-    snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
-    const psnap=S.projectsSnapshot;
-    if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
-    S.projectsFrozen=true;
-    S.pilotFrozen=true; save(); go('pilotage'); toast("Modifications annulées ↩","✓");
-  };
+  const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>cancelBudgetChanges();
+}
+// Restaure revenus/charges/catégories/mensualités au dernier budget validé (S.pilotSnapshot
+// + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Simulation budgétaire
+// ET depuis le bandeau d'alerte affiché sur tous les autres écrans.
+function cancelBudgetChanges(){
+  const snap=S.pilotSnapshot; if(!snap) return;
+  S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
+  snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
+  snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
+  const psnap=S.projectsSnapshot;
+  if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
+  S.projectsFrozen=true;
+  S.pilotFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
 }
 function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
