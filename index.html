@@ -1169,22 +1169,30 @@ function renderSetupBanner(){
   // Rappel persistant tant que le couple n'a pas cliqué sur "Valider le budget du mois" :
   // évite de croire que des chiffres ajustés sont déjà officiels alors qu'ils ne le sont pas.
   if(!S.pilotFrozen){
-    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Budget non validé — vos ajustements ne sont pas encore officiels</span>
-      <span class="cta">Valider →</span>
+      <div style="display:flex; gap:8px; margin-left:auto">
+        ${pilotHasChanges()?`<span class="cta" id="bannerCancelBudget" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        <span class="cta" id="bannerValidBudget">Valider →</span>
+      </div>
     </div>`;
-    $('#setupBannerBtn').onclick=()=>go('pilotage');
+    $('#bannerValidBudget').onclick=()=>go('pilotage');
+    const bcb=$('#bannerCancelBudget'); if(bcb) bcb.onclick=()=>cancelBudgetChanges();
     return;
   }
   // Même logique pour les mensualités de projets ajustées depuis "Vos projets" : tant que ce
   // n'est pas validé là-bas, on le rappelle partout (sauf sur l'écran Vos projets lui-même,
   // où l'état est déjà visible directement).
   if(!S.projectsFrozen && current!=='projets'){
-    el.innerHTML=`<div class="setup-banner blink-cta" id="setupBannerBtn" style="background:var(--warn)">
+    el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Mensualités de projets non validées</span>
-      <span class="cta">Valider →</span>
+      <div style="display:flex; gap:8px; margin-left:auto">
+        ${S.projectsSnapshot?`<span class="cta" id="bannerCancelProjects" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        <span class="cta" id="bannerValidProjects">Valider →</span>
+      </div>
     </div>`;
-    $('#setupBannerBtn').onclick=()=>go('projets');
+    $('#bannerValidProjects').onclick=()=>go('projets');
+    const bcp=$('#bannerCancelProjects'); if(bcp) bcp.onclick=()=>cancelProjectsChanges();
     return;
   }
   el.innerHTML='';
@@ -1578,21 +1586,20 @@ function renderAjouter(){
       ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
 
+    <div class="field"><label>Description</label>
+      <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
+    </div>
+
+    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
+
+    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (ajouter un commerce, date, prévision, qui a payé) ▾"}</span></div>
+    ${draft._showMore?`
     <div class="field"><label>Commerce <span class="muted" style="font-weight:600">(optionnel)</span></label>
       <div class="merch">
         ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
         ${S.merchants.length<8?`<button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter</button>`:''}
       </div>
     </div>
-
-    <div class="field"><label>Description <span class="muted" style="font-weight:600">(optionnel)</span></label>
-      <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
-    </div>
-
-    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
-
-    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (date, prévision, qui a payé) ▾"}</span></div>
-    ${draft._showMore?`
     <div class="field"><label>Date</label><input class="input" id="dDate" type="date" value="${draft.date}"></div>
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
       <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Prévision</div><div class="small muted">Dépense future anticipée</div></div></div>
@@ -3058,6 +3065,17 @@ function openMoneyDateSchedule(){
     S.moneyDate.nextDate=val; save(); closeModal(); go('vue'); toast(cur?"Date mise à jour ✓":"Rendez-vous programmé ✓","📅");
   };
 }
+// Restaure les mensualités au dernier état validé (S.projectsSnapshot) — appelé depuis le
+// bouton "Annuler nos changements" sur l'écran Vos projets ET depuis le bandeau d'alerte
+// affiché sur tous les autres écrans, pour ne pas obliger à naviguer d'abord.
+function cancelProjectsChanges(){
+  const snap=S.projectsSnapshot; if(!snap) return;
+  Object.keys(snap).forEach(id=>{
+    const p=S.projects.find(x=>x.id===id);
+    if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
+  });
+  S.projectsFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+}
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>{
     // Créer un projet fixe une nouvelle mensualité : impossible tant que le budget projets
@@ -3071,14 +3089,7 @@ function bindProjets(){
     S.projectsFrozen=true; save(); go('projets'); toast("Mensualités validées ✓ — vous êtes prêts !","❤️");
   };
   const uvp=$('#unfreezeProjects'); if(uvp) uvp.onclick=()=>{ S.projectsFrozen=false; save(); go('projets'); };
-  const cp=$('#cancelProjects'); if(cp) cp.onclick=()=>{
-    const snap=S.projectsSnapshot; if(!snap) return;
-    Object.keys(snap).forEach(id=>{
-      const p=S.projects.find(x=>x.id===id);
-      if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
-    });
-    S.projectsFrozen=true; save(); go('projets'); toast("Modifications annulées ↩","✓");
-  };
+  const cp=$('#cancelProjects'); if(cp) cp.onclick=()=>cancelProjectsChanges();
   const chh=$('#cagHistHdr'); if(chh) chh.onclick=()=>{cagUI.histOpen=!cagUI.histOpen; go('projets');};
   const cat=$('#cagAddToggle'); if(cat) cat.onclick=openCagnotteAddLine;
   document.querySelectorAll('[data-caghist]').forEach(b=>b.addEventListener('click',()=>openEditCagnotteEntry(+b.dataset.caghist)));
@@ -3859,16 +3870,20 @@ function bindPilotage(){
     go('pilotage');
   };
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
-  const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>{
-    const snap=S.pilotSnapshot; if(!snap) return;
-    S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
-    snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
-    snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
-    const psnap=S.projectsSnapshot;
-    if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
-    S.projectsFrozen=true;
-    S.pilotFrozen=true; save(); go('pilotage'); toast("Modifications annulées ↩","✓");
-  };
+  const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>cancelBudgetChanges();
+}
+// Restaure revenus/charges/catégories/mensualités au dernier budget validé (S.pilotSnapshot
+// + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Simulation budgétaire
+// ET depuis le bandeau d'alerte affiché sur tous les autres écrans.
+function cancelBudgetChanges(){
+  const snap=S.pilotSnapshot; if(!snap) return;
+  S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
+  snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
+  snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
+  const psnap=S.projectsSnapshot;
+  if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
+  S.projectsFrozen=true;
+  S.pilotFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
 }
 function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
