@@ -1560,6 +1560,7 @@ function renderAjouter(){
   const isCagnotte = draft.cat==='__cagnotte__';
   const isTransfer=/transfert|virement/i.test(draft.desc);
   const whoSel = draft.who||me();
+  const catMerchants = c ? S.merchants.filter(m=>m.cat===c.id) : S.merchants;
   return `
   <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
     <h1 class="hero-title">Ajouter une dépense</h1>
@@ -1584,9 +1585,9 @@ function renderAjouter(){
       ${isCagnotte?`<div class="small muted" style="margin-top:8px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
     </div>
 
-    ${S.merchants.length?`<div class="field"><label>Commerce</label>
+    ${catMerchants.length?`<div class="field"><label>Commerce</label>
       <div class="merch-wrap">
-        ${S.merchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
+        ${catMerchants.map(m=>`<button class="cat-pill ${draft.merchant===m.id?'on':''}" data-merchpick="${m.id}">${escapeHtml(m.name)}</button>`).join('')}
       </div>
     </div>`:''}
 
@@ -2984,7 +2985,12 @@ function bindAjouter(){
   const mo=$('#dMoreToggle'); if(mo) mo.onclick=()=>{draft._showMore=!draft._showMore; go('ajouter');};
   const p=$('#dPrev'); if(p) p.onclick=()=>{draft.prevision=!draft.prevision; go('ajouter');};
   document.querySelectorAll('[data-whopick]').forEach(b=>b.addEventListener('click',()=>{draft.who=b.dataset.whopick; go('ajouter');}));
-  document.querySelectorAll('[data-catpick]').forEach(b=>b.addEventListener('click',()=>{draft.cat=b.dataset.catpick; go('ajouter');}));
+  document.querySelectorAll('[data-catpick]').forEach(b=>b.addEventListener('click',()=>{
+    draft.cat=b.dataset.catpick;
+    const m=draft.merchant?S.merchants.find(x=>x.id===draft.merchant):null;
+    if(m && m.cat!==draft.cat) draft.merchant="";
+    go('ajouter');
+  }));
   document.querySelectorAll('[data-merchpick]').forEach(b=>b.addEventListener('click',()=>{
     const id=b.dataset.merchpick;
     draft.merchant = draft.merchant===id ? "" : id;
