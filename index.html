@@ -60,6 +60,65 @@ html[data-theme="dark"]{
   --shadow:0 16px 44px -24px rgba(0,0,0,.6); --shadow-sm:0 8px 24px -16px rgba(0,0,0,.6);
 }
 
+/* ---------- Thèmes de couleur (accent uniquement — Besoin/Envie/Investissement/
+   Protection restent fixes partout, ce sont des repères appris dans les graphiques) ---------- */
+html[data-color="sauge"]{
+  --cream:#F7F8F1; --cream-2:#F0F3E8; --card:#FFFFFF; --card-2:#FDFEFB;
+  --terra:#6B8F5C; --terra-d:#57744A; --terra-l:#89AD79; --clay:#749368;
+  --blush:#DCE6D3; --blush-2:#CFDDC2; --peach:#A8C293;
+  --ink:#242B22; --ink-2:#454F40; --muted:#84947F; --muted-2:#A9B6A3;
+  --line:#E2E9DA; --line-2:#D7E1CC;
+}
+html[data-theme="dark"][data-color="sauge"]{
+  --cream:#1C2119; --cream-2:#151810; --card:#242A20; --card-2:#2A3126;
+  --terra:#8CB37A; --terra-d:#749368; --terra-l:#A5C795; --clay:#94B981;
+  --blush:#2E3527; --blush-2:#3A4530; --peach:#7FA36B;
+  --ink:#EAF0E5; --ink-2:#CFDBC6; --muted:#94A38D; --muted-2:#6E7C68;
+  --line:#333D2C; --line-2:#3C4833;
+}
+html[data-color="ardoise"]{
+  --cream:#F5F7F9; --cream-2:#EDF1F4; --card:#FFFFFF; --card-2:#FCFDFE;
+  --terra:#4C6B8A; --terra-d:#3D5670; --terra-l:#6D89A5; --clay:#56728F;
+  --blush:#D9E2EA; --blush-2:#C7D5E0; --peach:#9AB2C7;
+  --ink:#1F262E; --ink-2:#3E4750; --muted:#7C8894; --muted-2:#A3AEB7;
+  --line:#E1E7ED; --line-2:#D3DBE3;
+}
+html[data-theme="dark"][data-color="ardoise"]{
+  --cream:#1A1F26; --cream-2:#12161B; --card:#232A33; --card-2:#2A323C;
+  --terra:#7093B5; --terra-d:#5C7A9C; --terra-l:#8CACCC; --clay:#7B9DBE;
+  --blush:#28313B; --blush-2:#333F4B; --peach:#6E8FAD;
+  --ink:#E9EEF3; --ink-2:#CDD7E0; --muted:#8D99A5; --muted-2:#647380;
+  --line:#2F3944; --line-2:#38434F;
+}
+html[data-color="prune"]{
+  --cream:#FAF4F8; --cream-2:#F5EBF2; --card:#FFFFFF; --card-2:#FDFAFC;
+  --terra:#7D4068; --terra-d:#663355; --terra-l:#985C82; --clay:#874A72;
+  --blush:#E9D7E3; --blush-2:#DEC3D5; --peach:#C089AF;
+  --ink:#2A1C25; --ink-2:#4A3742; --muted:#9A8391; --muted-2:#B8A5B1;
+  --line:#EEDFE9; --line-2:#E4D0DE;
+}
+html[data-theme="dark"][data-color="prune"]{
+  --cream:#221720; --cream-2:#181017; --card:#2C1F29; --card-2:#332531;
+  --terra:#A4638D; --terra-d:#8A4F76; --terra-l:#BA7DA5; --clay:#AE6E97;
+  --blush:#372A34; --blush-2:#443340; --peach:#9A6084;
+  --ink:#F1E4EC; --ink-2:#D9C6D2; --muted:#9F8C99; --muted-2:#71606B;
+  --line:#3B2C37; --line-2:#463441;
+}
+html[data-color="ocre"]{
+  --cream:#FBF7EE; --cream-2:#F6EEDC; --card:#FFFFFF; --card-2:#FEFBF5;
+  --terra:#C08A2E; --terra-d:#9E7024; --terra-l:#D3A455; --clay:#C8944A;
+  --blush:#F2E3C4; --blush-2:#EAD4A9; --peach:#DDB05F;
+  --ink:#302A1D; --ink-2:#514735; --muted:#9C8F71; --muted-2:#BCAF92;
+  --line:#F0E3C7; --line-2:#E8D6B0;
+}
+html[data-theme="dark"][data-color="ocre"]{
+  --cream:#221C11; --cream-2:#18130B; --card:#2C2417; --card-2:#332A1C;
+  --terra:#D3A24E; --terra-d:#B3873D; --terra-l:#DFB876; --clay:#C99F5D;
+  --blush:#3A2F1C; --blush-2:#483B24; --peach:#C79957;
+  --ink:#F2E9D8; --ink-2:#DACBAE; --muted:#A6987C; --muted-2:#7C6F55;
+  --line:#3E331F; --line-2:#4A3D26;
+}
+
 *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
@@ -461,6 +520,16 @@ const EMAILJS_SERVICE_ID = "service_m998ctj";
 const EMAILJS_TEMPLATE_ID = "template_uup9bv1";
 if(window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 const SUPPORT_EMAIL = "equipe.budgetadeux@gmail.com"; // contact éditeur (mentions légales / RGPD)
+// Thèmes de couleur d'accent (Réglages > Préférences). Besoin/Envie/Investissement/Protection
+// restent volontairement fixes dans tous les thèmes : ce sont des repères appris, présents
+// dans tous les graphiques, et les faire varier ferait perdre ce repère à chaque bascule.
+const COLOR_THEMES = [
+  {id:"terra",   name:"Terracotta", dot:"#A84B32"},
+  {id:"sauge",   name:"Sauge",      dot:"#6B8F5C"},
+  {id:"ardoise", name:"Ardoise",    dot:"#4C6B8A"},
+  {id:"prune",   name:"Prune",      dot:"#7D4068"},
+  {id:"ocre",    name:"Ocre",       dot:"#C08A2E"},
+];
 
 /* ============================================================
    ÉTAT & PERSISTANCE
@@ -474,7 +543,7 @@ const PHOTO = "assets/objectif-cible.jpg";
 const DEFAULT = {
   auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
   partner:{ name:"Marc", profile:"lui" },
-  ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, welcomeSeen:false, natureHelpSeen:false },
+  ui:{ dark:false, colorTheme:"terra", period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, welcomeSeen:false, natureHelpSeen:false },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   projectsFrozen:false, // idem mais pour les mensualités de projets ajustées depuis "Vos projets"
   pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler nos changements"
@@ -529,6 +598,7 @@ function migrate(s){
   // apparaître rétroactivement.
   if(s.ui.welcomeSeen===undefined) s.ui.welcomeSeen = true;
   if(s.ui.natureHelpSeen===undefined) s.ui.natureHelpSeen = true;
+  if(!s.ui.colorTheme) s.ui.colorTheme = "terra";
   if(!s.settings.fixed) s.settings.fixed = {lui:0, elle:0};
   if(!s.settings.idealSplit) s.settings.idealSplit = {besoin:50, envie:30, protection:0, invest:20};
   if(s.pilotFrozen===undefined) s.pilotFrozen = false;
@@ -572,8 +642,12 @@ let demoMode=false;
 // Le raccourci "Voir la répartition" du bandeau démo clignote tant qu'il n'a pas été
 // remarqué/cliqué au moins une fois pendant la session de démo en cours.
 let demoPilotageSeen=false;
-function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){} }
+function applyTheme(){
   document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
+  document.documentElement.setAttribute("data-color", S.ui.colorTheme||"terra");
+}
+function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify(S)); }catch(_){} }
+  applyTheme();
   schedulePush(); }
 
 /* ============================================================
@@ -1370,7 +1444,7 @@ function buildDemoState(){
                     categories:d.categories.map(c=>({id:c.id, budget:c.budget})) };
   d.projectsSnapshot={}; d.projects.forEach(p=>{ d.projectsSnapshot[p.id]={mensuel:p.mensuel, months:p.months}; });
   d.budgetHistory=[{date:iso0, label:"Budget valid\u00e9 pour "+monthLabel(0), effect:"immediate"}];
-  d.ui={ dark:S.ui.dark, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0 };
+  d.ui={ dark:S.ui.dark, colorTheme:S.ui.colorTheme||"terra", period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0 };
   return d;
 }
 function enterDemo(){
@@ -1378,7 +1452,7 @@ function enterDemo(){
   demoPilotageSeen=false;
   S=buildDemoState();
   pilotSim={}; projUI={}; analyseUI={}; annualSel=null;
-  document.documentElement.setAttribute("data-theme", S.ui.dark?"dark":"light");
+  applyTheme();
   enterApp();
   toast("Mode d\u00e9monstration \u2014 rien n'est enregistr\u00e9","\ud83c\udfad");
 }
@@ -2436,6 +2510,12 @@ function renderReglages(){
       <div class="row" style="gap:12px"><div class="mi">${S.ui.dark?'🌙':'☀️'}</div><div><div class="nm">Mode sombre</div><div class="sub">Confort des yeux le soir</div></div></div>
       <div class="switch ${S.ui.dark?'on':''}" id="darkSw"></div>
     </div>
+    <div class="menu-row" style="flex-direction:column; align-items:stretch; gap:10px">
+      <div class="row" style="gap:12px"><div class="mi">🎨</div><div><div class="nm">Thème de couleur</div><div class="sub">Personnalisez l'accent de l'app</div></div></div>
+      <div class="row" style="gap:10px; padding-left:52px">
+        ${COLOR_THEMES.map(t=>`<button data-colortheme="${t.id}" title="${t.name}" style="width:26px; height:26px; border-radius:50%; background:${t.dot}; border:2px solid ${S.ui.colorTheme===t.id?'var(--ink)':'transparent'}; display:grid; place-items:center; flex-shrink:0">${S.ui.colorTheme===t.id?'<span style="color:#fff; font-size:11px; font-weight:800">✓</span>':''}</button>`).join('')}
+      </div>
+    </div>
     ${S.auth.coupleCode?`<button class="menu-row" id="syncNow" style="border:none; width:100%; text-align:left; background:none"><div class="row" style="gap:12px"><div class="mi">⬇️</div><div><div class="nm">Synchroniser maintenant</div><div class="sub">La synchro se fait déjà toutes les 15s — ce bouton force la récupération sans attendre</div></div></div><span class="chev">→</span></button>`:''}
   </div>
   ${(window.__lastSyncError)?`<div class="card" style="margin-top:10px; background:#FBE9E4; border:1px solid var(--terra)"><div class="small" style="font-weight:800; color:var(--terra)">⚠️ Dernière erreur de synchro</div><div class="small muted" style="margin-top:4px; word-break:break-word">Étape : ${escapeHtml(window.__lastSyncError.phase)}${window.__lastSyncError.code?' · Code : '+escapeHtml(''+window.__lastSyncError.code):''}<br>${escapeHtml(''+window.__lastSyncError.msg)}</div></div>`:''}
@@ -2448,7 +2528,6 @@ function renderReglages(){
   <div class="section-title">Données</div>
   <div class="card" style="padding:6px 18px">
     <button class="menu-row" id="exportCSV"><div class="mi">📤</div><div class="grow"><div class="nm">Exporter mes dépenses (CSV)</div><div class="sub">Toutes vos dépenses et mouvements, pour un tableur</div></div><span class="chev">→</span></button>
-    <button class="menu-row" id="exportJSON"><div class="mi">📦</div><div class="grow"><div class="nm">Exporter toutes mes données</div><div class="sub">Sauvegarde complète (JSON) : réglages, catégories, dépenses, projets…</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="resetExp"><div class="mi">🧹</div><div class="grow"><div class="nm">Réinitialiser les dépenses</div><div class="sub">Repartir sur un mois vierge</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="logout"><div class="mi">👋</div><div class="grow"><div class="nm" style="color:var(--danger)">Se déconnecter</div></div><span class="chev">→</span></button>
   </div>
@@ -2799,24 +2878,6 @@ function openProfile(){
     openDeleteAccount(); };
 }
 
-// Export RGPD (portabilité) : toutes les données de l'utilisateur + du couple,
-// en JSON téléchargeable — pas besoin du serveur, tout est déjà dans S côté client.
-function exportMyData(){
-  const payload = {
-    export_le: new Date().toISOString(),
-    compte: { nom: S.auth.name, email: S.auth.email, profil: S.auth.profile, code_couple: S.auth.coupleCode },
-    partenaire: S.auth.partnerLinked ? { nom: S.partner.name, profil: S.partner.profile } : null,
-    budget: sharedSnapshot(),
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `budget-a-deux-export-${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  toast("Export téléchargé 📦","✓");
-}
-
 /* ============================================================
    MENTIONS LÉGALES / CONFIDENTIALITÉ / CGU
    ============================================================ */
@@ -2840,7 +2901,7 @@ function openLegal(){
     <p class="small muted">Aucun traceur publicitaire ni analytique. L'application utilise uniquement le stockage local de votre appareil (localStorage) pour votre session et vos préférences — strictement nécessaire au fonctionnement, sans consentement requis.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Vos droits</p>
-    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez tout directement depuis l'app (Réglages → Données → Exporter toutes mes données pour récupérer un fichier de toutes vos données, ou Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
+    <p class="small muted">Vous gérez la suppression de votre compte directement depuis l'app (menu → Supprimer mon compte). Pour toute demande d'accès, de rectification ou de portabilité de vos données, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Conditions d'utilisation</p>
     <p class="small muted">Budget à Deux est fourni tel quel, en phase de test privée, sans garantie de disponibilité continue. Un compte est personnel ; le code couple ne doit être partagé qu'avec votre partenaire. Vous restez responsable de l'exactitude des données financières que vous saisissez.</p>`);
@@ -2880,7 +2941,7 @@ function openDeleteAccount(){
       <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Réinitialiser mes données</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. Votre connexion reste active.</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer définitivement mon compte</div><div class="sub">Nom, email, connexion et tout le budget.</div></div><span class="chev">→</span></button>`;
   openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
-    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos données avant (Réglages → Données → Exporter toutes mes données).</p>
+    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos dépenses avant (Réglages → Données → Exporter mes dépenses), ou écrivez-nous pour récupérer l'ensemble de vos données.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">${rows}</div>
     <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
   $('#daCancel').onclick=()=>closeModal();
@@ -3649,9 +3710,9 @@ function bindReglages(){
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
+  document.querySelectorAll('[data-colortheme]').forEach(b=>b.addEventListener('click',()=>{ S.ui.colorTheme=b.dataset.colortheme; save(); go('reglages'); }));
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
-  const ej=$('#exportJSON'); if(ej) ej.onclick=exportMyData;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
