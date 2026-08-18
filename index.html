@@ -541,7 +541,7 @@ function makeAvatarSVG(bg, label){
 const PHOTO = "assets/objectif-cible.jpg";
 
 const DEFAULT = {
-  auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
+  auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false, pendingDeletionAt:null, pendingDeletionMode:null },
   partner:{ name:"Marc", profile:"lui" },
   ui:{ dark:false, colorTheme:"terra", period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, welcomeSeen:false, natureHelpSeen:false },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
@@ -970,6 +970,14 @@ async function loadCoupleIntoState(prof, user){
   const partner=others&&others[0];
   if(partner){ S.partner.name=partner.name; S.partner.profile=partner.gender; S.auth.partnerLinked=true; }
   else { S.partner.profile=partnerOf(prof.gender); S.partner.name='Partenaire'; S.auth.partnerLinked=false; }
+  // Suppression programmée (délai de grâce de 14 jours) : à afficher en priorité dès l'arrivée,
+  // pour qu'elle ne passe pas inaperçue sous d'autres bandeaux.
+  try{
+    const {data:pd}=await sb.rpc('get_pending_deletion');
+    const row=pd&&pd[0];
+    S.auth.pendingDeletionAt = row&&row.pending_deletion_at || null;
+    S.auth.pendingDeletionMode = row&&row.pending_deletion_mode || null;
+  }catch(_){ S.auth.pendingDeletionAt=null; S.auth.pendingDeletionMode=null; }
   save();
 }
 
@@ -1254,6 +1262,17 @@ function renderSetupBanner(){
     </div>`;
     $('#demoPilotage').onclick=()=>{ demoPilotageSeen=true; go('pilotage'); };
     $('#demoQuit').onclick=()=>exitDemo();
+    return;
+  }
+  // Suppression programmée : priorité absolue, y compris sur Pilotage — c'est plus urgent
+  // que n'importe quel autre rappel, et facilement raté si noyé sous un autre bandeau.
+  if(S.auth.pendingDeletionAt && new Date(S.auth.pendingDeletionAt) > new Date()){
+    const d=new Date(S.auth.pendingDeletionAt);
+    el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--danger)">
+      <span>🗓️ Suppression programmée le ${d.toLocaleDateString('fr-FR')}</span>
+      <span class="cta" id="cancelDeletionBtn">Annuler →</span>
+    </div>`;
+    $('#cancelDeletionBtn').onclick=()=>cancelPendingDeletion();
     return;
   }
   if(current==='pilotage'){ el.innerHTML=''; return; }
@@ -2936,18 +2955,18 @@ function openLegal(){
 /* ============================================================
    SUPPRESSION DE COMPTE / DONNÉES COUPLE
    ============================================================ */
+// Ne supprime rien tout de suite : programme la suppression dans 14 jours (RPC
+// schedule_account_deletion, SECURITY DEFINER). Se reconnecter dans ce délai permet
+// d'annuler (voir cancelPendingDeletion + le bandeau affiché sur renderSetupBanner).
 async function callDeleteAccount(mode){
-  const { data:{ session } } = await sb.auth.getSession();
-  const token = session?.access_token;
-  if(!token) throw new Error("Session expirée, reconnectez-vous.");
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
-    method:'POST',
-    headers:{ 'Authorization':`Bearer ${token}`, 'apikey':SUPABASE_ANON_KEY, 'Content-Type':'application/json' },
-    body: JSON.stringify({ mode })
-  });
-  const out = await res.json().catch(()=>({}));
-  if(!res.ok || out.error) throw new Error(out.error || ('HTTP '+res.status));
-  return out;
+  const { error } = await sb.rpc('schedule_account_deletion', { p_mode: mode });
+  if(error) throw new Error(error.message || 'Erreur inconnue');
+}
+async function cancelPendingDeletion(){
+  const { error } = await sb.rpc('cancel_account_deletion');
+  if(error){ toast("Erreur : "+error.message,"⚠️"); return; }
+  S.auth.pendingDeletionAt=null; S.auth.pendingDeletionMode=null; save();
+  renderSetupBanner(); toast("Suppression annulée ✓");
 }
 // Après suppression du compte : on vide l'appareil et on repart à zéro.
 async function wipeLocalAndRestart(){
@@ -2967,7 +2986,7 @@ function openDeleteAccount(){
       <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Réinitialiser mes données</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. Votre connexion reste active.</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer définitivement mon compte</div><div class="sub">Nom, email, connexion et tout le budget.</div></div><span class="chev">→</span></button>`;
   openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
-    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos dépenses avant (Réglages → Données → Exporter mes dépenses), ou écrivez-nous pour récupérer l'ensemble de vos données.</p>
+    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Vous aurez <b>14 jours pour changer d'avis</b> (il suffit de vous reconnecter pour annuler) avant que ce soit définitif. 💡 Pensez à exporter vos dépenses avant (Réglages → Données → Exporter mes dépenses), ou écrivez-nous pour récupérer l'ensemble de vos données.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">${rows}</div>
     <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
   $('#daCancel').onclick=()=>closeModal();
@@ -2975,16 +2994,9 @@ function openDeleteAccount(){
   const run = async (mode)=>{
     closeModal();
     try{
-      toast("Suppression…","⏳");
       await callDeleteAccount(mode);
-      if(mode==='couple'){
-        // Budget réinitialisé côté serveur : on adopte l'état vierge du cloud.
-        lastAppliedStamp=null; await pullState();
-        toast("Budget réinitialisé 🧹");
-      } else {
-        toast("Compte supprimé. À bientôt 👋");
-        setTimeout(wipeLocalAndRestart, 900);
-      }
+      toast("Suppression programmée dans 14 jours ⏳","🗓️");
+      setTimeout(wipeLocalAndRestart, 900);
     }catch(e){
       openModal(`<h3 style="color:var(--danger)">Suppression impossible</h3><p class="small muted" style="margin:6px 0 18px">${escapeHtml(e.message||'Erreur inconnue')}<br><br>Réessayez dans un instant. Si le souci persiste, le service n'est peut-être pas encore activé.</p><button class="btn btn-soft" id="okErr" style="width:100%">Fermer</button>`);
       const b=$('#okErr'); if(b) b.onclick=closeModal;
@@ -2993,15 +3005,15 @@ function openDeleteAccount(){
 
   const da=$('#daAccount'); if(da) da.onclick=()=>openConfirm(
     "Supprimer votre compte ?",
-    "Votre profil (nom, email, connexion) sera supprimé définitivement. Le budget du couple restera pour votre partenaire.<br><br>Cette action est irréversible.",
+    "Votre profil (nom, email, connexion) sera supprimé dans 14 jours. Le budget du couple restera pour votre partenaire.<br><br>Vous pouvez annuler à tout moment d'ici là en vous reconnectant.",
     ()=>run('account'));
   $('#daCouple').onclick=()=>openConfirm(
     linked?"Réinitialiser le budget du couple ?":"Réinitialiser vos données ?",
-    "Toutes les données du budget (dépenses, catégories, projets, revenus, historique) seront effacées et remises à zéro."+(linked?" Cela affecte aussi votre partenaire.":"")+"<br><br>Votre connexion reste active. Cette action est irréversible.",
+    "Toutes les données du budget (dépenses, catégories, projets, revenus, historique) seront effacées dans 14 jours."+(linked?" Cela affecte aussi votre partenaire.":"")+"<br><br>Votre connexion reste active. Vous pouvez annuler à tout moment d'ici là en vous reconnectant.",
     ()=>run('couple'));
   $('#daAll').onclick=()=>openConfirm(
     linked?"Tout supprimer ?":"Supprimer définitivement votre compte ?",
-    (linked?"Votre compte (nom, email, connexion) ET tout le budget commun seront supprimés définitivement. Le budget disparaîtra aussi pour votre partenaire.":"Votre compte (nom, email, connexion) ET tout votre budget seront supprimés définitivement.")+"<br><br>Cette action est irréversible.",
+    (linked?"Votre compte (nom, email, connexion) ET tout le budget commun seront supprimés dans 14 jours. Le budget disparaîtra aussi pour votre partenaire.":"Votre compte (nom, email, connexion) ET tout votre budget seront supprimés dans 14 jours.")+"<br><br>Vous pouvez annuler à tout moment d'ici là en vous reconnectant.",
     ()=>run(linked?'all':'account'));
 }
 
