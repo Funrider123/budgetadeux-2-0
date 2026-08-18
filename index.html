@@ -2447,7 +2447,8 @@ function renderReglages(){
 
   <div class="section-title">Données</div>
   <div class="card" style="padding:6px 18px">
-    <button class="menu-row" id="exportCSV"><div class="mi">📤</div><div class="grow"><div class="nm">Exporter en CSV</div><div class="sub">Toutes vos dépenses et mouvements</div></div><span class="chev">→</span></button>
+    <button class="menu-row" id="exportCSV"><div class="mi">📤</div><div class="grow"><div class="nm">Exporter mes dépenses (CSV)</div><div class="sub">Toutes vos dépenses et mouvements, pour un tableur</div></div><span class="chev">→</span></button>
+    <button class="menu-row" id="exportJSON"><div class="mi">📦</div><div class="grow"><div class="nm">Exporter toutes mes données</div><div class="sub">Sauvegarde complète (JSON) : réglages, catégories, dépenses, projets…</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="resetExp"><div class="mi">🧹</div><div class="grow"><div class="nm">Réinitialiser les dépenses</div><div class="sub">Repartir sur un mois vierge</div></div><span class="chev">→</span></button>
     <button class="menu-row" id="logout"><div class="mi">👋</div><div class="grow"><div class="nm" style="color:var(--danger)">Se déconnecter</div></div><span class="chev">→</span></button>
   </div>
@@ -2785,7 +2786,6 @@ function openProfile(){
     <p class="small muted" style="margin:12px 0 16px">Votre profil et votre session.</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" id="pmLogout"><div class="mi" style="background:var(--blush)">🚪</div><div class="grow"><div class="nm">Se déconnecter</div><div class="sub">Revenir à l'écran de connexion</div></div><span class="chev">→</span></button>
-      <button class="menu-row" id="pmExport"><div class="mi">📦</div><div class="grow"><div class="nm">Exporter mes données</div><div class="sub">Télécharger un fichier avec toutes vos données</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmLegal"><div class="mi">📄</div><div class="grow"><div class="nm">Mentions légales & confidentialité</div><div class="sub">Données, RGPD, CGU</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="pmDelete"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer mon compte</div><div class="sub">Compte, données du couple…</div></div><span class="chev">→</span></button>
     </div>`, true);
@@ -2793,7 +2793,6 @@ function openProfile(){
     // En demo il n'y a aucune session Supabase a fermer : on recharge simplement.
     if(demoMode){ exitDemo(); return; }
     openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); }); };
-  $('#pmExport').onclick=()=>{ closeModal(); exportMyData(); };
   $('#pmLegal').onclick=()=>{ closeModal(); openLegal(); };
   $('#pmDelete').onclick=()=>{ closeModal();
     if(demoMode){ toast("Indisponible en d\u00e9monstration \u2014 aucun compte n'existe","\ud83c\udfad"); return; }
@@ -2841,7 +2840,7 @@ function openLegal(){
     <p class="small muted">Aucun traceur publicitaire ni analytique. L'application utilise uniquement le stockage local de votre appareil (localStorage) pour votre session et vos préférences — strictement nécessaire au fonctionnement, sans consentement requis.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Vos droits</p>
-    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez tout directement depuis l'app (menu → Exporter mes données pour récupérer un fichier de toutes vos données, ou Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
+    <p class="small muted">Accès, rectification, suppression et portabilité de vos données : vous gérez tout directement depuis l'app (Réglages → Données → Exporter toutes mes données pour récupérer un fichier de toutes vos données, ou Supprimer mon compte). Pour toute autre demande, écrivez à ${escapeHtml(SUPPORT_EMAIL)}.</p>
 
     <p style="font-weight:800; margin:14px 0 6px">Conditions d'utilisation</p>
     <p class="small muted">Budget à Deux est fourni tel quel, en phase de test privée, sans garantie de disponibilité continue. Un compte est personnel ; le code couple ne doit être partagé qu'avec votre partenaire. Vous restez responsable de l'exactitude des données financières que vous saisissez.</p>`);
@@ -2881,7 +2880,7 @@ function openDeleteAccount(){
       <button class="menu-row" id="daCouple"><div class="mi">📊</div><div class="grow"><div class="nm">Réinitialiser mes données</div><div class="sub">Dépenses, catégories, projets, revenus… remis à zéro. Votre connexion reste active.</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="daAll"><div class="mi" style="background:#F6D7CE">🗑️</div><div class="grow"><div class="nm" style="color:var(--danger)">Supprimer définitivement mon compte</div><div class="sub">Nom, email, connexion et tout le budget.</div></div><span class="chev">→</span></button>`;
   openModal(`<h3 style="color:var(--danger)">Supprimer — que faire ?</h3>
-    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos données avant (menu → Exporter mes données).</p>
+    <p class="small muted" style="margin-bottom:16px">Choisissez ce que vous souhaitez supprimer. Ces actions sont <b>définitives</b>. 💡 Pensez à exporter vos données avant (Réglages → Données → Exporter toutes mes données).</p>
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">${rows}</div>
     <button class="btn btn-soft" id="daCancel" style="width:100%; margin-top:14px">Annuler</button>`);
   $('#daCancel').onclick=()=>closeModal();
@@ -3652,6 +3651,7 @@ function bindReglages(){
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
+  const ej=$('#exportJSON'); if(ej) ej.onclick=exportMyData;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
