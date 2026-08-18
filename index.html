@@ -474,7 +474,7 @@ const PHOTO = "assets/objectif-cible.jpg";
 const DEFAULT = {
   auth:{ loggedIn:false, email:"", name:"Alice", profile:"elle", coupleCode:"LV2NCO", partnerLinked:false },
   partner:{ name:"Marc", profile:"lui" },
-  ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true, welcomeSeen:false, natureHelpSeen:false },
+  ui:{ dark:false, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, welcomeSeen:false, natureHelpSeen:false },
   pilotFrozen:false, // décision partagée du couple (synchronisée) : gèle l'écran de pilotage jusqu'à "Modifier"
   projectsFrozen:false, // idem mais pour les mensualités de projets ajustées depuis "Vos projets"
   pilotSnapshot:null, // dernier état validé du budget (salaires/charges/catégories) pour "Annuler nos changements"
@@ -585,7 +585,7 @@ function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify
 const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
-function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode && S.ui.sync); }
+function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode); }
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
 function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
 // On ne signale une erreur de synchro qu'une fois par session, pour ne pas spammer.
@@ -1202,7 +1202,7 @@ function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
     <div class="brand">Budget à Deux <span class="v">2.0</span></div>
     <div class="appbar-actions">
-      ${S.auth.partnerLinked && S.ui.sync?`<span class="sync"><span class="dot"></span>Synchro</span>`:`<span class="sync" style="color:var(--muted); background:var(--cream-2)">Hors ligne</span>`}
+      ${S.auth.partnerLinked?`<span class="sync"><span class="dot"></span>Synchro</span>`:`<span class="sync" style="color:var(--muted); background:var(--cream-2)">Hors ligne</span>`}
       <button class="icon-btn" id="themeBtn" title="Thème">${S.ui.dark?'☀️':'🌙'}</button>
       <button class="icon-btn" id="menuBtn" title="Plus">☰</button>
       <img class="avatar" src="${avatarOf(me())}" id="avatarBtn">
@@ -1370,7 +1370,7 @@ function buildDemoState(){
                     categories:d.categories.map(c=>({id:c.id, budget:c.budget})) };
   d.projectsSnapshot={}; d.projects.forEach(p=>{ d.projectsSnapshot[p.id]={mensuel:p.mensuel, months:p.months}; });
   d.budgetHistory=[{date:iso0, label:"Budget valid\u00e9 pour "+monthLabel(0), effect:"immediate"}];
-  d.ui={ dark:S.ui.dark, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0, sync:true };
+  d.ui={ dark:S.ui.dark, period:"mensuel", histMonth:0, analyMonth:0, mdMonth:0 };
   return d;
 }
 function enterDemo(){
@@ -1925,6 +1925,7 @@ function annualOverviewHtml(){
     <p class="small muted" style="margin-top:10px; text-align:center; padding:20px 0">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p></div>`;
   }
   const seg = (v,color) => v>0 ? `<div style="height:${(v/max*H).toFixed(1)}px; background:var(${color}); margin-bottom:1.5px"></div>` : '';
+  const scaleMarks = [0,.25,.5,.75,1].map(f=>`<div style="position:absolute; left:0; top:${(H-f*H-6).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--muted)">${fmt0(max*f)}</div>`).join('');
   const bars = months.map(m=>{
     return `<div data-anamonth="${m.off}" style="flex:1; display:flex; justify-content:center; align-items:flex-end; height:${H}px; cursor:pointer">
       <div style="position:relative; width:100%; max-width:20px; display:flex; flex-direction:column-reverse; ${m.cur?'outline:2px solid var(--terra); outline-offset:2px; border-radius:3px':''}">
@@ -1944,12 +1945,13 @@ function annualOverviewHtml(){
     <div class="between" style="margin-bottom:2px"><b class="small">Dépenses par nature</b><span class="muted small">moy. ${fmt0(avg)}/mois</span></div>
     ${scopeToggle}
     <p class="small muted" style="margin:0 0 16px">La ligne pointillée « budget » = ${budgetParts.join(' + ')}.</p>
-    <div style="position:relative">
+    <div style="position:relative; padding-left:32px">
+      ${scaleMarks}
       <div style="display:flex; align-items:flex-end; gap:5px; height:${H}px">${bars}</div>
-      ${budget>0?`<div style="position:absolute; left:0; right:0; bottom:${budgetY.toFixed(1)}px; border-top:2px dashed var(--ink-2); opacity:.5; pointer-events:none"></div>
+      ${budget>0?`<div style="position:absolute; left:32px; right:0; bottom:${budgetY.toFixed(1)}px; border-top:2px dashed var(--ink-2); opacity:.5; pointer-events:none"></div>
       <div style="position:absolute; right:0; bottom:${(budgetY+2).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--ink-2); background:var(--card); padding:0 4px; pointer-events:none">budget</div>`:''}
     </div>
-    <div style="display:flex; gap:5px; margin-top:5px">${labels}</div>
+    <div style="display:flex; gap:5px; margin-top:5px; padding-left:32px">${labels}</div>
     <div class="row" style="gap:14px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       ${leg('--besoin','Besoins')}${leg('--envie','Envies')}${leg('--invest','Investissement')}${leg('--protection','Protection')}
     </div>
@@ -1961,7 +1963,7 @@ function annualSuiviHtml(){
   if(!S.categories.length) return `<div class="card"><p class="small muted" style="text-align:center; padding:20px 0">Ajoutez des catégories dans Simulation et validation budgétaire pour suivre leur évolution ici.</p></div>`;
   if(!annualSel || !annualSel.startsWith('cat:') || !S.categories.some(c=>'cat:'+c.id===annualSel)) annualSel='cat:'+S.categories[0].id;
   const catChip=(c)=>`<button class="cat-pill ${annualSel==='cat:'+c.id?'on':''}" data-poste="cat:${c.id}" style="flex:0 0 auto">${c.emoji} ${escapeHtml(c.name)}</button>`;
-  const chips=`<div class="row" style="gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; flex-wrap:nowrap">${S.categories.map(catChip).join('')}</div>`;
+  const chips=`<div class="row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px">${S.categories.map(catChip).join('')}</div>`;
   const actual=[], budg=[];
   for(let off=-11; off<=0; off++){ actual.push(posteActualAt(annualSel,off)); budg.push(posteBudgetAt(annualSel,off)); }
   const meta=posteMeta(annualSel);
@@ -1977,7 +1979,7 @@ function annualSuiviHtml(){
       return `<div class="card"><div class="row" style="gap:6px; margin-bottom:2px"><span style="width:11px;height:11px;border-radius:3px;background:var(--${meta.color})"></span><b>${escapeHtml(meta.name)}</b></div>
       <p class="small muted" style="text-align:center; padding:24px 0">Aucune dépense sur ce poste pour l'instant.</p></div>`;
     }
-    const W=326,H=150,padL=4,padR=4,padT=8,padB=4;
+    const W=326,H=150,padL=28,padR=4,padT=8,padB=4;
     const max=maxV*1.08;
     const x=k=>padL + k/11*(W-padL-padR);
     const y=v=>padT + (1-v/max)*(H-padT-padB);
@@ -1986,6 +1988,7 @@ function annualSuiviHtml(){
     const lineB = budg.map((v,k)=>`${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const overDots = actual.map((v,k)=> (budg[k]>0 && v>budg[k]) ? `<circle cx="${x(k).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="var(--danger)" stroke="var(--card)" stroke-width="1.5"/>`:'').join('');
     const labels = Mi.map((m,k)=>`<text x="${x(k).toFixed(1)}" y="${H+14}" font-size="9" font-weight="800" fill="var(--muted)" text-anchor="middle">${m}</text>`).join('');
+    const scaleMarks = [0,.25,.5,.75,1].map(f=>`<text x="0" y="${(y(max*f)-3).toFixed(1)}" font-size="9" font-weight="800" fill="var(--muted)">${fmt0(max*f)}</text>`).join('');
     return `<div class="card">
       <div class="between" style="margin-bottom:2px"><div class="row" style="gap:6px"><span style="font-size:16px">${meta.emoji}</span><b>${escapeHtml(meta.name)}</b></div>
       ${nOver>0?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 14%,transparent)">${nOver} mois dépassés</span>`:`<span class="muted small">moy. ${fmt0(avgA)}/mois</span>`}</div>
@@ -1993,7 +1996,7 @@ function annualSuiviHtml(){
       <svg viewBox="0 0 ${W} ${H+20}" style="width:100%; height:auto; overflow:visible">
         ${hasBudget?`<polyline points="${lineB}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 4" opacity="0.55"/>`:''}
         <polyline points="${lineA}" fill="none" stroke="var(--${meta.color})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-        ${overDots}${labels}
+        ${overDots}${labels}${scaleMarks}
       </svg>
       <div class="row" style="gap:16px; margin-top:10px; padding-top:12px; border-top:1px solid var(--line); flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:6px"><span style="width:16px;height:3px;border-radius:2px;background:var(--${meta.color})"></span><span class="small">Dépensé</span></div>
@@ -2433,11 +2436,7 @@ function renderReglages(){
       <div class="row" style="gap:12px"><div class="mi">${S.ui.dark?'🌙':'☀️'}</div><div><div class="nm">Mode sombre</div><div class="sub">Confort des yeux le soir</div></div></div>
       <div class="switch ${S.ui.dark?'on':''}" id="darkSw"></div>
     </div>
-    <div class="between menu-row" ${S.ui.sync?'':'style="border:none"'}>
-      <div class="row" style="gap:12px"><div class="mi">🔄</div><div><div class="nm">Synchronisation temps réel</div><div class="sub">Via Supabase, entre vos deux téléphones</div></div></div>
-      <div class="switch ${S.ui.sync?'on':''}" id="syncSw"></div>
-    </div>
-    ${S.ui.sync?`<button class="menu-row" id="syncNow" style="border:none; width:100%; text-align:left; background:none"><div class="row" style="gap:12px"><div class="mi">⬇️</div><div><div class="nm">Synchroniser maintenant</div><div class="sub">Forcer la récupération des données du couple</div></div></div><span class="chev">→</span></button>`:''}
+    ${S.auth.coupleCode?`<button class="menu-row" id="syncNow" style="border:none; width:100%; text-align:left; background:none"><div class="row" style="gap:12px"><div class="mi">⬇️</div><div><div class="nm">Synchroniser maintenant</div><div class="sub">La synchro se fait déjà toutes les 15s — ce bouton force la récupération sans attendre</div></div></div><span class="chev">→</span></button>`:''}
   </div>
   ${(window.__lastSyncError)?`<div class="card" style="margin-top:10px; background:#FBE9E4; border:1px solid var(--terra)"><div class="small" style="font-weight:800; color:var(--terra)">⚠️ Dernière erreur de synchro</div><div class="small muted" style="margin-top:4px; word-break:break-word">Étape : ${escapeHtml(window.__lastSyncError.phase)}${window.__lastSyncError.code?' · Code : '+escapeHtml(''+window.__lastSyncError.code):''}<br>${escapeHtml(''+window.__lastSyncError.msg)}</div></div>`:''}
 
@@ -3651,7 +3650,6 @@ function bindReglages(){
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
-  const ss=$('#syncSw'); if(ss) ss.onclick=()=>{S.ui.sync=!S.ui.sync; save(); renderAppbar(); go('reglages'); toast(S.ui.sync?"Synchronisation activée 🔄":"Mode hors ligne"); if(S.ui.sync) initSync(); else stopSync();};
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
   const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
