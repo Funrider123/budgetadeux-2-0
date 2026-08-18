@@ -662,6 +662,25 @@ let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastApp
 function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode); }
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
 function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
+// Fusionne les listes par id (union) au lieu d'un remplacement complet, pour éviter
+// qu'une dépense/charge/catégorie/commerce/projet ajouté chez un partenaire soit
+// effacé si l'autre pousse juste après sans l'avoir encore reçu. Limite connue : si
+// les deux modifient ou suppriment le MÊME élément (même id) au même moment, c'est
+// toujours la version qui pousse en dernier qui gagne — cas rare, non traité ici ;
+// une vraie garantie demanderait une fusion côté serveur (fonction Postgres).
+const MERGE_ARRAY_KEYS = ['categories','charges','merchants','expenses','projects'];
+function mergeArraysWithRemote(remoteData){
+  if(!remoteData) return false;
+  let changed=false;
+  MERGE_ARRAY_KEYS.forEach(k=>{
+    const remoteArr=remoteData[k];
+    if(!Array.isArray(remoteArr) || !Array.isArray(S[k])) return;
+    const localIds=new Set(S[k].map(x=>x.id));
+    const onlyRemote=remoteArr.filter(x=>x && x.id && !localIds.has(x.id));
+    if(onlyRemote.length){ S[k]=S[k].concat(onlyRemote); changed=true; }
+  });
+  return changed;
+}
 // On ne signale une erreur de synchro qu'une fois par session, pour ne pas spammer.
 // Le détail (code + message) est exposé pour diagnostiquer (cache de schéma, droits…).
 function syncError(phase,e){
@@ -680,6 +699,13 @@ function schedulePush(){ if(!syncActive()||applyingRemote) return; clearTimeout(
 async function pushState(){
   if(!syncActive()||applyingRemote) return;
   try{
+    // On relit l'état distant juste avant d'écraser, pour y fusionner tout ajout du
+    // partenaire qu'on n'aurait pas encore reçu localement (voir mergeArraysWithRemote).
+    const {data:remoteRow}=await sb.from('couple_state').select('data').eq('couple_code',S.auth.coupleCode).maybeSingle();
+    if(mergeArraysWithRemote(remoteRow && remoteRow.data)){
+      applyingRemote=true; save(); applyingRemote=false;
+      if(!$('#main').classList.contains('hidden')){ renderAppbar(); renderSetupBanner(); go(current); }
+    }
     const stamp=new Date().toISOString();
     const {error}=await sb.from('couple_state').upsert({ couple_code:S.auth.coupleCode, data:sharedSnapshot(), updated_at:stamp, updated_by:deviceId });
     if(error){ syncError('envoi', error); return; }
