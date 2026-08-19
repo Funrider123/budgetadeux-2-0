@@ -26,8 +26,11 @@ jobs:
       - name: Installer les dépendances
         run: npm ci
 
+      # Sans --with-deps : l'image ubuntu-latest fournit déjà les bibliothèques
+      # système nécessaires à Chromium, et l'installation apt de --with-deps
+      # reste bloquée sur une confirmation interactive.
       - name: Installer Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Lancer les tests
         run: npx playwright test
