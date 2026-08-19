@@ -1,0 +1,14 @@
+{
+  "name": "budget-a-deux",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Budget à Deux — application de budget pour couples (fichier unique index.html)",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

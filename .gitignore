@@ -1,2 +1,9 @@
 # Config locale de l'outil Claude Code — hors dépôt
 .claude/
+
+# Tests
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
