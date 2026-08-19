@@ -8,6 +8,12 @@ on:
     branches: [main, preview, 'claude/**']
   pull_request:
     branches: [main]
+  # Contrôle hebdomadaire même sans nouveau code : détecte ce qui casse tout seul
+  # (image du runner qui évolue, dépendance mise à jour…). Lundi 7h UTC.
+  # À noter : GitHub suspend les workflows planifiés après 60 jours sans activité
+  # sur le dépôt, et le réveille au prochain push.
+  schedule:
+    - cron: '0 7 * * 1'
   workflow_dispatch:
 
 jobs:
