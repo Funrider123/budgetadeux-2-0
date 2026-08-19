@@ -659,7 +659,34 @@ function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify
 const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
+// État affiché par la pastille de connexion/synchro (voir renderAppbar + openConnStatusHelp).
+// 'ok' | 'error' | 'ratelimited' — n'a de sens que si on est en ligne et syncActive().
+let netOnline = navigator.onLine;
+let syncStatus = 'ok';
 function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode); }
+// Chaîne de priorité à un seul niveau : pas de partenaire relié prime sur tout le reste
+// (rien à synchroniser tant que personne n'est relié), sinon la santé réseau/synchro.
+function connStatus(){
+  if(demoMode || !S.auth.partnerLinked) return 'unlinked';
+  if(!netOnline) return 'offline';
+  if(syncStatus==='ratelimited') return 'ratelimited';
+  if(syncStatus==='error') return 'error';
+  return 'ok';
+}
+const CONN_STATUS_META = {
+  unlinked:    { icon:'👥', label:'Non relié',       color:'var(--muted)', bg:'var(--cream-2)' },
+  ok:          { icon:null, label:'Synchro',          color:'var(--ok)',    bg:'color-mix(in srgb,var(--ok) 12%, transparent)' },
+  offline:     { icon:'📡', label:'Hors ligne',       color:'var(--muted)', bg:'var(--cream-2)' },
+  error:       { icon:'⚠️', label:'Synchro en échec', color:'#fff',         bg:'var(--warn)' },
+  ratelimited: { icon:'⏳', label:'Patientez',         color:'#fff',         bg:'var(--warn)' },
+};
+function connStatusPillHtml(){
+  const st=connStatus(), m=CONN_STATUS_META[st];
+  return `<span class="sync" id="connStatusPill" style="cursor:pointer; color:${m.color}; background:${m.bg}">${m.icon?`<span>${m.icon}</span>`:'<span class="dot"></span>'}${m.label}</span>`;
+}
+// Ne redessine que si l'app est visible (évite une erreur si #appbar n'existe pas encore,
+// avant connexion) : appelé depuis les écouteurs online/offline et syncError.
+function refreshConnStatusUI(){ if($('#main') && !$('#main').classList.contains('hidden')) renderAppbar(); }
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
 function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
 // Fusionne les listes par id (union) au lieu d'un remplacement complet, pour éviter
@@ -688,6 +715,8 @@ function syncError(phase,e){
   const msg=(e&&(e.message||e.error_description||e.error))||(typeof e==='string'?e:JSON.stringify(e));
   window.__lastSyncError={phase,code,msg};
   console.error('sync '+phase, e);
+  syncStatus = /rate.?limit/i.test(msg||'') ? 'ratelimited' : 'error';
+  refreshConnStatusUI();
   if(!syncErrShown){ syncErrShown=true; toast('Synchro '+phase+' — '+(code?code+' : ':'')+msg, '⚠️'); }
 }
 function applyRemote(data, stamp){
@@ -711,6 +740,7 @@ async function pushState(){
     if(error){ syncError('envoi', error); return; }
     lastAppliedStamp=stamp; // notre propre écriture : on ne se la réappliquera pas
     syncErrShown=false;
+    if(syncStatus!=='ok'){ syncStatus='ok'; refreshConnStatusUI(); }
   }catch(e){ syncError('envoi', e); }
 }
 async function pullState(){
@@ -719,6 +749,7 @@ async function pullState(){
     const {data,error}=await sb.from('couple_state').select('data,updated_at,updated_by').eq('couple_code',S.auth.coupleCode).maybeSingle();
     if(error){ syncError('lecture', error); return; }
     syncErrShown=false;
+    if(syncStatus!=='ok'){ syncStatus='ok'; refreshConnStatusUI(); }
     if(!data || !data.data || !Object.keys(data.data).length){ await pushState(); return; } // cloud vide → on initialise
     if(data.updated_at===lastAppliedStamp) return;            // rien de nouveau
     if(data.updated_by===deviceId){ lastAppliedStamp=data.updated_at; return; } // notre propre écriture
@@ -742,7 +773,12 @@ function subscribeSync(){
 // régulièrement et au retour sur l'app, en plus de l'abonnement temps réel.
 function startPolling(){ stopPolling(); pollTimer=setInterval(()=>{ if(syncActive() && !document.hidden) pullState(); }, 15000); }
 function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
-function bindVisibility(){ if(visBound) return; visBound=true; document.addEventListener('visibilitychange',()=>{ if(!document.hidden && syncActive()) pullState(); }); window.addEventListener('online',()=>{ if(syncActive()) pullState(); }); }
+function bindVisibility(){
+  if(visBound) return; visBound=true;
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden && syncActive()) pullState(); });
+  window.addEventListener('online',()=>{ netOnline=true; refreshConnStatusUI(); if(syncActive()) pullState(); });
+  window.addEventListener('offline',()=>{ netOnline=false; refreshConnStatusUI(); });
+}
 async function initSync(){ bindVisibility(); if(!syncActive()) return; await pullState(); subscribeSync(); startPolling(); }
 function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} syncChan=null; } clearTimeout(pushTimer); stopPolling(); lastAppliedStamp=null; }
 
@@ -1321,7 +1357,7 @@ function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
     <div class="brand">Budget à Deux <span class="v">2.0</span></div>
     <div class="appbar-actions">
-      ${S.auth.partnerLinked?`<span class="sync"><span class="dot"></span>Synchro</span>`:`<span class="sync" style="color:var(--muted); background:var(--cream-2)">Hors ligne</span>`}
+      ${connStatusPillHtml()}
       <button class="icon-btn" id="themeBtn" title="Thème">${S.ui.dark?'☀️':'🌙'}</button>
       <button class="icon-btn" id="menuBtn" title="Plus">☰</button>
       <img class="avatar" src="${avatarOf(me())}" id="avatarBtn">
@@ -1330,6 +1366,27 @@ function renderAppbar(){
   $('#themeBtn').onclick=()=>{ S.ui.dark=!S.ui.dark; save(); renderAppbar(); };
   $('#menuBtn').onclick=()=>openMenu();
   $('#avatarBtn').onclick=()=>openProfile();
+  const csp=$('#connStatusPill'); if(csp) csp.onclick=()=>openConnStatusHelp();
+}
+// Glossaire des 5 états de la pastille connexion/synchro, l'état en cours mis en avant —
+// même principe que openNatureHelp : tout montrer d'un coup plutôt qu'un message isolé.
+function openConnStatusHelp(){
+  const cur=connStatus();
+  const row=(key,icon,name,text)=>{
+    const active=key===cur;
+    return `<div style="background:${active?'color-mix(in srgb,var(--terra) 7%, var(--card))':'var(--card)'}; border:1px solid ${active?'var(--terra-l)':'var(--line)'}; border-radius:12px 12px 12px 3px; padding:10px 13px; margin-bottom:8px">
+      <div class="row" style="gap:7px; align-items:center"><b class="small">${icon} ${name}</b>${active?`<span class="tag" style="color:#fff; background:var(--terra); font-size:9.5px; letter-spacing:.02em; text-transform:uppercase">Votre état actuel</span>`:''}</div>
+      <p class="small muted" style="margin-top:3px; line-height:1.5">${text}</p>
+    </div>`;
+  };
+  openModal(`<h3>Statut de synchro</h3>
+    <p class="small muted" style="margin-bottom:14px">Ce que signifie chaque badge, et ce que vous pouvez faire.</p>
+    ${row('unlinked','👥','Non relié',"Vous n'avez pas encore relié votre compte à celui de votre partenaire. Vos données restent sur cet appareil, rien n'est encore partagé.")}
+    ${row('ok','🟢','Synchro',"Tout est à jour : ce que vous enregistrez se retrouve automatiquement chez votre partenaire, et inversement.")}
+    ${row('offline','📡','Hors ligne',"Pas de connexion internet pour le moment. Continuez à enregistrer normalement ; rien n'est perdu. Dès que la connexion revient, tout se met à jour tout seul.")}
+    ${row('error','⚠️','Synchro en échec',"Le réseau fonctionne, mais nos serveurs ne répondent pas pour l'instant. On réessaie automatiquement ; si ça continue, revenez dans quelques minutes.")}
+    ${row('ratelimited','⏳','Patientez',"Trop de tentatives rapprochées. Cela revient à la normale en quelques minutes ; vos données restent en sécurité sur l'appareil entre-temps.")}
+    <p class="small muted" style="text-align:center; margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">Vos saisies ne sont jamais perdues, quel que soit l'état affiché ici.</p>`, true);
 }
 const TABS=[
   {id:"vue", label:"Vue", icon:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>'},
