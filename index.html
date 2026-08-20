@@ -562,9 +562,11 @@ const DEFAULT = {
   },
   // Catégories suggérées comme structure de départ (la plupart des couples en ont besoin),
   // mais à 0€ — on ne devine pas un montant qui serait faux pour ce couple précis.
+  // rollover : report du solde d'un mois sur l'autre (voir catRolloverBalance). Désactivé
+  // par défaut — c'est un mode "enveloppe" que le couple choisit catégorie par catégorie.
   categories:[
-    {id:"courses", emoji:"🛒", name:"Courses", budget:0, cls:"besoin"},
-    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:0, cls:"envie"}
+    {id:"courses", emoji:"🛒", name:"Courses", budget:0, cls:"besoin", rollover:false, rolloverStart:0, rolloverFrom:null},
+    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:0, cls:"envie", rollover:false, rolloverStart:0, rolloverFrom:null}
   ],
   // Squelette de charges fixes : les lignes que presque tout le monde a, a 0 EUR.
   // On ne devine pas les montants (ce serait faux), mais on dit quoi chercher — le vrai
@@ -638,6 +640,14 @@ function migrate(s){
     s.projects.forEach(p=>{ s.projectsSnapshot[p.id] = {mensuel:p.mensuel||0, months:p.months||0}; });
   }
   if(!s.budgetTimeline) s.budgetTimeline = {};
+  // Report du solde d'un mois sur l'autre : strictement opt-in. Les comptes existants
+  // gardent donc exactement le comportement qu'ils connaissent (budget remis à zéro
+  // chaque mois) tant qu'ils n'activent pas le report sur une catégorie.
+  s.categories.forEach(c=>{
+    if(c.rollover===undefined) c.rollover=false;
+    if(c.rolloverStart===undefined) c.rolloverStart=0;
+    if(c.rolloverFrom===undefined) c.rolloverFrom=null;
+  });
   return s;
 }
 // Mode demonstration : tout vit en memoire uniquement. Rien n'est ecrit dans le stockage
@@ -854,6 +864,12 @@ function expensesInWeek(){
 }
 function spentThisWeek(){ return expensesInWeek().reduce((s,x)=>s+x.amount,0); }
 function totalBudget(){ return S.categories.reduce((s,c)=>s+c.budget,0); }
+// Somme réellement disponible à dépenser sur le mois. Identique à totalBudget() tant
+// qu'aucune catégorie n'est en report ; sinon elle intègre les soldes hérités.
+// À n'utiliser que pour les écrans "ce qu'il nous reste" : tout ce qui touche à
+// l'allocation depuis les revenus (pilotage, projets, vue annuelle) doit rester sur
+// totalBudget(), sinon un report gonflerait artificiellement le budget du couple.
+function totalAvailable(offset=0){ return S.categories.reduce((s,c)=>s+catAvailable(c.id,offset),0); }
 // Répartition réelle entre les 4 natures (besoin/envie/investissement/protection), en %.
 // Basée uniquement sur ce qui est engagé/alloué (charges fixes, catégories, mensualité des
 // projets) — pas sur les dépenses réelles : c'est au couple de tenir son budget et d'ajuster
@@ -1599,7 +1615,7 @@ function exitDemo(){ location.reload(); }
 function renderVue(){
   const weekly = S.ui.period==="hebdo";
   const w = weekOfMonthInfo();
-  const budgetScoped = weekly ? totalBudget()*(w.weekDays/w.daysInMonth) : totalBudget();
+  const budgetScoped = weekly ? totalBudget()*(w.weekDays/w.daysInMonth) : totalAvailable(0);
   const spentScoped = weekly ? spentThisWeek() : totalSpent();
   const usedPct = budgetScoped>0 ? Math.min(100, Math.round(spentScoped/budgetScoped*100)) : 0;
   const remainingScoped = budgetScoped - spentScoped;
@@ -1691,18 +1707,28 @@ function renderVue(){
 
   <div class="section-title">Budgets par catégorie <span class="link" data-go="historique">Détail →</span></div>
   <div class="card">
-    ${S.categories.every(c=>c.budget<=0) ? `<div class="empty"><div class="e">🧭</div><p>Vos catégories n'ont pas encore de budget — <span class="link" data-go="pilotage">à définir dans Simulation budgétaire</span>.</p></div>` : (()=>{ const weekExp = weekly ? expensesInWeek() : null; return S.categories.filter(c=>c.budget>0).map(c=>{
-      const budgetC = weekly ? c.budget*(w.weekDays/w.daysInMonth) : c.budget;
+    ${budgetedCats().length===0 ? `<div class="empty"><div class="e">🧭</div><p>Vos catégories n'ont pas encore de budget — <span class="link" data-go="pilotage">à définir dans Simulation budgétaire</span>.</p></div>` : (()=>{ const weekExp = weekly ? expensesInWeek() : null; return budgetedCats().map(c=>{
+      const roll=!!c.rollover;
+      // En vue hebdo on proratise la dotation comme avant : le report est une notion
+      // mensuelle, on l'affiche à part plutôt que de le diluer sur une semaine.
+      const budgetC = weekly ? c.budget*(w.weekDays/w.daysInMonth) : (roll ? catAvailable(c.id,0) : c.budget);
       const sp = weekly ? weekExp.filter(x=>x.cat===c.id).reduce((s,x)=>s+x.amount,0) : spentByCat(c.id);
-      const pct = budgetC>0 ? Math.round(sp/budgetC*100) : 0;
-      const cls=pct>100?'over':pct>=85?'warn':'';
-      const alert = pct>100?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
+      const pct = budgetC>0 ? Math.round(sp/budgetC*100) : (sp>0?100:0);
+      // Une enveloppe à report peut être dans le rouge sans aucune dépense ce mois-ci
+      // (trou hérité des mois précédents) : on se base sur le solde, pas sur le %.
+      const bal = roll && !weekly ? catRolloverBalance(c.id,0) : budgetC-sp;
+      const over = bal < -0.005;
+      const cls=over?'over':pct>=85?'warn':'';
+      const alert = over?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
+      const carry = roll ? catCarryIn(c.id,0) : 0;
+      const rollLine = roll ? `<div class="small muted" style="margin-top:5px">${Math.abs(carry)>=0.5?carryLabel(carry)+' · ':''}<b style="color:${bal<0?'var(--danger)':'var(--terra)'}">reste ${fmt0(bal)}</b></div>` : '';
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:8px">
           <div class="row" style="gap:9px"><span style="font-size:18px">${c.emoji}</span><b style="font-size:14px">${c.name}</b> ${alert}</div>
           <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(budgetC)}</span></span>
         </div>
-        <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
+        <div class="bar thin ${cls}"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div>
+        ${rollLine}
       </div>`;
     }).join(''); })()}
   </div>
@@ -1787,7 +1813,12 @@ function renderAjouter(){
       <div class="merch-wrap">
         ${S.categories.map(cc=>`<button class="cat-pill ${draft.cat===cc.id?'on':''}" data-catpick="${cc.id}">${escapeHtml(cc.name)}</button>`).join('')}
       </div>
-      ${c?`<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${(c.budget-spentByCat(c.id))<0?'var(--danger)':'var(--terra)'}">${fmt0(c.budget-spentByCat(c.id))}</b> / mois</div>`:''}
+      ${c?(()=>{
+        // Sur une catégorie à report, le "reste" inclut le solde hérité des mois précédents :
+        // c'est ce chiffre-là qui dit vraiment ce qu'on peut encore dépenser.
+        const rest = c.id ? catAvailable(c.id,0)-spentByCat(c.id,0) : c.budget;
+        return `<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${rest<0?'var(--danger)':'var(--terra)'}">${fmt0(rest)}</b>${c.rollover?' <span style="font-size:11px">(report inclus)</span>':' / mois'}</div>`;
+      })():''}
     </div>
     ${isCagnotte?`<div class="small muted" style="margin:-10px 2px 14px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
 
@@ -2099,6 +2130,54 @@ function catBudgetAt(catId, offset=0){
   const c=S.categories.find(x=>x.id===catId); return c?c.budget:0;
 }
 function clsBudgetAt(cls, offset=0){ return S.categories.filter(c=>c.cls===cls).reduce((s,c)=>s+catBudgetAt(c.id,offset),0); }
+
+/* ---- Report du solde d'un mois sur l'autre (mode "enveloppe", opt-in par catégorie) ----
+   Ce qui n'a pas été dépensé un mois s'ajoute au mois suivant ; un dépassement se déduit
+   du mois suivant et se rattrape tout seul au fil des dotations. Le solde peut donc être
+   négatif pendant plusieurs mois : c'est le principe même, pas une anomalie.
+   Le report ne change RIEN au budget alloué depuis les revenus (c.budget reste la dotation
+   mensuelle) : il ne joue que sur ce qui est réellement disponible à dépenser. */
+function monthKeyToOffset(key){
+  if(!key) return 0;
+  const [y,m]=String(key).split('-').map(Number);
+  if(!Number.isFinite(y)||!Number.isFinite(m)) return 0;
+  const n=new Date();
+  return (y-n.getFullYear())*12 + (m-n.getMonth());
+}
+// Solde cumulé à la FIN du mois `offset`. null si la catégorie n'est pas en report.
+function catRolloverBalance(catId, offset=0){
+  const c=S.categories.find(x=>x.id===catId);
+  if(!c || !c.rollover) return null;
+  const start=monthKeyToOffset(c.rolloverFrom);
+  const open=c.rolloverStart||0;
+  if(offset<start) return open;
+  // Garde-fou : un mois d'activation aberrant (données corrompues, import) ne doit pas
+  // faire boucler des milliers d'itérations au rendu.
+  const from=Math.max(start, offset-120);
+  let bal=open;
+  for(let o=from; o<=offset; o++) bal += catBudgetAt(catId,o) - spentByCat(catId,o);
+  return bal;
+}
+// Report entrant sur le mois `offset` = solde à la fin du mois précédent (0 si pas de report).
+function catCarryIn(catId, offset=0){
+  const b=catRolloverBalance(catId, offset-1);
+  return b===null ? 0 : b;
+}
+// Enveloppe réellement disponible sur le mois = report entrant + dotation du mois.
+// Sans report, c'est simplement la dotation — donc utilisable partout sans distinction.
+function catAvailable(catId, offset=0){
+  const c=S.categories.find(x=>x.id===catId);
+  const dot=catBudgetAt(catId,offset);
+  return (c && c.rollover) ? catCarryIn(catId,offset)+dot : dot;
+}
+// Catégories à afficher dans les listes de budgets : celles qui ont une dotation, plus
+// celles en report (une enveloppe peut avoir 0 € de dotation et vivre sur son solde).
+function budgetedCats(){ return S.categories.filter(c=>c.budget>0 || c.rollover); }
+// Libellé court du report entrant, pour les cartes de catégorie.
+function carryLabel(carry){
+  return carry>=0 ? `↩ ${fmt0(carry)} reportés du mois dernier`
+                  : `↩ ${fmt0(Math.abs(carry))} à rattraper du mois dernier`;
+}
 function posteMeta(sel){
   if(sel && sel.startsWith('cat:')){ const c=catById(sel.slice(4)); return {emoji:c.emoji, name:c.name, color:c.cls||'besoin'}; }
   const map={besoin:{e:'🏠',n:'Besoins'},envie:{e:'✨',n:'Envies'},invest:{e:'💰',n:'Investissement'},protection:{e:'🛡️',n:'Protection'}};
@@ -2396,8 +2475,11 @@ function projectEtaLabel(p){
   const monthsLeft = p.mensuel>0 ? Math.ceil(remaining/p.mensuel) : (p.months||0);
   const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+monthsLeft); return `${MOIS[d.getMonth()]} ${d.getFullYear()}`;
 }
+// Les catégories à report ne passent pas par la décision de surplus : leur solde bascule
+// déjà tout seul sur le mois suivant. Les faire décider ici sortirait deux fois le même
+// argent (une fois vers la cagnotte, une fois vers le mois suivant).
 function mdSurplusRows(offset){
-  return S.categories.filter(c=>c.budget>0).map(c=>{
+  return S.categories.filter(c=>c.budget>0 && !c.rollover).map(c=>{
     const surplus=Math.max(0, c.budget-spentByCat(c.id,offset));
     return {c, surplus};
   }).filter(x=>x.surplus>0);
@@ -2461,8 +2543,18 @@ function mdContent(step){
     const rebalanceNote=`<div class="card-soft" style="margin-bottom:14px; text-align:left">
       <p class="small muted" style="margin:0">Un surplus ne peut être transféré que vers la cagnotte commune ou un projet ; pas directement vers une autre catégorie de dépense. Pour rééquilibrer durablement vos budgets (ex. baisser Courses au profit de Loisirs), rendez-vous dans <span class="link" id="mdGoPilotage">Simulation budgétaire →</span>.</p>
     </div>`;
-    if(!rows.length) return `<p class="empty">Aucun surplus ce mois-ci, tout a été utilisé 💪</p>`;
-    return rebalanceNote + rows.map(({c,surplus})=>{
+    // Les enveloppes à report sont affichées pour information : rien à décider, mais on
+    // ne veut pas laisser croire que l'app a oublié leur solde.
+    const rollCats=S.categories.filter(c=>c.rollover);
+    const rollNote = rollCats.length ? `<div class="card-soft" style="margin-bottom:14px; text-align:left">
+      <p class="small" style="margin:0 0 8px; font-weight:800">↩ Reporté automatiquement</p>
+      ${rollCats.map(c=>{ const b=catRolloverBalance(c.id,offset)||0;
+        return `<div class="between" style="padding:3px 0"><span class="small">${c.emoji} ${escapeHtml(c.name)}</span><b class="small" style="color:${b<0?'var(--danger)':'var(--ok)'}">${b>=0?'+':'−'}${fmt0(Math.abs(b))}</b></div>`;
+      }).join('')}
+      <p class="small muted" style="margin:8px 0 0">Ces soldes basculent seuls sur ${monthLabel(offset+1)}, en positif comme en négatif. Rien à décider ici.</p>
+    </div>` : '';
+    if(!rows.length) return rollNote + `<p class="empty">Aucun surplus à décider ce mois-ci 💪</p>`;
+    return rollNote + rebalanceNote + rows.map(({c,surplus})=>{
       const decisions=mdSurplusDecisions(offset, c.id);
       const remaining=mdSurplusRemaining(offset, c.id, surplus);
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
@@ -3562,7 +3654,7 @@ function openMdCategorisation(){
 }
 function mdCategoriesDetailHtml(offset){
   const closed = offset<0;
-  const budgetTotal = totalBudget();
+  const budgetTotal = totalAvailable(offset);
   const spent = totalSpent(offset);
   const usedPct = budgetTotal>0 ? Math.round(spent/budgetTotal*100) : 0;
   const remaining = budgetTotal - spent;
@@ -3612,17 +3704,23 @@ function mdCategoriesDetailHtml(offset){
       </div>
     </div>`;
   }
-  const catsHtml = S.categories.filter(c=>c.budget>0).map(c=>{
+  const catsHtml = budgetedCats().map(c=>{
     const sp=spentByCat(c.id, offset);
-    const pct=c.budget>0?Math.round(sp/c.budget*100):0;
-    const cls=pct>100?'over':pct>=85?'warn':'';
-    const alert = pct>100?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
+    const avail=catAvailable(c.id, offset);
+    const bal=avail-sp;
+    const pct=avail>0?Math.round(sp/avail*100):(sp>0?100:0);
+    const over=bal<-0.005;
+    const cls=over?'over':pct>=85?'warn':'';
+    const alert = over?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
+    const carry=c.rollover?catCarryIn(c.id,offset):0;
+    const rollLine=c.rollover&&Math.abs(carry)>=0.5?`<div class="small muted" style="margin-top:5px">${carryLabel(carry)}</div>`:'';
     return `<div style="padding:11px 0; border-top:1px solid var(--line)">
       <div class="between" style="margin-bottom:8px">
         <div class="row" style="gap:9px"><span style="font-size:18px">${c.emoji}</span><b style="font-size:14px">${c.name}</b> ${alert}</div>
-        <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(c.budget)}</span></span>
+        <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(avail)}</span></span>
       </div>
-      <div class="bar thin ${cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
+      <div class="bar thin ${cls}"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div>
+      ${rollLine}
     </div>`;
   }).join('');
   return `${rythmeHtml}
@@ -4117,6 +4215,17 @@ function openEditCat(id, returnTo){
     <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
     <div class="field"><label>Budget mensuel</label><input class="input" type="number" id="ceB" value="${c.budget}"></div>
     <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmt0((c.budget||0)/4)} / semaine</b></p>
+    <div class="field"><label>Report du solde</label>
+      <button class="cat-opt" id="ceRoll" style="width:100%">
+        <span class="e">↩</span>
+        <span class="grow"><span class="nm">Reporter d'un mois sur l'autre</span>
+        <span class="bd" style="display:block; margin-top:2px; line-height:1.45">Ce qui n'est pas dépensé s'ajoute au mois suivant ; un dépassement se déduit des mois suivants jusqu'à être rattrapé.</span></span>
+      </button>
+    </div>
+    <div class="field" id="ceRollStartWrap" style="display:none"><label>Solde de départ</label>
+      <input class="input" type="number" id="ceRollStart" value="${c.rolloverStart||0}">
+      <p class="small muted" style="margin:6px 2px 0">L'avance déjà accumulée sur cette enveloppe — ou son retard, en négatif. Laissez 0 pour démarrer à plat.</p>
+    </div>
     <div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">Détails</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick ${c.cls===cl?'on':''}" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
@@ -4127,10 +4236,35 @@ function openEditCat(id, returnTo){
   let cls=c.cls;
   document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
   document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
+  let roll=!!c.rollover;
+  const syncRoll=()=>{ $('#ceRoll').classList.toggle('on',roll); $('#ceRollStartWrap').style.display=roll?'block':'none'; };
+  syncRoll();
+  $('#ceRoll').onclick=()=>{ roll=!roll; syncRoll(); };
   $('#ceSave').onclick=()=>{ const n=$('#ceN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
     if(!cls){ toast("Choisissez une classification","🏷️"); return; }
-    if(id){ c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls; }
-    else { S.categories.push({id:e(),emoji:'📦',name:n,budget:+$('#ceB').value||0,cls:cls}); }
+    const rollStart = roll ? (parseFloat(($('#ceRollStart').value+'').replace(',','.'))||0) : 0;
+    let target;
+    if(id){
+      c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls;
+      // On ne fige le mois de départ qu'à l'activation : le cumul ne remonte jamais avant,
+      // donc activer le report n'invente pas un historique qu'on n'a pas.
+      if(roll && !c.rollover) c.rolloverFrom=annualMonthKey(0);
+      if(!roll) c.rolloverFrom=null;
+      c.rollover=roll; c.rolloverStart=rollStart;
+      target=c;
+    }
+    else {
+      target={id:e(),emoji:'📦',name:n,budget:+$('#ceB').value||0,cls:cls,rollover:roll,rolloverStart:rollStart,rolloverFrom:roll?annualMonthKey(0):null};
+      S.categories.push(target);
+    }
+    // Sur une catégorie à report, on épingle la dotation du mois courant. Sans ça,
+    // catBudgetAt retombe sur c.budget pour les mois sans instantané : changer le budget
+    // plus tard réécrirait rétroactivement un cumul déjà affiché au couple.
+    if(roll){
+      const k=annualMonthKey(0);
+      if(!S.budgetTimeline[k]) S.budgetTimeline[k]={};
+      S.budgetTimeline[k][target.id]=target.budget;
+    }
     save(); closeModal(); go(returnTo); toast("Catégorie enregistrée"); };
   const del=$('#ceDel'); if(del) del.onclick=()=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast("Catégorie supprimée 🗑"); };
 }
