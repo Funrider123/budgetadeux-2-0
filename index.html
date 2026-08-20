@@ -494,6 +494,7 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
   <!-- MAIN APP -->
   <div id="main" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div id="appbar"></div>
+    <div id="installBanner"></div>
     <div id="setupBanner"></div>
     <div id="screen" class="screen"></div>
     <button class="fab-bug" id="bugBtn" title="Signaler un bug">🚨</button>
@@ -663,6 +664,10 @@ let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastApp
 // 'ok' | 'error' | 'ratelimited' — n'a de sens que si on est en ligne et syncActive().
 let netOnline = navigator.onLine;
 let syncStatus = 'ok';
+// Bannière d'installation PWA : Chrome/Edge/Android déclenchent 'beforeinstallprompt' mais le
+// laissent silencieux par défaut — on l'intercepte pour proposer notre propre bouton. Absent
+// sur iOS Safari (jamais implémenté par Apple, installation manuelle uniquement).
+let deferredInstallPrompt = null;
 function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode); }
 // Chaîne de priorité à un seul niveau : pas de partenaire relié prime sur tout le reste
 // (rien à synchroniser tant que personne n'est relié), sinon la santé réseau/synchro.
@@ -1242,7 +1247,7 @@ let prevScreen=null;
 function enterApp(){
   $('#auth').classList.add('hidden');
   $('#main').classList.remove('hidden');
-  renderAppbar(); renderSetupBanner(); renderTab(); go("vue");
+  renderAppbar(); renderSetupBanner(); renderInstallBanner(); renderTab(); go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
   initSync();
   // Deux pop-ups au premier arrivage, jamais empilés : bienvenue d'abord, puis (au tour
@@ -1352,6 +1357,29 @@ function renderSetupBanner(){
     return;
   }
   el.innerHTML='';
+}
+// Bouton d'installation : n'apparaît que si le navigateur nous a laissé la main via
+// 'beforeinstallprompt' (Chrome/Edge/Android — jamais sur iOS Safari) et tant qu'on ne l'a
+// pas refermé. Séparé du bandeau setupBanner pour ne jamais lui faire concurrence.
+function renderInstallBanner(){
+  const el=$('#installBanner'); if(!el) return;
+  let dismissed=false; try{ dismissed=localStorage.getItem('bad2_installDismissed')==='1'; }catch(_){}
+  if(!deferredInstallPrompt || dismissed){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2); cursor:default">
+    <span>📲 Installez l'app sur cet appareil</span>
+    <div style="display:flex; gap:8px; margin-left:auto">
+      <span class="cta" id="installBtn">Installer →</span>
+      <span class="cta" id="installDismiss" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">✕</span>
+    </div>
+  </div>`;
+  $('#installBtn').onclick=async()=>{
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt=null;
+    renderInstallBanner();
+  };
+  $('#installDismiss').onclick=()=>{ try{ localStorage.setItem('bad2_installDismissed','1'); }catch(_){} renderInstallBanner(); };
 }
 function renderAppbar(){
   $('#appbar').innerHTML=`<div class="appbar">
@@ -4129,6 +4157,16 @@ sb.auth.onAuthStateChange((event,session)=>{
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); });
 }
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  renderInstallBanner();
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  renderInstallBanner();
+});
 </script>
 </body>
 </html>
