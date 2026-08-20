@@ -488,13 +488,16 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 <body>
 
 <div id="app">
+  <!-- Hors de #auth et #main : reste affiché qu'on soit connecté ou non, sans jamais
+       être effacé par leur réécriture (renderAuth()/go() remplacent leur innerHTML). -->
+  <div id="installBanner"></div>
+
   <!-- AUTH FLOW -->
   <div id="auth" class="auth"></div>
 
   <!-- MAIN APP -->
   <div id="main" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div id="appbar"></div>
-    <div id="installBanner"></div>
     <div id="setupBanner"></div>
     <div id="screen" class="screen"></div>
     <button class="fab-bug" id="bugBtn" title="Signaler un bug">🚨</button>
