@@ -209,6 +209,110 @@ test.describe('Stabilité du cumul dans le temps', () => {
   });
 });
 
+test.describe('Suppression d\'une enveloppe à report', () => {
+  /** Prépare deux enveloppes à report, la première avec le solde voulu. */
+  async function deuxEnveloppes(page, soldeDepart) {
+    await installer(page, seed({}, 500));
+    await page.evaluate((s) => {
+      S.categories[0].rolloverStart = s;
+      S.categories[0].rolloverFrom = annualMonthKey(0);
+      S.categories[0].budget = 0;   // pas de dotation : le solde vaut exactement rolloverStart
+      S.categories.push({ id: 'autre', emoji: '🏖️', name: 'Vacances', budget: 0, cls: 'envie',
+                          rollover: true, rolloverStart: 0, rolloverFrom: annualMonthKey(0) });
+      S.cagnotte = { balance: 100, history: [] };
+      save();
+    }, soldeDepart);
+  }
+
+  test('une avance peut être versée dans la cagnotte', async ({ page }) => {
+    await deuxEnveloppes(page, 312.43);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.click('#dcCag');
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => S.cagnotte.balance)).toBeCloseTo(412.43, 2);
+    expect(await page.evaluate(() => S.categories.some(c => c.id === 'env'))).toBe(false);
+    expect(await page.evaluate(() => S.cagnotte.history[0].amount)).toBeCloseTo(312.43, 2);
+  });
+
+  test('un retard est absorbé par la cagnotte, pas effacé en douce', async ({ page }) => {
+    await deuxEnveloppes(page, -150.82);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.click('#dcCag');
+    await page.waitForTimeout(200);
+    // 100 - 150,82 : la cagnotte encaisse le trou, elle ne l'ignore pas.
+    expect(await page.evaluate(() => S.cagnotte.balance)).toBeCloseTo(-50.82, 2);
+    expect(await page.evaluate(() => S.cagnotte.history[0].amount)).toBeCloseTo(-150.82, 2);
+  });
+
+  test('un solde peut être reporté sur une autre enveloppe, sans réécrire le passé', async ({ page }) => {
+    await deuxEnveloppes(page, 312.43);
+    const avantVacances = await page.evaluate(() => catRolloverBalance('autre', -1));
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.selectOption('#dcDest', 'autre');
+    await page.click('#dcMove');
+    await page.waitForTimeout(200);
+    // L'enveloppe d'accueil récupère bien le solde ce mois-ci...
+    expect(await page.evaluate(() => catRolloverBalance('autre', 0))).toBeCloseTo(312.43, 2);
+    // ...mais son historique n'est pas retouché : le mouvement est daté d'aujourd'hui.
+    expect(await page.evaluate(() => catRolloverBalance('autre', -1))).toBeCloseTo(avantVacances, 2);
+    expect(await page.evaluate(() => S.categories.find(c => c.id === 'autre').rolloverStart)).toBe(0);
+  });
+
+  test('un retard reporté creuse bien l\'enveloppe d\'accueil', async ({ page }) => {
+    await deuxEnveloppes(page, -150.82);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.selectOption('#dcDest', 'autre');
+    await page.click('#dcMove');
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => catRolloverBalance('autre', 0))).toBeCloseTo(-150.82, 2);
+  });
+
+  test('on peut aussi supprimer en renonçant explicitement au solde', async ({ page }) => {
+    await deuxEnveloppes(page, 312.43);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.click('#dcDrop');
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => S.categories.some(c => c.id === 'env'))).toBe(false);
+    expect(await page.evaluate(() => S.cagnotte.balance)).toBe(100);   // rien n'a bougé
+  });
+
+  test('annuler ne supprime rien', async ({ page }) => {
+    await deuxEnveloppes(page, 312.43);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.click('#dcCancel');
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => S.categories.some(c => c.id === 'env'))).toBe(true);
+  });
+
+  test('sans report, la suppression reste directe (pas de pop-up inutile)', async ({ page }) => {
+    await installer(page, seed({}, 500, { rollover: false }));
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => S.categories.some(c => c.id === 'env'))).toBe(false);
+    expect(await page.evaluate(() => !!document.querySelector('#dcCag'))).toBe(false);
+  });
+
+  test('un solde négligeable ne déclenche pas d\'arbitrage', async ({ page }) => {
+    await deuxEnveloppes(page, 0.2);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => S.categories.some(c => c.id === 'env'))).toBe(false);
+    expect(await page.evaluate(() => !!document.querySelector('#dcCag'))).toBe(false);
+  });
+
+  test('un crédit s\'affiche en positif dans l\'historique, pas en "--312 €"', async ({ page }) => {
+    await deuxEnveloppes(page, 312.43);
+    await page.evaluate(() => openDeleteCat('env', 'pilotage'));
+    await page.selectOption('#dcDest', 'autre');
+    await page.click('#dcMove');
+    await page.evaluate(() => go('historique'));
+    await page.waitForTimeout(300);
+    const txt = await page.innerText('#screen');
+    expect(txt).toContain('+312,43 €');
+    expect(txt).not.toContain('--312');
+  });
+});
+
 test.describe('Affichage du report', () => {
   test('la carte de catégorie annonce le report et le reste réel', async ({ page }) => {
     await installer(page, seed(COURSE, 500));

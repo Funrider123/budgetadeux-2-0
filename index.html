@@ -1937,7 +1937,7 @@ function histRow(x, editable=true){
       <div class="sub">${new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} · ${nameOf(x.who)} · ${transfer?'Mouvement interne':c.name}${x.note?` · <i>${escapeHtml(x.note)}</i>`:''}</div>
     </div>
     ${editable?'<span class="muted" style="font-size:13px">✏️</span>':''}
-    <div class="amt" style="color:${transfer?'var(--invest)':'var(--ink)'}">${transfer?'↔ ':'-'}${fmt(x.amount)}</div>
+    <div class="amt" style="color:${transfer?'var(--invest)':(x.amount<0?'var(--ok)':'var(--ink)')}">${transfer?'↔ ':(x.amount<0?'+':'-')}${fmt(Math.abs(x.amount))}</div>
   </div>`;
 }
 
@@ -4266,7 +4266,49 @@ function openEditCat(id, returnTo){
       S.budgetTimeline[k][target.id]=target.budget;
     }
     save(); closeModal(); go(returnTo); toast("Catégorie enregistrée"); };
-  const del=$('#ceDel'); if(del) del.onclick=()=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast("Catégorie supprimée 🗑"); };
+  const del=$('#ceDel'); if(del) del.onclick=()=>openDeleteCat(id, returnTo);
+}
+// Supprimer une enveloppe à report ne doit pas escamoter son solde : une avance existe
+// vraiment sur le compte commun, et un retard doit être absorbé quelque part sous peine
+// de fausser les comptes. Même principe que openAbandon pour les projets, avec en plus
+// le cas du solde négatif — qui est fréquent, c'est le propre d'une enveloppe à report.
+function openDeleteCat(id, returnTo){
+  returnTo = returnTo || 'pilotage';
+  const c=S.categories.find(x=>x.id===id); if(!c) return;
+  const bal = c.rollover ? (catRolloverBalance(id,0)||0) : 0;
+  const wipe=(msg)=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast(msg||"Catégorie supprimée 🗑"); };
+  // Pas de report, ou solde négligeable : suppression directe, comme avant.
+  if(!c.rollover || Math.abs(bal)<0.5){ wipe(); return; }
+
+  const pos=bal>0;
+  const others=S.categories.filter(x=>x.id!==id && x.rollover);
+  const cagAfter=S.cagnotte.balance+bal;
+  openModal(`<h3>Supprimer « ${escapeHtml(c.name)} » ?</h3>
+    <p class="small muted" style="margin-bottom:14px">Cette enveloppe ${pos?`a encore <b style="color:var(--terra)">${fmt0(bal)}</b> d'avance. Cet argent existe sur votre compte commun :`:`accuse <b style="color:var(--danger)">${fmt0(Math.abs(bal))}</b> de retard. Ce retard doit être absorbé quelque part, sinon il disparaît de vos comptes :`} que voulez-vous en faire ?</p>
+    <button class="btn btn-soft" id="dcCag" style="margin-bottom:${cagAfter<0?'4':'10'}px">👛 ${pos?'Verser dans la cagnotte commune':'Absorber par la cagnotte commune'}</button>
+    ${cagAfter<0?`<p class="small muted" style="margin:0 2px 10px">La cagnotte passerait à ${fmt0(cagAfter)}.</p>`:''}
+    ${others.length?`<div class="field"><label>Ou reporter ${pos?'ce solde':'ce retard'} sur une autre enveloppe</label>
+      <select class="select" id="dcDest">${others.map(o=>`<option value="${o.id}">${o.emoji} ${escapeHtml(o.name)}</option>`).join('')}</select></div>
+    <button class="btn btn-soft" id="dcMove" style="margin-bottom:10px">↩ Reporter sur cette enveloppe</button>`:''}
+    <button class="btn btn-ghost" id="dcDrop" style="margin-bottom:10px; color:var(--danger)">${pos?`Supprimer sans conserver les ${fmt0(bal)}`:'Supprimer et effacer le retard'}</button>
+    <button class="btn btn-ghost btn-sm" id="dcCancel" style="width:100%">Annuler</button>`, true);
+
+  $('#dcCag').onclick=()=>{
+    S.cagnotte.balance+=bal;
+    S.cagnotte.history.unshift({date:iso(0), label:`${pos?'Solde':'Retard'} de l'enveloppe ${c.name}`, amount:bal});
+    wipe(pos?"Solde versé dans la cagnotte 👛":"Retard absorbé par la cagnotte 👛");
+  };
+  const mv=$('#dcMove'); if(mv) mv.onclick=()=>{
+    const dest=$('#dcDest').value, d=S.categories.find(x=>x.id===dest);
+    if(!d){ toast("Choisissez une enveloppe","↩"); return; }
+    // Une ligne datée d'aujourd'hui plutôt qu'un ajustement du solde de départ : le
+    // mouvement reste visible dans l'historique et ne réécrit pas les mois déjà clôturés.
+    S.expenses.push({id:e(), amount:-bal, date:iso(0), desc:`${pos?'Solde':'Retard'} repris de ${c.name}`,
+                     cat:dest, who:me(), type:'depense', prevision:false, note:''});
+    wipe(`${pos?'Solde':'Retard'} reporté sur ${d.name} ↩`);
+  };
+  $('#dcDrop').onclick=()=>wipe();
+  $('#dcCancel').onclick=closeModal;
 }
 
 /* ============================================================
