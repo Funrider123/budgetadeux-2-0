@@ -992,8 +992,19 @@ function authError(error){
   if(m.includes("already registered")||m.includes("already been registered")) return "Cet email a déjà un compte. Connecte-toi 👇";
   if(m.includes("invalid login")||m.includes("invalid credentials")) return "Email ou mot de passe incorrect";
   if(m.includes("email not confirmed")) return "Confirme d'abord ton email (vérifie ta boîte mail) 📩";
-  if(m.includes("password")) return "Mot de passe : 6 caractères minimum 🔑";
+  if(m.includes("password")) return PASSWORD_HINT+" 🔑";
   return "Oups, réessaie dans un instant ⚠️";
+}
+// Règle Supabase (Authentication → Sign In / Providers → Email → Password requirements) :
+// longueur mini + "Letters and digits". Vérifiée côté app pour bloquer AVANT de collecter
+// nom/intention/code couple — sinon l'erreur ne tombe que tout à la fin, sur l'écran du
+// code couple, loin du champ concerné (c'est le bug signalé). Si la règle change un jour
+// dans le dashboard, il faut la reporter ici : rien ne la lit automatiquement.
+const PASSWORD_MIN=8;
+const PASSWORD_HINT=`${PASSWORD_MIN} caractères minimum, avec au moins une lettre et un chiffre`;
+function validatePassword(pw){
+  if(!pw||pw.length<PASSWORD_MIN) return false;
+  return /[a-zA-ZÀ-ÿ]/.test(pw) && /[0-9]/.test(pw);
 }
 
 // Crée la ligne profile au besoin, puis charge le couple dans l'état local
@@ -1118,7 +1129,9 @@ function authSignup(){
     <h1>Créez votre compte 💞</h1>
     <p class="muted small" style="margin-bottom:18px">Un compte chacun — vous relierez vos deux comptes juste après avec un code couple.</p>
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr"></div>
-    <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe"></div>
+    <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe">
+      <p class="small muted" style="margin:6px 2px 0">${PASSWORD_HINT}</p>
+    </div>
     <button class="btn btn-primary" id="doSignup">Continuer</button>
     <div style="text-align:center; margin-top:14px"><span class="link-text small" id="goLegalSignup">Mentions légales & confidentialité</span></div>
   </div>`, 'signup');
@@ -1191,7 +1204,9 @@ function authRecovery(){
   return authShell(`<div class="card fade">
     <h1>Choisis un nouveau mot de passe 🔑</h1>
     <p class="muted small" style="margin-bottom:18px">Saisis ton nouveau mot de passe pour terminer la réinitialisation.</p>
-    <div class="field"><label>Nouveau mot de passe</label><input class="input" id="aPass" type="password" placeholder="Au moins 6 caractères"></div>
+    <div class="field"><label>Nouveau mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe">
+      <p class="small muted" style="margin:6px 2px 0">${PASSWORD_HINT}</p>
+    </div>
     <button class="btn btn-primary" id="doRecovery">Enregistrer</button>
   </div>`);
 }
@@ -1214,7 +1229,7 @@ function bindAuth(){
   on('doSignup','click',()=>{
     const em=$('#aEmail').value.trim(), pw=$('#aPass').value;
     if(!em){toast("Entrez votre email","✉️");return;}
-    if(!pw||pw.length<6){toast("Mot de passe : 6 caractères minimum","🔑");return;}
+    if(!validatePassword(pw)){toast(PASSWORD_HINT,"🔑");return;}
     tmp={email:em, pass:pw}; authStep="name"; renderAuth();
   });
   busy('doForgot','Envoi…',async ()=>{
@@ -1224,7 +1239,7 @@ function bindAuth(){
     toast("Lien de réinitialisation envoyé 💌","✓"); setTimeout(()=>{authStep="login"; renderAuth();},900);
   });
   busy('doRecovery','Enregistrement…',async ()=>{
-    const pw=$('#aPass').value; if(!pw||pw.length<6){toast("Mot de passe : 6 caractères minimum","🔑");return;}
+    const pw=$('#aPass').value; if(!validatePassword(pw)){toast(PASSWORD_HINT,"🔑");return;}
     const {error}=await sb.auth.updateUser({password:pw});
     if(error){ toast(authError(error),"⚠️"); return; }
     toast("Mot de passe mis à jour 🔑","✓"); const {data:{session}}=await sb.auth.getSession();
