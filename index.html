@@ -1113,6 +1113,8 @@ function renderAuth(){
   el.innerHTML=body;
   el.classList.add('fade');
   bindAuth();
+  renderInstallBanner(); // #installBanner est hors de #auth (voir sa position dans le HTML) :
+                          // sans cet appel ici, il reste vide tant qu'on n'est pas connecté.
 }
 function authShell(inner, activeTab){
   const tabs = activeTab ? `<div class="auth-tabs">
