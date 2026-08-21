@@ -131,7 +131,7 @@ test.describe('Annuler nos changements', () => {
     // On quitte l'écran sans valider : c'est là que le rappel doit apparaître.
     await page.evaluate(() => go('historique'));
 
-    const banniere = page.locator('.setup-banner');
+    const banniere = page.locator('#setupBanner .setup-banner');
     await expect(banniere).toContainText('Budget non validé');
     await expect(page.locator('#bannerCancelBudget')).toBeVisible();
 
@@ -146,7 +146,7 @@ test.describe('Annuler nos changements', () => {
     await budgetValide(page);
     await page.evaluate(() => { S.pilotFrozen = false; save(); go('historique'); });
 
-    await expect(page.locator('.setup-banner')).toContainText('Budget non validé');
+    await expect(page.locator('#setupBanner .setup-banner')).toContainText('Budget non validé');
     await expect(page.locator('#bannerCancelBudget')).toHaveCount(0);
   });
 });

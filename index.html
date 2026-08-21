@@ -677,10 +677,6 @@ let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastApp
 // 'ok' | 'error' | 'ratelimited' — n'a de sens que si on est en ligne et syncActive().
 let netOnline = navigator.onLine;
 let syncStatus = 'ok';
-// Bannière d'installation PWA : Chrome/Edge/Android déclenchent 'beforeinstallprompt' mais le
-// laissent silencieux par défaut — on l'intercepte pour proposer notre propre bouton. Absent
-// sur iOS Safari (jamais implémenté par Apple, installation manuelle uniquement).
-let deferredInstallPrompt = null;
 function syncActive(){ return !!(!demoMode && S.auth.loggedIn && S.auth.coupleCode); }
 // Chaîne de priorité à un seul niveau : pas de partenaire relié prime sur tout le reste
 // (rien à synchroniser tant que personne n'est relié), sinon la santé réseau/synchro.
@@ -1434,27 +1430,57 @@ function renderSetupBanner(){
   }
   el.innerHTML='';
 }
-// Bouton d'installation : n'apparaît que si le navigateur nous a laissé la main via
-// 'beforeinstallprompt' (Chrome/Edge/Android — jamais sur iOS Safari) et tant qu'on ne l'a
-// pas refermé. Séparé du bandeau setupBanner pour ne jamais lui faire concurrence.
+// Étapes du raccourci écran d'accueil, selon l'appareil : sur Android, on pointe
+// délibérément vers « Créer un raccourci » plutôt que « Installer » — cette seconde option
+// fabrique un paquet applicatif (WebAPK) que Google Play Protect scanne à l'installation, et
+// peut afficher un avertissement alarmant ("application non sécurisée") sur les téléphones à
+// Chrome ancien. Un simple raccourci ne fabrique aucun paquet : rien à scanner, donc jamais
+// cet avertissement — pour un résultat visuellement identique (icône, plein écran sans barre
+// d'adresse grâce à display:standalone dans le manifest).
+function shortcutSteps(){
+  const ua=navigator.userAgent||'';
+  if(/iPad|iPhone|iPod/.test(ua)){
+    return {os:"iPhone / iPad (Safari)", steps:[
+      "Appuyez sur le bouton Partager (le carré avec une flèche vers le haut) en bas de l'écran",
+      "Faites défiler les options et choisissez « Sur l'écran d'accueil »",
+      "Confirmez avec « Ajouter », en haut à droite"
+    ]};
+  }
+  if(/Android/.test(ua)){
+    return {os:"Android (Chrome)", steps:[
+      "Appuyez sur le menu ⋮ en haut à droite de Chrome",
+      "Choisissez « Ajouter à l'écran d'accueil »",
+      "Sélectionnez « Créer un raccourci » (pas « Installer »)"
+    ]};
+  }
+  return {os:"votre navigateur", steps:[
+    "Ouvrez le menu de votre navigateur",
+    "Cherchez « Ajouter à l'écran d'accueil » ou « Créer un raccourci »"
+  ]};
+}
+function openShortcutHelp(){
+  const {os,steps}=shortcutSteps();
+  openModal(`<h3>📲 Accès rapide depuis l'écran d'accueil</h3>
+    <p class="small muted" style="margin-bottom:14px">Une icône directe vers Budget à Deux, sans rien installer — depuis ${escapeHtml(os)} :</p>
+    ${steps.map((s,i)=>`<div class="row" style="gap:10px; align-items:flex-start; margin-bottom:10px"><b class="small" style="color:var(--terra); flex-shrink:0">${i+1}.</b><p class="small" style="margin:0">${s}</p></div>`).join('')}
+    <p class="small muted" style="text-align:center; margin-top:14px; padding-top:12px; border-top:1px solid var(--line)">Rien n'est réellement installé : c'est un simple raccourci vers cette page, sans aucun avertissement au passage.</p>`, true);
+}
+// Séparé du bandeau setupBanner pour ne jamais lui faire concurrence. Toujours proposé (pas
+// conditionné à un événement du navigateur, contrairement à l'installation complète) : un
+// raccourci existe sur tous les navigateurs, pas seulement ceux qui déclenchent
+// 'beforeinstallprompt'.
 function renderInstallBanner(){
   const el=$('#installBanner'); if(!el) return;
   let dismissed=false; try{ dismissed=localStorage.getItem('bad2_installDismissed')==='1'; }catch(_){}
-  if(!deferredInstallPrompt || dismissed){ el.innerHTML=''; return; }
-  el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2); cursor:default">
-    <span>📲 Installez l'app sur cet appareil</span>
+  if(dismissed){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2); cursor:default; flex-wrap:wrap; row-gap:8px">
+    <span>📲 Raccourci vers l'écran d'accueil</span>
     <div style="display:flex; gap:8px; margin-left:auto">
-      <span class="cta" id="installBtn">Installer →</span>
+      <span class="cta" id="installBtn">Comment faire →</span>
       <span class="cta" id="installDismiss" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">✕</span>
     </div>
   </div>`;
-  $('#installBtn').onclick=async()=>{
-    if(!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt=null;
-    renderInstallBanner();
-  };
+  $('#installBtn').onclick=()=>openShortcutHelp();
   $('#installDismiss').onclick=()=>{ try{ localStorage.setItem('bad2_installDismissed','1'); }catch(_){} renderInstallBanner(); };
 }
 function renderAppbar(){
@@ -4406,15 +4432,10 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); });
 }
 
-window.addEventListener('beforeinstallprompt', (e)=>{
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  renderInstallBanner();
-});
-window.addEventListener('appinstalled', ()=>{
-  deferredInstallPrompt = null;
-  renderInstallBanner();
-});
+// On étouffe le prompt natif de Chrome (sinon il propose sa propre installation complète,
+// celle qu'on évite justement — voir renderInstallBanner/openShortcutHelp) sans rien y
+// substituer : le bandeau qui oriente vers un simple raccourci est déjà toujours affiché.
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); });
 </script>
 </body>
 </html>
