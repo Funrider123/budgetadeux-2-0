@@ -13,7 +13,10 @@ const SUPABASE_STUB = `
 window.__mock = {
   session: null,          // session Supabase courante (null = déconnecté)
   tables: { profiles: [], couple_state: [] },
-  rpc: {},                // nom -> valeur retournée (ou fonction(args))
+  // window.__rpcPresets, quand présent, vient d'un page.addInitScript() posé AVANT le
+  // chargement de la page : seul moyen de préconfigurer une réponse RPC lue au tout premier
+  // rendu (boot() valide ?code=... avant même d'afficher un écran, voir presetRpc()).
+  rpc: window.__rpcPresets || {}, // nom -> valeur retournée (ou fonction(args))
   rpcErrors: {},          // nom -> message d'erreur à renvoyer
   calls: { rpc: [], upsert: [], insert: [], select: [] },
 };
@@ -92,7 +95,7 @@ const PIXEL = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
  * Charge l'app avec toutes les dépendances externes bouchonnées.
  * À appeler au début de chaque test, avant toute interaction.
  */
-async function openApp(page) {
+async function openApp(page, path = '/index.html') {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
 
@@ -104,11 +107,19 @@ async function openApp(page) {
     r.fulfill({ status: 200, contentType: 'image/gif', body: PIXEL }));
   await page.route('**://fonts.googleapis.com/**', r => r.fulfill({ contentType: 'text/css', body: '' }));
 
-  await page.goto('/index.html');
+  await page.goto(path);
   // `S` est déclaré avec `let` : c'est une variable globale mais pas une propriété
   // de `window`, d'où le test direct sur l'identifiant plutôt que sur `window.S`.
   await page.waitForFunction(() => typeof S === 'object' && S !== null && typeof go === 'function');
   return { errors };
+}
+
+/**
+ * Préconfigure des réponses RPC lues dès boot() (avant le premier rendu), donc trop tôt
+ * pour un simple page.evaluate() après openApp(). À appeler AVANT openApp().
+ */
+async function presetRpc(page, presets) {
+  await page.addInitScript((p) => { window.__rpcPresets = p; }, presets);
 }
 
 /**
@@ -135,4 +146,4 @@ async function loginAs(page, state = {}) {
 /** Raccourci : évalue une expression dans le contexte de l'app. */
 const evalApp = (page, fn, arg) => page.evaluate(fn, arg);
 
-module.exports = { openApp, loginAs, evalApp, SUPABASE_STUB };
+module.exports = { openApp, loginAs, evalApp, presetRpc, SUPABASE_STUB };
