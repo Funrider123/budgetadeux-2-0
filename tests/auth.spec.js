@@ -2,7 +2,7 @@
 // C'est le seul endroit où une erreur peut faire fuiter les données d'un couple
 // vers un autre — d'où les tests sur l'isolation à la création de compte.
 const { test, expect } = require('@playwright/test');
-const { openApp, loginAs } = require('./helpers');
+const { openApp, loginAs, presetRpc } = require('./helpers');
 
 const utilisateur = (over = {}) => Object.assign({
   id: '11111111-1111-4111-8111-111111111111',
@@ -143,5 +143,61 @@ test.describe('Suppression de compte (délai de grâce)', () => {
                   fixed: { lui: 1500, elle: 1500 }, idealSplit: { besoin: 50, envie: 30, protection: 0, invest: 20 } },
     });
     await expect(page.locator('.setup-banner')).not.toContainText('Suppression programmée');
+  });
+});
+
+test.describe('Invitation par lien (?code=...)', () => {
+  const remplirSignup = async (page) => {
+    await page.fill('#aEmail', 'partenaire@test.fr');
+    await page.fill('#aPass', 'Test1234');
+    await page.click('#doSignup');
+    await page.waitForSelector('#aName');
+    await page.fill('#aName', 'Dominique');
+    await page.click('#doName');
+  };
+
+  test('un code valide dans le lien saute le choix et la saisie manuelle', async ({ page }) => {
+    await presetRpc(page, { couple_code_exists: true, couple_member_count: 1 });
+    await openApp(page, '/index.html?code=abcdef');
+
+    expect(await page.evaluate(() => inviteCode)).toBe('ABCDEF'); // normalisé en majuscules
+    await remplirSignup(page);
+
+    // Écran de confirmation direct, aucune case de code à remplir.
+    await expect(page.locator('#doJoinInvite')).toBeVisible();
+    expect(await page.locator('.ci').count()).toBe(0);
+
+    await page.click('#doJoinInvite');
+
+    const t = await page.evaluate(() => tmp);
+    expect(t.intent).toBe('join');
+    expect(t.coupleCode).toBe('ABCDEF');
+    // signUp() du bouchon ne renvoie pas de session : on atterrit sur l'écran de confirmation email.
+    await expect(page.locator('#goLogin')).toBeVisible();
+  });
+
+  test('un code déjà complet dans le lien retombe sur le choix habituel', async ({ page }) => {
+    await presetRpc(page, { couple_code_exists: true, couple_member_count: 2 });
+    await openApp(page, '/index.html?code=PLEIN1');
+
+    expect(await page.evaluate(() => inviteCode)).toBeNull();
+    await remplirSignup(page);
+
+    await expect(page.locator('#goCreate')).toBeVisible();
+    await expect(page.locator('#goJoin')).toBeVisible();
+  });
+
+  test('un lien devenu invalide entre-temps est rattrapé avant la création du compte', async ({ page }) => {
+    await presetRpc(page, { couple_code_exists: true, couple_member_count: 1 });
+    await openApp(page, '/index.html?code=RACE01');
+    await remplirSignup(page);
+    await expect(page.locator('#doJoinInvite')).toBeVisible();
+
+    // Le code a été rejoint par quelqu'un d'autre (ou supprimé) juste avant le clic final.
+    await page.evaluate(() => { window.__mock.rpc.couple_code_exists = false; });
+    await page.click('#doJoinInvite');
+
+    await expect(page.locator('#goCreate')).toBeVisible(); // repli sur l'écran de choix
+    expect(await page.evaluate(() => inviteCode)).toBeNull();
   });
 });

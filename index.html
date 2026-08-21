@@ -974,8 +974,12 @@ function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('s
 /* ============================================================
    AUTH FLOW
    ============================================================ */
-let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | intent | code-create | code-join | confirm | recovery
+let authStep = localStorage.getItem("bad2") ? "login" : "signup"; // login | signup | forgot | name | intent | code-create | code-join | code-invite | confirm | recovery
 let tmp = {};
+// Code couple porté par le lien d'invitation (?code=XXXXXX), validé une fois au démarrage
+// (voir boot()) : s'il est présent et valide, toute la création de compte saute l'écran de
+// choix et la saisie manuelle du code — le lien fait tout, rien à copier ni à retaper.
+let inviteCode = null;
 
 /* ----- Helpers Supabase auth ----- */
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans I,O,0,1 (ambigus)
@@ -1076,6 +1080,12 @@ async function enterWithSession(user){
   finally{ entering=false; }
 }
 
+// Message d'invitation WhatsApp/SMS, partagé entre l'écran de création de compte et le menu
+// "Inviter mon/ma partenaire". Le lien embarque le code (?code=XXXXXX) : plus rien à copier
+// ni à retaper à l'arrivée, voir boot() + authCodeInvite().
+function inviteMessage(code){
+  return `Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien, tout est déjà prêt : ${location.origin}/?code=${code}\n\nÀ tout de suite de l'autre côté !`;
+}
 // Crée le compte Supabase une fois toutes les infos collectées
 async function finalizeSignup(){
   const {email,pass,name,profile,intent,coupleCode}=tmp;
@@ -1101,6 +1111,7 @@ function renderAuth(){
   else if(authStep==="intent") body=authIntent();
   else if(authStep==="code-create") body=authCodeCreate();
   else if(authStep==="code-join") body=authCodeJoin();
+  else if(authStep==="code-invite") body=authCodeInvite();
   else if(authStep==="confirm") body=authConfirm();
   else if(authStep==="recovery") body=authRecovery();
   el.innerHTML=body;
@@ -1190,6 +1201,15 @@ function authCodeCreate(){
     <p class="small muted" style="text-align:center; margin-top:8px">Pas de panique si tu n'envoies pas le code tout de suite : tu pourras le repartager plus tard, depuis le menu.</p>
   </div>`);
 }
+// Arrivée via le lien d'invitation (?code=XXXXXX déjà validé dans boot()) : le code n'est
+// jamais affiché à saisir, juste confirmé — c'est le lien qui a fait tout le travail.
+function authCodeInvite(){
+  return authShell(`<div class="card fade">
+    <h1>Tu rejoins votre espace 🔗</h1>
+    <p class="muted small" style="margin-bottom:18px">Le lien de ton/ta partenaire a été reconnu automatiquement — plus rien à saisir, votre espace commun n'attend plus que toi.</p>
+    <button class="btn btn-primary" id="doJoinInvite">Entrer dans notre espace</button>
+  </div>`);
+}
 function authCodeJoin(){
   return authShell(`<div class="card fade">
     <div style="margin-bottom:10px"><span class="link-text small" id="backIntent">← Retour</span></div>
@@ -1257,7 +1277,11 @@ function bindAuth(){
   });
   busy('doName','…',async ()=>{ const nm=$('#aName').value.trim(); if(!nm){toast("Dites-nous comment t'appeler","😊");return;}
     tmp.name=nm;
-    authStep="intent"; renderAuth();
+    // Un code d'invitation valide (voir boot()) saute le choix créer/rejoindre ET la saisie
+    // manuelle : le lien a déjà répondu à ces deux questions.
+    if(inviteCode){ tmp.intent='join'; tmp.profile='elle'; tmp.coupleCode=inviteCode; authStep="code-invite"; }
+    else { authStep="intent"; }
+    renderAuth();
   });
   busy('goCreate','…',async ()=>{
     if(!tmp.coupleCode){ try{ tmp.coupleCode=await generateUniqueCode(); }catch(_){ tmp.coupleCode=randCode(); } }
@@ -1268,9 +1292,17 @@ function bindAuth(){
   on('backIntent','click',()=>{ authStep="intent"; renderAuth(); });
   on('backSignup','click',()=>{ authStep="signup"; renderAuth(); });
   on('copyCode','click',()=>{ navigator.clipboard?.writeText(tmp.coupleCode); toast("Code copié — partagez-le 💑","📋"); });
-  on('codeWA','click',()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); });
-  on('codeSMS','click',()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${tmp.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); });
+  on('codeWA','click',()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(inviteMessage(tmp.coupleCode))}`,'_blank'); toast("WhatsApp ouvert 💬"); });
+  on('codeSMS','click',()=>{ window.open(`sms:?&body=${encodeURIComponent(inviteMessage(tmp.coupleCode))}`); toast("SMS prêt ✉️"); });
   busy('doCreate','Un instant…',async ()=>{ await finalizeSignup(); });
+  busy('doJoinInvite','Un instant…',async ()=>{
+    // Revérifié ici (et pas seulement au chargement dans boot()) : le code a pu être rejoint
+    // par quelqu'un d'autre, ou se remplir, pendant que cette personne remplissait le formulaire.
+    const {data:exists}=await sb.rpc('couple_code_exists',{p_code:tmp.coupleCode});
+    if(!exists){ toast("Ce lien d'invitation n'est plus valide 🔍","🔍"); inviteCode=null; authStep="intent"; renderAuth(); return; }
+    if((await coupleMemberCount(tmp.coupleCode))>=2){ toast("Cet espace est déjà complet : 2 personnes y sont reliées 🔒","🔒"); inviteCode=null; authStep="intent"; renderAuth(); return; }
+    await finalizeSignup();
+  });
   document.querySelectorAll('.ci').forEach((inp,i,arr)=>inp.addEventListener('input',()=>{ inp.value=inp.value.toUpperCase(); if(inp.value && i<arr.length-1) arr[i+1].focus(); }));
   busy('doJoin','Un instant…',async ()=>{
     const entered=[...document.querySelectorAll('.ci')].map(i=>i.value.trim().toUpperCase()).join('');
@@ -3955,8 +3987,8 @@ function bindMoneyDate(){
 
 function bindReglages(){
   const cp=$('#copyC2'); if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code couple copié 📋");};
-  const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble !\nOuvre ce lien : ${location.origin}\nEntre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`,'_blank'); toast("WhatsApp ouvert 💬"); };
-  const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(`Rejoins-moi pour gérer notre budget ensemble ! Ouvre ce lien : ${location.origin} — Entre le code couple : ${S.auth.coupleCode}\n\nÀ tout de suite de l'autre côté !`)}`); toast("SMS prêt ✉️"); };
+  const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`,'_blank'); toast("WhatsApp ouvert 💬"); };
+  const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
   const ds=$('#darkSw'); if(ds) ds.onclick=()=>{S.ui.dark=!S.ui.dark; save(); renderAppbar(); go('reglages');};
   document.querySelectorAll('[data-colortheme]').forEach(b=>b.addEventListener('click',()=>{ S.ui.colorTheme=b.dataset.colortheme; save(); go('reglages'); }));
@@ -4354,7 +4386,19 @@ sb.auth.onAuthStateChange((event,session)=>{
   try{
     const {data:{session}}=await sb.auth.getSession();
     if(session && !recovering){ await enterWithSession(session.user); }
-    else if(!recovering){ renderAuth(); }
+    else if(!recovering){
+      // Lien d'invitation (?code=XXXXXX) : validé une seule fois ici, avant le premier écran,
+      // pour ne jamais faire remplir toute l'inscription à quelqu'un dont le lien est en
+      // réalité périmé ou déjà complet (voir doName/doJoinInvite qui revérifient à la fin).
+      const urlCode=(new URLSearchParams(location.search).get('code')||'').trim().toUpperCase();
+      if(urlCode.length===6){
+        try{
+          const {data:exists}=await sb.rpc('couple_code_exists',{p_code:urlCode});
+          if(exists && (await coupleMemberCount(urlCode))<2) inviteCode=urlCode;
+        }catch(_){}
+      }
+      renderAuth();
+    }
   }catch(e){ console.error(e); renderAuth(); }
 })();
 
