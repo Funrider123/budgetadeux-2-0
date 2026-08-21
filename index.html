@@ -1446,26 +1446,30 @@ function shortcutSteps(){
       "Appuyez sur le bouton Partager (le carré avec une flèche vers le haut) en bas de l'écran",
       "Faites défiler les options et choisissez « Sur l'écran d'accueil »",
       "Confirmez avec « Ajouter », en haut à droite"
-    ]};
+    ], note:"Si vous ne voyez pas cette option, assurez-vous d'être dans Safari (pas dans Chrome ni dans l'aperçu WhatsApp) — appuyez sur « Ouvrir dans Safari » si besoin."};
   }
   if(/Android/.test(ua)){
+    // Sur Chrome, "Installer" et "Créer un raccourci" ont fusionné en une seule action (vérifié
+    // sur plusieurs appareils) : il n'existe plus de chemin "raccourci seul" séparé et fiable à
+    // indiquer. On prévient donc de l'avertissement possible plutôt que de promettre un chemin
+    // qui l'évite, ce que les instructions précédentes faisaient à tort.
     return {os:"Android (Chrome)", steps:[
       "Appuyez sur le menu ⋮ en haut à droite de Chrome",
-      "Choisissez « Ajouter à l'écran d'accueil »",
-      "Sélectionnez « Créer un raccourci » (pas « Installer »)"
-    ]};
+      "Choisissez « Installer et créer un raccourci » (le libellé peut varier selon la version de Chrome)",
+      "Confirmez avec « Installer »"
+    ], note:"Android peut afficher un avertissement à ce moment-là — il concerne la façon dont l'app est distribuée, pas la sécurité de vos données. Sachez que vos données sont chiffrées, hébergées en Europe (Allemagne), et visibles uniquement par vous et votre partenaire. Il n'y a aucune publicité, aucun traceur ; rien n'est vendu."};
   }
   return {os:"votre navigateur", steps:[
     "Ouvrez le menu de votre navigateur",
     "Cherchez « Ajouter à l'écran d'accueil » ou « Créer un raccourci »"
-  ]};
+  ], note:null};
 }
 function openShortcutHelp(){
-  const {os,steps}=shortcutSteps();
+  const {os,steps,note}=shortcutSteps();
   openModal(`<h3>📲 Accès rapide depuis l'écran d'accueil</h3>
-    <p class="small muted" style="margin-bottom:14px">Une icône directe vers Budget à Deux, sans rien installer — depuis ${escapeHtml(os)} :</p>
+    <p class="small muted" style="margin-bottom:14px">Une icône directe vers Budget à Deux, depuis ${escapeHtml(os)} :</p>
     ${steps.map((s,i)=>`<div class="row" style="gap:10px; align-items:flex-start; margin-bottom:10px"><b class="small" style="color:var(--terra); flex-shrink:0">${i+1}.</b><p class="small" style="margin:0">${s}</p></div>`).join('')}
-    <p class="small muted" style="text-align:center; margin-top:14px; padding-top:12px; border-top:1px solid var(--line)">Rien n'est réellement installé : c'est un simple raccourci vers cette page, sans aucun avertissement au passage.</p>`, true);
+    ${note?`<p class="small muted" style="text-align:center; margin-top:14px; padding-top:12px; border-top:1px solid var(--line)">${note}</p>`:''}`, true);
 }
 // Séparé du bandeau setupBanner pour ne jamais lui faire concurrence. Toujours proposé (pas
 // conditionné à un événement du navigateur, contrairement à l'installation complète) : un
