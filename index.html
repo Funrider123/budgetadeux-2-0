@@ -737,9 +737,15 @@ function syncError(phase,e){
   refreshConnStatusUI();
   if(!syncErrShown){ syncErrShown=true; toast('Synchro '+phase+' — '+(code?code+' : ':'')+msg, '⚠️'); }
 }
+// Dernier snapshot (SYNC_KEYS uniquement) effectivement envoyé au serveur — sert à ne pousser,
+// et donc à ne prévenir le partenaire, que si quelque chose de RÉELLEMENT partagé a changé.
+// Sans ça, save() étant appelé pour tout (y compris S.ui : thème, mois affiché…), chaque geste
+// purement local déclenchait quand même un envoi et le toast "Budget mis à jour" chez l'autre.
+let lastPushedSnapshot=null;
 function applyRemote(data, stamp){
   applyingRemote=true; applyShared(data); save(); applyingRemote=false;
   lastAppliedStamp=stamp||null;
+  lastPushedSnapshot=JSON.stringify(sharedSnapshot()); // on vient de s'aligner sur le serveur
   if(!$('#main').classList.contains('hidden')){ renderAppbar(); renderSetupBanner(); go(current); }
 }
 function schedulePush(){ if(!syncActive()||applyingRemote) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushState,800); }
@@ -753,10 +759,14 @@ async function pushState(){
       applyingRemote=true; save(); applyingRemote=false;
       if(!$('#main').classList.contains('hidden')){ renderAppbar(); renderSetupBanner(); go(current); }
     }
+    const snapshot=sharedSnapshot();
+    const snapshotJson=JSON.stringify(snapshot);
+    if(snapshotJson===lastPushedSnapshot) return; // rien de partagé n'a changé (ex: juste un thème local)
     const stamp=new Date().toISOString();
-    const {error}=await sb.from('couple_state').upsert({ couple_code:S.auth.coupleCode, data:sharedSnapshot(), updated_at:stamp, updated_by:deviceId });
+    const {error}=await sb.from('couple_state').upsert({ couple_code:S.auth.coupleCode, data:snapshot, updated_at:stamp, updated_by:deviceId });
     if(error){ syncError('envoi', error); return; }
     lastAppliedStamp=stamp; // notre propre écriture : on ne se la réappliquera pas
+    lastPushedSnapshot=snapshotJson;
     syncErrShown=false;
     if(syncStatus!=='ok'){ syncStatus='ok'; refreshConnStatusUI(); }
   }catch(e){ syncError('envoi', e); }
