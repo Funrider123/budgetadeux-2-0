@@ -138,6 +138,38 @@ test.describe('Réception des changements du partenaire', () => {
   });
 });
 
+test.describe('Pas d\'envoi ni de notification pour un changement purement local', () => {
+  test('changer de thème ne pousse rien et ne déclenche pas "Budget mis à jour"', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {
+      categories: [{ id: 'courses', emoji: '🛒', name: 'Courses', budget: 300, cls: 'besoin' }],
+    });
+    await page.evaluate(() => pushState()); // établit la référence, comme le ferait la synchro initiale
+
+    await page.evaluate(() => { window.__mock.calls.upsert = []; });
+    await page.evaluate(() => { S.ui.colorTheme = 'sauge'; S.ui.dark = !S.ui.dark; save(); });
+    await page.evaluate(() => pushState());
+
+    const upserts = await page.evaluate(() => window.__mock.calls.upsert.filter(u => u.table === 'couple_state').length);
+    expect(upserts).toBe(0);
+  });
+
+  test('une vraie modification partagée (budget) continue bien de pousser', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {
+      categories: [{ id: 'courses', emoji: '🛒', name: 'Courses', budget: 300, cls: 'besoin' }],
+    });
+    await page.evaluate(() => pushState());
+
+    await page.evaluate(() => { window.__mock.calls.upsert = []; });
+    await page.evaluate(() => { S.categories[0].budget = 400; save(); });
+    await page.evaluate(() => pushState());
+
+    const upserts = await page.evaluate(() => window.__mock.calls.upsert.filter(u => u.table === 'couple_state').length);
+    expect(upserts).toBe(1);
+  });
+});
+
 test.describe('Mode démonstration', () => {
   test('n\'écrit jamais rien dans le cloud', async ({ page }) => {
     await openApp(page);
