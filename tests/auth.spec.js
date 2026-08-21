@@ -116,7 +116,7 @@ test.describe('Suppression de compte (délai de grâce)', () => {
                   fixed: { lui: 1500, elle: 1500 }, idealSplit: { besoin: 50, envie: 30, protection: 0, invest: 20 } },
     });
 
-    const banniere = page.locator('.setup-banner');
+    const banniere = page.locator('#setupBanner .setup-banner');
     await expect(banniere).toContainText('Suppression programmée');
 
     // Le bandeau passe avant tous les autres rappels, y compris sur Pilotage
@@ -142,7 +142,7 @@ test.describe('Suppression de compte (délai de grâce)', () => {
       settings: { salaries: { lui: 0, elle: 0 }, mode: 'fixe', custom: { lui: 50, elle: 50 },
                   fixed: { lui: 1500, elle: 1500 }, idealSplit: { besoin: 50, envie: 30, protection: 0, invest: 20 } },
     });
-    await expect(page.locator('.setup-banner')).not.toContainText('Suppression programmée');
+    await expect(page.locator('#setupBanner .setup-banner')).not.toContainText('Suppression programmée');
   });
 });
 
