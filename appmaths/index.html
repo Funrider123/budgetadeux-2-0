@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#FFF8ED">
+<title>Les nombres</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --creme:#FFF8ED; --blanc:#FFFFFF; --encre:#2C2C2A; --gris:#5F5E5A; --gris-clair:#888780;
+  --bord:#E8DCC4; --bord-doux:#F1EFE8;
+  --orange:#EF9F27; --orange-clair:#FAEEDA; --orange-fonce:#412402;
+  --violet:#7F77DD; --violet-clair:#AFA9EC; --violet-pale:#EEEDFE; --violet-fonce:#26215C; --violet-fort:#534AB7;
+  --turquoise:#5DCAA5; --turquoise-fort:#1D9E75; --turquoise-pale:#E1F5EE; --turquoise-fonce:#04342C;
+  --corail:#F0997B; --corail-pale:#FAECE7; --corail-fonce:#4A1B0C;
+  --bleu:#B5D4F4; --bleu-fort:#378ADD; --bleu-pale:#E6F1FB; --bleu-fonce:#042C53;
+  --or:#F4C430; --or-fonce:#7A5B00; --or-clair:#FFF3C4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--creme)}
+body{font-family:'Andika',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--encre);
+  -webkit-font-smoothing:antialiased;user-select:none;overscroll-behavior:none}
+#app{max-width:420px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
+.grow{flex:1}
+button{font-family:inherit;border:none;background:none;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--violet);outline-offset:2px}
+
+.top{display:flex;gap:8px;justify-content:space-between;align-items:center;min-height:30px;flex-wrap:wrap}
+.grp{display:flex;gap:6px;align-items:center}
+.jeton{border-radius:999px;padding:4px 12px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.jeton.etoile{background:var(--orange-clair);color:#854F0B}
+.jeton.diam{background:var(--bleu-pale);color:#185FA5}
+.jeton.or{background:var(--or-clair);color:var(--or-fonce)}
+.hp{font-size:22px;color:var(--gris-clair);background:none;padding:4px;line-height:1}
+.pilule{background:var(--violet-clair);color:var(--violet-fonce);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700}
+
+.navtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.navbtn{font-size:14px;color:var(--gris);padding:7px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:5px}
+.navbtn:active{background:var(--bord-doux)}
+
+.chouette{width:104px;height:104px;border-radius:50%;background:var(--violet-clair);display:flex;align-items:center;
+  justify-content:center;gap:9px;position:relative;margin:0 auto}
+.chouette.mini{width:44px;height:44px;gap:5px;margin:0}
+.oeil{width:32px;height:32px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center}
+.chouette.mini .oeil{width:14px;height:14px}
+.pupille{width:13px;height:13px;border-radius:50%;background:var(--violet-fonce)}
+.chouette.mini .pupille{width:6px;height:6px}
+.bec{position:absolute;bottom:24px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid var(--orange)}
+.chouette.mini .bec{bottom:9px;border-left-width:4px;border-right-width:4px;border-top-width:6px}
+
+h1{font-size:26px;font-weight:700;margin:16px 0 0;text-align:center}
+.sous{font-size:15px;color:var(--gris);text-align:center;margin:6px 0 0}
+.consigne{font-size:19px;font-weight:700;text-align:center;margin:0}
+.ligne-consigne{display:flex;align-items:center;justify-content:center;gap:8px;min-height:32px}
+
+.gros{display:block;width:100%;border-radius:18px;padding:17px;text-align:center;font-size:22px;font-weight:700;transition:transform .1s}
+.gros:active{transform:scale(.97)}
+.gros.orange{background:var(--orange);color:var(--orange-fonce)}
+.gros.turquoise{background:var(--turquoise);color:var(--turquoise-fonce)}
+.gros.violet{background:var(--violet-clair);color:var(--violet-fonce)}
+.gros.corail{background:var(--corail);color:var(--corail-fonce)}
+.gros.blanc{background:var(--blanc);border:2px solid var(--bord);color:var(--encre)}
+.moyen{font-size:18px;padding:14px}
+
+.carte-matiere{display:block;width:100%;text-align:center;border-radius:18px;padding:22px 16px;font-size:20px;
+  font-weight:700;margin-top:12px;transition:transform .1s}
+.carte-matiere:active{transform:scale(.98)}
+.carte-matiere.violet{background:var(--violet-pale);color:var(--violet-fonce);border:2px solid var(--violet-clair)}
+.carte-matiere.corail{background:var(--corail-pale);color:var(--corail-fonce);border:2px solid var(--corail)}
+.carte-matiere.turquoise{background:var(--turquoise-pale);color:var(--turquoise-fonce);border:2px solid var(--turquoise)}
+
+.points{display:flex;gap:6px;justify-content:center;align-items:center;margin-bottom:12px}
+.pt{width:24px;height:6px;border-radius:99px;background:var(--bord)}
+.pt.fait{background:var(--turquoise-fort)}
+.pt.now{background:var(--orange)}
+
+.carte{background:var(--blanc);border:2px solid var(--bord);border-radius:16px;padding:14px}
+.zone-lab{font-size:13px;color:var(--gris-clair);margin:0 0 7px}
+.barre{background:var(--violet);border-radius:6px;padding:3px;display:flex;gap:2px;width:fit-content}
+.barre.nue{gap:0}
+.seg{width:13px;height:22px;background:var(--violet-clair);border-radius:2px}
+.barre.nue .seg{border-radius:0}
+.plaque{width:48px;height:48px;border-radius:5px;background:var(--violet-fort);
+  background-image:repeating-linear-gradient(to right,rgba(255,255,255,.4) 0 1px,transparent 1px 4.8px),
+  repeating-linear-gradient(to bottom,rgba(255,255,255,.4) 0 1px,transparent 1px 4.8px)}
+.cube{width:26px;height:26px;background:var(--orange);border-radius:5px}
+.cube.parti{background:var(--bord-doux);border:2px dashed var(--gris-clair)}
+.pile{display:flex;flex-direction:column;gap:7px}
+.rang{display:flex;gap:7px;flex-wrap:wrap;min-height:26px}
+.sep{border-top:2px dashed var(--bord-doux);margin:12px 0 10px}
+
+.champ{background:var(--blanc);border:2px solid var(--bord);border-radius:14px;padding:10px;text-align:center;
+  font-size:32px;font-weight:700;letter-spacing:4px;min-height:56px;display:flex;align-items:center;justify-content:center}
+.curseur{color:#D3D1C7;animation:cl 1.1s steps(1) infinite}
+@keyframes cl{50%{opacity:0}}
+.alerte{font-size:14px;color:var(--corail-fonce);text-align:center;margin:8px 0 0;min-height:20px}
+
+.pave{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.touche{background:var(--blanc);border:2px solid var(--bord);border-radius:12px;padding:10px 0;text-align:center;
+  font-size:22px;font-weight:700;transition:transform .08s}
+.touche:active{transform:scale(.94);background:var(--orange-clair)}
+.touche.ok{background:var(--turquoise);border-color:var(--turquoise-fort);color:var(--turquoise-fonce);font-size:20px}
+.touche.eff{color:var(--gris-clair);font-size:20px}
+.aide{display:block;width:100%;text-align:center;margin-top:10px;font-size:15px;color:var(--gris);padding:8px}
+
+.opt{display:block;width:100%;text-align:center;border-radius:16px;padding:16px;
+  font-size:19px;font-weight:700;margin-top:10px;background:var(--blanc);border:2px solid var(--bord);transition:transform .1s}
+.opt:active{transform:scale(.98)}
+
+.boites{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
+.boite{min-width:52px;height:56px;border-radius:12px;background:var(--blanc);border:2px solid var(--bord);
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;padding:0 10px}
+.boite.trou{border-style:dashed;border-color:#B4B2A9;color:#B4B2A9}
+.boite.mis{background:var(--turquoise-pale);border-color:var(--turquoise);color:var(--turquoise-fonce)}
+.fleche{font-size:20px;color:var(--gris-clair)}
+
+.lignum{position:relative;margin:22px 6px 0;height:78px}
+.axe{position:absolute;top:26px;left:0;right:0;height:4px;background:var(--bord);border-radius:9px}
+.tick{position:absolute;top:8px;width:34px;margin-left:-17px;display:flex;flex-direction:column;align-items:center;gap:4px;background:none}
+.tbar{width:4px;height:20px;background:var(--gris-clair);border-radius:9px}
+.tlab{font-size:13px;color:var(--gris-clair)}
+.tick.but .tbar{height:26px;background:var(--violet);width:6px}
+.tick.cible .tbar{background:var(--turquoise-fort);height:30px}
+
+.grille{display:grid;gap:6px;justify-content:center;margin-top:14px}
+.cell{width:56px;height:56px;border-radius:10px;background:var(--blanc);border:2px solid var(--bord);
+  display:flex;align-items:center;justify-content:center;font-size:26px}
+.cell.depart{background:var(--violet-pale);border-color:var(--violet)}
+
+.cadre{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:fit-content;margin:0 auto;
+  background:var(--blanc);border:2px solid var(--bord);border-radius:12px;padding:8px}
+.case{width:32px;height:32px;border-radius:7px;background:var(--bord-doux)}
+.case.plein{background:var(--orange)}
+.case.ajout{background:var(--turquoise)}
+.case.manque{background:var(--blanc);border:2px dashed var(--turquoise-fort)}
+
+.sou{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#412402}
+.billet{border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.piece-or{display:inline-block;width:15px;height:15px;border-radius:50%;background:var(--or);border:2px solid #B8860B;vertical-align:-3px}
+
+.badge{border-radius:999px;font-size:15px;font-weight:700;padding:3px 10px;text-align:center;margin-top:7px;display:inline-block}
+.badge.v{background:var(--violet-clair);color:var(--violet-fonce)}
+.badge.o{background:var(--corail);color:var(--corail-fonce)}
+.badge.p{background:var(--violet-fort);color:#EEEDFE}
+.vide{width:52px;height:46px;border:2px dashed #B4B2A9;border-radius:11px;display:inline-flex;align-items:center;
+  justify-content:center;font-size:24px;color:#B4B2A9;font-weight:700}
+
+.recomp{width:92px;height:92px;border-radius:24px;display:flex;align-items:center;justify-content:center;
+  font-size:46px;margin:22px auto 0;animation:pop .4s}
+@keyframes pop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+.recomp.diam{background:var(--bleu);color:var(--bleu-fonce)}
+.recomp.star{background:var(--orange-clair);color:#854F0B}
+.collec{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.piece{aspect-ratio:1;border-radius:10px;background:var(--blanc);border:2px dashed var(--bord)}
+.piece.on{border:none}
+.piece.neuve{border:3px solid var(--encre)}
+.stat{display:flex;gap:10px;width:100%;margin-top:18px}
+.stat>div{flex:1;border-radius:14px;padding:14px 0;text-align:center}
+.stat .n{font-size:22px;font-weight:700;margin:5px 0 0}
+
+.adulte{font-size:14px;color:var(--gris-clair);text-align:center;padding:12px;width:100%;background:none}
+.retour{font-size:15px;color:var(--gris);padding:8px 0;background:none}
+.tab{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+.tab td{padding:8px 0;border-bottom:1px solid var(--bord-doux);vertical-align:middle}
+.tab td:last-child{text-align:right}
+.pastille{font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px}
+.p-ok{background:var(--turquoise-pale);color:var(--turquoise-fonce)}
+.p-cours{background:var(--orange-clair);color:#854F0B}
+.p-dur{background:var(--violet-pale);color:var(--violet-fonce)}
+.p-vide{background:var(--bord-doux);color:var(--gris)}
+.note{background:var(--violet-pale);border-radius:14px;padding:14px;font-size:15px;line-height:1.6;margin-top:16px;color:var(--violet-fonce)}
+.titrine{font-size:13px;font-weight:700;color:var(--gris-clair);margin:18px 0 0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+
+/* ================= stockage ================= */
+var memoire = {};
+var Store = {
+  get:function(k){
+    try{
+      if(window.storage && window.storage.get)
+        return window.storage.get(k).then(function(r){return r?r.value:null}).catch(function(){return null});
+      return Promise.resolve(localStorage.getItem(k));
+    }catch(e){ return Promise.resolve(memoire[k]||null); }
+  },
+  set:function(k,v){
+    try{
+      if(window.storage && window.storage.set) return window.storage.set(k,v).catch(function(){});
+      localStorage.setItem(k,v); return Promise.resolve();
+    }catch(e){ memoire[k]=v; return Promise.resolve(); }
+  }
+};
+
+/* ================= sons ================= */
+var Son = {
+  ctx:null, actif:true,
+  init:function(){
+    try{
+      if(!this.ctx){ var AC=window.AudioContext||window.webkitAudioContext; if(AC) this.ctx=new AC(); }
+      if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
+    }catch(e){ this.ctx=null; }
+  },
+  note:function(f,retard,duree,vol,timbre){
+    try{
+      var c=this.ctx; if(!c) return;
+      var o=c.createOscillator(), g=c.createGain(), t=c.currentTime+retard;
+      o.type=timbre||'triangle'; o.frequency.setValueAtTime(f,t);
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+duree);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+duree+0.03);
+    }catch(e){}
+  },
+  jouer:function(nom){
+    if(!this.actif) return; this.init(); if(!this.ctx) return;
+    var n=this.note.bind(this);
+    if(nom==='clic'){ n(1050,0,0.035,0.05,'sine'); }
+    else if(nom==='juste'){ n(523.25,0,0.14,0.16); n(783.99,0.09,0.2,0.14); }
+    else if(nom==='doux'){ n(392,0,0.19,0.10,'sine'); n(329.63,0.14,0.3,0.09,'sine'); }
+    else if(nom==='etoile'){ n(523.25,0,0.13,0.16); n(659.25,0.09,0.13,0.15); n(783.99,0.18,0.3,0.15); }
+    else if(nom==='diamant'){ n(659.25,0,0.12,0.15); n(783.99,0.09,0.12,0.15); n(1046.5,0.18,0.14,0.15);
+      n(1318.5,0.28,0.42,0.13); n(783.99,0.28,0.42,0.06,'sine'); }
+    else if(nom==='or'){ n(1046.5,0,0.06,0.09,'sine'); n(1568,0.05,0.08,0.08,'sine'); }
+    else if(nom==='fin'){ n(523.25,0,0.15,0.15); n(659.25,0.13,0.15,0.15); n(783.99,0.26,0.15,0.15); n(1046.5,0.39,0.5,0.16); }
+  }
+};
+
+/* ================= écran allumé ================= */
+var Veille = {
+  verrou:null, voulu:false,
+  dispo:function(){ try{ return !!(navigator.wakeLock && navigator.wakeLock.request); }catch(e){ return false; } },
+  garder:function(){
+    this.voulu=true; var self=this;
+    if(!this.dispo()||this.verrou) return;
+    try{
+      navigator.wakeLock.request('screen').then(function(v){
+        self.verrou=v; v.addEventListener('release',function(){ self.verrou=null; });
+      }).catch(function(){ self.verrou=null; });
+    }catch(e){ this.verrou=null; }
+  },
+  lacher:function(){
+    this.voulu=false;
+    try{ if(this.verrou) this.verrou.release().catch(function(){}); }catch(e){}
+    this.verrou=null;
+  }
+};
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible' && Veille.voulu && !Veille.verrou) Veille.garder();
+});
+
+/* ================= outils ================= */
+function rnd(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
+function pick(t){ return t[rnd(0,t.length-1)]; }
+function melange(t){ var a=t.slice(),i,j,x; for(i=a.length-1;i>0;i--){ j=rnd(0,i); x=a[i]; a[i]=a[j]; a[j]=x; } return a; }
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+function dire(txt){
+  try{
+    if(!window.speechSynthesis) return;
+    var u=new SpeechSynthesisUtterance(txt); u.lang='fr-FR'; u.rate=0.88; u.pitch=1.05;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ================= briques visuelles ================= */
+function hBarre(ech){
+  var s=''; for(var i=0;i<10;i++) s+='<div class="seg"></div>';
+  return '<div class="barre'+(ech>=1?'':' nue')+'">'+s+'</div>';
+}
+function hCubes(n,parti){
+  var s=''; for(var i=0;i<n;i++) s+='<div class="cube'+(parti&&i>=parti?' parti':'')+'"></div>';
+  return s;
+}
+function hPlaques(n){ var s=''; for(var i=0;i<n;i++) s+='<div class="plaque"></div>'; return s; }
+function hMateriel(c,d,u,ech){
+  var b='',i; for(i=0;i<d;i++) b+=hBarre(ech);
+  var h='<div class="carte">';
+  if(c>0){
+    if(ech>=2) h+='<p class="zone-lab">centaines</p>';
+    h+='<div class="rang">'+hPlaques(c)+'</div><div class="sep"></div>';
+  }
+  if(ech>=2) h+='<p class="zone-lab">dizaines</p>';
+  h+='<div class="pile">'+(d?b:'<span style="color:#B4B2A9;font-size:14px">aucune</span>')+'</div><div class="sep"></div>';
+  if(ech>=2) h+='<p class="zone-lab">unités</p>';
+  h+='<div class="rang">'+(u?hCubes(u):'<span style="color:#B4B2A9;font-size:14px">aucun</span>')+'</div></div>';
+  return h;
+}
+function hCadre(plein,ajout,manque){
+  var h='<div class="cadre">';
+  for(var i=0;i<10;i++){
+    var c='case';
+    if(i<plein) c='case plein';
+    else if(ajout && i<plein+ajout) c='case ajout';
+    else if(manque) c='case manque';
+    h+='<div class="'+c+'"></div>';
+  }
+  return h+'</div>';
+}
+function hSuite(vals,trou,fleche){
+  var h='<div class="boites">',i;
+  for(i=0;i<vals.length;i++){
+    if(i>0) h+='<span class="fleche">'+(fleche==='gauche'?'&larr;':'&rarr;')+'</span>';
+    h+= (i===trou) ? '<div class="boite trou">?</div>' : '<div class="boite">'+vals[i]+'</div>';
+  }
+  return h+'</div>';
+}
+function hHorloge(h24,min){
+  var ang=function(a){ return (a-90)*Math.PI/180; };
+  var ah=((h24%12)+min/60)*30, am=min*6;
+  var xh=50+26*Math.cos(ang(ah)), yh=50+26*Math.sin(ang(ah));
+  var xm=50+38*Math.cos(ang(am)), ym=50+38*Math.sin(ang(am));
+  var ticks='',i,a,x1,y1,x2,y2;
+  for(i=0;i<12;i++){
+    a=ang(i*30); x1=50+42*Math.cos(a); y1=50+42*Math.sin(a); x2=50+46*Math.cos(a); y2=50+46*Math.sin(a);
+    ticks+='<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke="#888780" stroke-width="2" stroke-linecap="round"/>';
+  }
+  return '<svg viewBox="0 0 100 100" width="170" height="170" style="display:block;margin:0 auto" role="img" aria-label="horloge">'
+    +'<circle cx="50" cy="50" r="48" fill="#FFFFFF" stroke="#E8DCC4" stroke-width="3"/>'+ticks
+    +'<line x1="50" y1="50" x2="'+xm.toFixed(1)+'" y2="'+ym.toFixed(1)+'" stroke="#EF9F27" stroke-width="3" stroke-linecap="round"/>'
+    +'<line x1="50" y1="50" x2="'+xh.toFixed(1)+'" y2="'+yh.toFixed(1)+'" stroke="#7F77DD" stroke-width="5.5" stroke-linecap="round"/>'
+    +'<circle cx="50" cy="50" r="4" fill="#2C2C2A"/></svg>';
+}
+var FORMES = {
+  carre:{nom:'un carré', svg:'<rect x="18" y="18" width="64" height="64" rx="3"/>'},
+  rectangle:{nom:'un rectangle', svg:'<rect x="8" y="28" width="84" height="44" rx="3"/>'},
+  triangle:{nom:'un triangle', svg:'<polygon points="50,14 88,84 12,84"/>'},
+  cercle:{nom:'un cercle', svg:'<circle cx="50" cy="50" r="36"/>'},
+  losange:{nom:'un losange', svg:'<polygon points="50,10 88,50 50,90 12,50"/>'}
+};
+function hForme(cle){
+  return '<svg viewBox="0 0 100 100" width="150" height="150" style="display:block;margin:0 auto" role="img" aria-label="figure">'
+    +'<g fill="#AFA9EC" stroke="#534AB7" stroke-width="3">'+FORMES[cle].svg+'</g></svg>';
+}
+var PIECES = [
+  {v:1,t:'p',c:'#FAC775',d:40},{v:2,t:'p',c:'#D3D1C7',d:44},
+  {v:5,t:'b',c:'#C0DD97',w:62},{v:10,t:'b',c:'#F4C0D1',w:66},{v:20,t:'b',c:'#B5D4F4',w:70}
+];
+function hArgent(liste){
+  var h='<div class="rang" style="gap:9px;justify-content:center">';
+  liste.forEach(function(p){
+    if(p.t==='p') h+='<div class="sou" style="width:'+p.d+'px;height:'+p.d+'px;background:'+p.c+';font-size:15px">'+p.v+'&euro;</div>';
+    else h+='<div class="billet" style="width:'+p.w+'px;height:38px;background:'+p.c+';color:#2C2C2A">'+p.v+'&euro;</div>';
+  });
+  return h+'</div>';
+}
+
+/* ================= catalogue d'exercices ================= */
+var T = {};
+
+/* ---------- MATHÉMATIQUES ---------- */
+
+T.lire = {
+  nom:'Lire un nombre', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv,ech){
+    var c=0,d,u;
+    if(niv==='CE1' && Math.random()<0.45){ c=rnd(1,4); d=rnd(0,9); u=rnd(0,9); }
+    else { d=rnd(1,niv==='CE1'?9:5); u=rnd(0,9); }
+    return {mode:'pave', c:c, d:d, u:u, rep:c*100+d*10+u, consigne:'Écris le nombre'};
+  },
+  visuel:function(e){ return hMateriel(e.c,e.d,e.u,e.ech); },
+  classer:function(e,v){
+    if(e.c===0 && v===e.u*10+e.d && e.d!==e.u) return 'inversion';
+    if(v===e.c+e.d+e.u) return 'barre-vaut-un';
+    if(v===e.u) return 'unites-seules';
+    if(e.c>0 && v===e.d*10+e.u) return 'oubli-centaines';
+    if(Math.abs(v-e.rep)===1) return 'proche';
+    return 'autre';
+  },
+  remede:function(e,v,f){
+    if(f==='barre-vaut-un'||f==='unites-seules'){
+      return {titre:'Une barre, c\'est 10 cubes', corps:
+        '<div class="carte" style="text-align:center"><div style="display:flex;justify-content:center">'+hBarre(2)+'</div>'
+        +'<p class="sous" style="margin:10px 0">c\'est pareil que</p>'
+        +'<div class="rang" style="justify-content:center">'+hCubes(10)+'</div>'
+        +'<div class="badge v">10</div></div>'
+        +'<p class="sous" style="margin-top:14px">Compte les barres par 10, pas par 1.</p>'};
+    }
+    if(f==='oubli-centaines'){
+      return {titre:'N\'oublie pas les plaques', corps:
+        '<div class="carte" style="text-align:center"><div class="rang" style="justify-content:center">'+hPlaques(e.c)+'</div>'
+        +'<div class="badge p">'+(e.c*100)+'</div>'
+        +'<p class="sous" style="margin-top:12px">Une plaque vaut 100.</p></div>'};
+    }
+    var g='<div style="display:flex;gap:14px;justify-content:center;align-items:flex-start;flex-wrap:wrap">';
+    if(e.c>0) g+='<div style="text-align:center"><div class="rang">'+hPlaques(e.c)+'</div><div class="badge p">'+(e.c*100)+'</div></div>';
+    g+='<div style="text-align:center"><div class="pile">'+(function(){var s='',i;for(i=0;i<e.d;i++)s+=hBarre(2);return s;})()+'</div>'
+      +'<div class="badge v">'+(e.d*10)+'</div></div>'
+      +'<div style="text-align:center"><div class="rang" style="max-width:110px">'+hCubes(e.u)+'</div>'
+      +'<div class="badge o">'+e.u+'</div></div></div>';
+    return {titre:'Les gros paquets d\'abord', corps:g
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:18px;flex-wrap:wrap">'
+      +(e.c>0?'<span style="font-size:22px;font-weight:700;color:#26215C">'+(e.c*100)+'</span><span class="fleche">et</span>':'')
+      +'<span style="font-size:22px;font-weight:700;color:#04342C">'+(e.d*10)+'</span><span class="fleche">et</span>'
+      +'<span style="font-size:22px;font-weight:700;color:#4A1B0C">'+e.u+'</span>'
+      +'<span class="fleche">&rarr;</span><span class="vide">?</span></div>'};
+  }
+};
+
+T.fab = {
+  nom:'Fabriquer un nombre', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var d=rnd(1,niv==='CE1'?9:5), u=rnd(1,9);
+    return {mode:'construire', d:d, u:u, rep:d*10+u, consigne:'Fabrique '+(d*10+u)};
+  },
+  visuel:function(){ return ''; },
+  classer:function(e,v){ return v===e.u*10+e.d ? 'inversion' : 'nombre'; },
+  remede:function(e){
+    return {titre:'Le premier chiffre, ce sont les barres', corps:
+      '<div style="display:flex;gap:26px;justify-content:center;align-items:center">'
+      +'<div style="text-align:center"><div style="font-size:42px;font-weight:700;color:#26215C">'+e.d+'</div>'
+      +'<p class="sous" style="margin:2px 0 0">barres</p></div>'
+      +'<div style="text-align:center"><div style="font-size:42px;font-weight:700;color:#4A1B0C">'+e.u+'</div>'
+      +'<p class="sous" style="margin:2px 0 0">cubes</p></div></div>'
+      +'<p class="sous" style="margin-top:18px">Le nombre '+e.rep+' se lit dans cet ordre.</p>'};
+  }
+};
+
+T.suite = {
+  nom:'Avant et après', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var n=rnd(niv==='CE1'?20:4, niv==='CE1'?98:58);
+    var apres=Math.random()<0.5;
+    return {mode:'pave', n:n, apres:apres, rep:apres?n+1:n-1,
+      consigne:apres?'Quel nombre vient juste après ?':'Quel nombre vient juste avant ?'};
+  },
+  visuel:function(e){
+    return e.apres ? hSuite([e.n,'?'],1,'droite') : hSuite(['?',e.n],0,'droite');
+  },
+  classer:function(e,v){
+    if(v===e.n) return 'repete';
+    if(v===(e.apres?e.n-1:e.n+1)) return 'sens';
+    if(Math.abs(v-e.rep)<=2) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    var a=e.n-2,vals=[a,a+1,a+2,a+3,a+4];
+    return {titre:e.apres?'Après, on avance d\'un pas':'Avant, on recule d\'un pas', corps:
+      hSuite(vals,-1,'droite')
+      +'<p class="sous" style="margin-top:16px">Trouve '+e.n+' sur la file, puis fais '
+      +(e.apres?'un pas vers la droite.':'un pas vers la gauche.')+'</p>'};
+  }
+};
+
+T.recul = {
+  nom:'Compter à reculons', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var pas = niv==='CE1' ? pick([1,2,10]) : 1;
+    var dep = pas===10 ? rnd(6,9)*10+rnd(0,9) : rnd(niv==='CE1'?30:8, niv==='CE1'?99:40);
+    var vals=[dep,dep-pas,dep-2*pas,dep-3*pas];
+    return {mode:'pave', pas:pas, vals:vals, rep:vals[3],
+      consigne: pas===1?'Continue à reculons':'Recule de '+pas+' en '+pas};
+  },
+  visuel:function(e){ return hSuite(e.vals,3,'gauche'); },
+  classer:function(e,v){
+    if(v===e.vals[2]+e.pas) return 'avance';
+    if(v===e.vals[2]) return 'repete';
+    if(Math.abs(v-e.rep)<=2) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    return {titre:'À reculons, le nombre devient plus petit', corps:
+      hSuite([e.vals[0],e.vals[1],e.vals[2],'?'],3,'gauche')
+      +'<div style="text-align:center;margin-top:18px;font-size:17px;color:#5F5E5A">'
+      +e.vals[0]+' <span class="fleche">&larr;</span> '+e.vals[1]+' <span class="fleche">&larr;</span> '+e.vals[2]+'</div>'
+      +'<p class="sous" style="margin-top:12px">Chaque flèche enlève '+e.pas+'. Pars de '+e.vals[2]+' et enlève encore '+e.pas+'.</p>'};
+  }
+};
+
+T.sauts = {
+  nom:'Compter de 2, 5, 10 en 10', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var pas = niv==='CE1' ? pick([5,10,100]) : pick([2,5,10]);
+    var dep = pas===100 ? rnd(1,4)*100 : (Math.random()<0.5 ? pas : rnd(1,5)*pas+rnd(0,3));
+    var vals=[dep,dep+pas,dep+2*pas,dep+3*pas];
+    return {mode:'pave', pas:pas, vals:vals, rep:vals[3], consigne:'Compte de '+pas+' en '+pas};
+  },
+  visuel:function(e){ return hSuite(e.vals,3,'droite'); },
+  classer:function(e,v){
+    if(v===e.vals[2]+1) return 'compte-par-un';
+    if(v===e.vals[2]) return 'repete';
+    if(Math.abs(v-e.rep)<=e.pas) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    return {titre:'Des sauts de '+e.pas+', pas de 1', corps:
+      hSuite([e.vals[0],e.vals[1],e.vals[2],'?'],3,'droite')
+      +'<div style="text-align:center;margin-top:16px;font-size:16px;color:#0F6E56;font-weight:700">'
+      +'+'+e.pas+' &nbsp; +'+e.pas+' &nbsp; +'+e.pas+'</div>'
+      +'<p class="sous" style="margin-top:12px">Pars de '+e.vals[2]+' et ajoute '+e.pas+'.</p>'};
+  }
+};
+
+T.compare = {
+  nom:'Comparer et ranger', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    if(niv==='CE1'){
+      var t=[],x;
+      while(t.length<3){ x=rnd(5,999); if(t.indexOf(x)<0) t.push(x); }
+      return {mode:'ordre', items:melange(t), rep:t.slice().sort(function(a,b){return a-b}).join('-'),
+        consigne:'Range du plus petit au plus grand'};
+    }
+    var a,b;
+    if(Math.random()<0.5){ a=rnd(2,9); b=rnd(10,49); }
+    else { a=rnd(11,89); b=rnd(11,89); while(b===a) b=rnd(11,89); }
+    var opts=melange([a,b]);
+    return {mode:'choix', options:opts.map(function(x){return {label:String(x), val:String(x)}}),
+      a:a, b:b, rep:String(Math.max(a,b)), consigne:'Quel est le plus grand ?'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(e,v){
+    if(e.mode==='ordre') return 'ordre';
+    if(String(v).length < String(e.rep).length) return 'longueur';
+    return 'autre';
+  },
+  remede:function(e,v,f){
+    if(f==='ordre'){
+      var tri=e.rep.split('-');
+      return {titre:'On regarde d\'abord la taille du nombre', corps:
+        '<p class="sous">Un nombre à 3 chiffres est toujours plus grand qu\'un nombre à 2 chiffres.</p>'
+        +'<div class="boites" style="margin-top:16px">'+tri.map(function(x,i){
+          return (i?'<span class="fleche">&lt;</span>':'')+'<div class="boite">'+x+'</div>'; }).join('')+'</div>'
+        +'<p class="sous" style="margin-top:14px">Commence par le plus petit, à gauche.</p>'};
+    }
+    var g=Math.max(e.a,e.b), p=Math.min(e.a,e.b);
+    return {titre:'Compte les chiffres d\'abord', corps:
+      '<div style="display:flex;gap:20px;justify-content:center;align-items:flex-end">'
+      +'<div style="text-align:center"><div class="boite" style="margin:0 auto">'+p+'</div>'
+      +'<p class="sous" style="margin-top:6px;font-size:13px">'+String(p).length+' chiffre'+(String(p).length>1?'s':'')+'</p></div>'
+      +'<div style="text-align:center"><div class="boite" style="margin:0 auto">'+g+'</div>'
+      +'<p class="sous" style="margin-top:6px;font-size:13px">'+String(g).length+' chiffre'+(String(g).length>1?'s':'')+'</p></div></div>'
+      +'<p class="sous" style="margin-top:18px">Plus il y a de chiffres, plus le nombre est grand.</p>'};
+  }
+};
+
+T.ligne = {
+  nom:'La ligne des nombres', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var max = niv==='CE1' ? 1000 : 100;
+    var pas = max/10;
+    var rep = rnd(1,9)*pas;
+    return {mode:'ligne', max:max, pas:pas, rep:rep, consigne:'Où est le nombre '+rep+' ?'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(e,v){
+    var d=Math.abs(v-e.rep);
+    if(d===e.pas) return 'voisin';
+    return v<e.rep ? 'trop-petit' : 'trop-grand';
+  },
+  remede:function(e,v,f){
+    var h='<div class="lignum" style="height:86px"><div class="axe"></div>';
+    for(var i=0;i<=10;i++){
+      var x=(i/10)*100, val=i*e.pas;
+      h+='<div class="tick'+(val===e.rep?' cible':'')+'" style="left:'+x+'%"><div class="tbar"></div>'
+        +'<span class="tlab">'+val+'</span></div>';
+    }
+    h+='</div>';
+    return {titre: f==='voisin' ? 'Tu étais juste à côté' : (f==='trop-petit'?'C\'est plus loin vers la droite':'C\'est plus près du début'),
+      corps:h+'<p class="sous" style="margin-top:14px">Le milieu de la ligne, c\'est '+(e.max/2)+'. '
+      +(e.rep<e.max/2?'Ton nombre est avant le milieu.':(e.rep>e.max/2?'Ton nombre est après le milieu.':'Ton nombre est pile au milieu.'))+'</p>'};
+  }
+};
+
+T.c10 = {
+  nom:'Compléments à 10', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    if(niv==='CE1'){
+      var n=rnd(2,9)*10+rnd(1,9), cible=Math.ceil(n/10)*10;
+      return {mode:'pave', n:n, cible:cible, rep:cible-n, consigne:'Combien pour aller à '+cible+' ?'};
+    }
+    var a=rnd(2,9);
+    return {mode:'pave', a:a, cible:10, rep:10-a, consigne:'Combien il manque pour 10 ?'};
+  },
+  visuel:function(e){
+    if(e.cible===10) return hCadre(e.a,0,false);
+    return '<div class="boites"><div class="boite">'+e.n+'</div><span class="fleche">+ ?</span>'
+      +'<div class="boite mis">'+e.cible+'</div></div>';
+  },
+  classer:function(e,v){
+    if(v===(e.a!==undefined?e.a:e.n)) return 'repete';
+    if(v===e.cible) return 'total';
+    if(Math.abs(v-e.rep)===1) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    if(e.cible===10){
+      return {titre:'Compte les cases vides', corps: hCadre(e.a,0,true)
+        +'<p class="sous" style="margin-top:16px">'+e.a+' cases sont pleines.<br>Compte celles qui restent.</p>'};
+    }
+    var u=e.n%10;
+    return {titre:'Regarde seulement les unités', corps:
+      '<div class="boites"><div class="boite">'+u+'</div><span class="fleche">+ ?</span><div class="boite mis">10</div></div>'
+      +'<p class="sous" style="margin-top:16px">'+e.n+' finit par '+u+'. Pour aller à '+e.cible
+      +', il faut le même complément que pour aller de '+u+' à 10.</p>'};
+  }
+};
+
+T.dm = {
+  nom:'Doubles et moitiés', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    if(niv==='CE1' && Math.random()<0.5){
+      var m=rnd(2,25);
+      return {mode:'pave', moitie:true, n:2*m, rep:m, consigne:'La moitié de '+(2*m)};
+    }
+    var n=rnd(2,niv==='CE1'?25:10);
+    return {mode:'pave', moitie:false, n:n, rep:2*n, consigne:'Le double de '+n};
+  },
+  visuel:function(e){
+    if(e.moitie){
+      if(e.n>20) return '';
+      return '<div class="carte"><div class="rang" style="justify-content:center">'+hCubes(e.n)+'</div></div>';
+    }
+    if(e.n>12) return '';
+    return '<div class="carte"><div class="rang" style="justify-content:center">'+hCubes(e.n)+'</div>'
+      +'<div class="sep"></div><div class="rang" style="justify-content:center">'+hCubes(e.n)+'</div></div>';
+  },
+  classer:function(e,v){
+    if(v===e.n) return 'repete';
+    if(!e.moitie && v===Math.round(e.n/2)) return 'inverse';
+    if(e.moitie && v===e.n*2) return 'inverse';
+    if(Math.abs(v-e.rep)<=2) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    if(e.moitie){
+      var m=e.rep;
+      return {titre:'La moitié, c\'est deux parts égales', corps:
+        '<div class="carte"><div class="rang" style="justify-content:center">'+hCubes(Math.min(m,12))+'</div>'
+        +'<div class="sep"></div><div class="rang" style="justify-content:center">'+hCubes(Math.min(m,12))+'</div></div>'
+        +'<p class="sous" style="margin-top:14px">On partage '+e.n+' en deux tas pareils.<br>Combien dans un seul tas ?</p>'};
+    }
+    return {titre:'Le double, c\'est deux fois pareil', corps:
+      '<div class="carte"><div class="rang" style="justify-content:center">'+hCubes(Math.min(e.n,12))+'</div>'
+      +'<div class="badge o">'+e.n+'</div><div class="sep"></div>'
+      +'<div class="rang" style="justify-content:center">'+hCubes(Math.min(e.n,12))+'</div>'
+      +'<div class="badge o">'+e.n+'</div></div>'
+      +'<p class="sous" style="margin-top:14px">'+e.n+' et encore '+e.n+'.</p>'};
+  }
+};
+
+T.add = {
+  nom:'Additions', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    if(niv==='CE1'){ var a=rnd(14,58), b=rnd(4,9); return {mode:'pave', a:a, b:b, rep:a+b, consigne:'Combien ça fait ?'}; }
+    var x=rnd(5,9), y=rnd(3,9);
+    return {mode:'pave', a:x, b:y, rep:x+y, consigne:'Combien ça fait ?'};
+  },
+  visuel:function(e){
+    var h='<div style="text-align:center;font-size:40px;font-weight:700;letter-spacing:3px">'+e.a+' + '+e.b+'</div>';
+    if(e.ech>=1 && e.a<=10) h+='<div style="margin-top:12px">'+hCadre(e.a,0,false)+'</div>';
+    return h;
+  },
+  classer:function(e,v){
+    if(Math.abs(v-e.rep)===1) return 'surcomptage';
+    if(v===Math.abs(e.a-e.b)) return 'soustrait';
+    if(v===Number(''+e.a+e.b)) return 'juxtapose';
+    return 'autre';
+  },
+  remede:function(e){
+    var u=e.a%10, pourDix=10-u, reste=e.b-pourDix;
+    if(reste>0 && e.a<=10){
+      return {titre:'On passe par 10', corps: hCadre(e.a,pourDix,false)
+        +'<p class="sous" style="margin-top:12px">'+e.a+' et '+pourDix+' font 10.</p>'
+        +'<div class="rang" style="justify-content:center;margin-top:12px">'+hCubes(reste)+'</div>'
+        +'<p class="sous" style="margin-top:8px">Il reste '+reste+' à côté.</p>'
+        +'<div class="boites" style="margin-top:14px"><div class="boite mis">10</div><span class="fleche">et</span>'
+        +'<div class="boite">'+reste+'</div><span class="fleche">&rarr;</span><div class="boite trou">?</div></div>'};
+    }
+    if(reste>0){
+      var dix=e.a+pourDix;
+      return {titre:'On s\'arrête d\'abord sur la dizaine', corps:
+        '<div class="boites"><div class="boite">'+e.a+'</div><span class="fleche">+'+pourDix+'</span>'
+        +'<div class="boite mis">'+dix+'</div><span class="fleche">+'+reste+'</span><div class="boite trou">?</div></div>'
+        +'<p class="sous" style="margin-top:16px">On coupe le '+e.b+' en '+pourDix+' et '+reste+'.</p>'};
+    }
+    return {titre:'Compte à partir de '+e.a, corps:
+      (e.a<=10 ? hCadre(e.a,e.b,false) : hSuite([e.a,e.a+1,e.a+2,'?'],3,'droite'))
+      +'<p class="sous" style="margin-top:16px">Tu as déjà '+e.a+'. Avance de '+e.b+', un pas à la fois.</p>'};
+  }
+};
+
+T.sous = {
+  nom:'Soustractions', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    if(niv==='CE1'){ var a=rnd(21,79), b=rnd(3,9); return {mode:'pave', a:a, b:b, rep:a-b, consigne:'Combien il en reste ?'}; }
+    var x=rnd(6,18), y=rnd(2,Math.min(6,x-1));
+    return {mode:'pave', a:x, b:y, rep:x-y, consigne:'Combien il en reste ?'};
+  },
+  visuel:function(e){
+    var h='<div style="text-align:center;font-size:40px;font-weight:700;letter-spacing:3px">'+e.a+' &minus; '+e.b+'</div>';
+    if(e.ech>=1 && e.a<=18) h+='<div class="carte" style="margin-top:12px"><div class="rang" style="justify-content:center">'
+      +hCubes(e.a,e.a-e.b)+'</div></div>';
+    return h;
+  },
+  classer:function(e,v){
+    if(v===e.a+e.b) return 'ajoute';
+    if(v===e.a) return 'repete';
+    if(Math.abs(v-e.rep)===1) return 'surcomptage';
+    return 'autre';
+  },
+  remede:function(e){
+    if(e.a<=18){
+      return {titre:'On enlève, il en reste moins', corps:
+        '<div class="carte"><div class="rang" style="justify-content:center">'+hCubes(e.a,e.a-e.b)+'</div></div>'
+        +'<p class="sous" style="margin-top:14px">Il y en avait '+e.a+'. Les '+e.b+' en pointillés sont partis.<br>Compte ceux qui restent en orange.</p>'};
+    }
+    var u=e.a%10, dix=e.a-u;
+    return {titre:'On recule jusqu\'à la dizaine', corps:
+      '<div class="boites"><div class="boite">'+e.a+'</div><span class="fleche">&minus;'+u+'</span>'
+      +'<div class="boite mis">'+dix+'</div><span class="fleche">&minus;'+(e.b-u)+'</span><div class="boite trou">?</div></div>'
+      +'<p class="sous" style="margin-top:16px">'+(e.b>u
+        ? 'On coupe le '+e.b+' en '+u+' et '+(e.b-u)+' pour passer par '+dix+'.'
+        : 'Enlève '+e.b+' aux unités, les dizaines ne bougent pas.')+'</p>'};
+  }
+};
+
+T.mult = {
+  nom:'Multiplications', matiere:'maths', niveaux:['CE1'],
+  faire:function(){
+    var a=pick([2,3,5,10]), b=rnd(2,6);
+    return {mode:'pave', a:a, b:b, rep:a*b, consigne:b+' paquets de '+a};
+  },
+  visuel:function(e){
+    var h='<div class="carte"><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">';
+    for(var i=0;i<e.b;i++)
+      h+='<div style="background:var(--violet-pale);border-radius:9px;padding:5px"><div class="rang" style="gap:4px;max-width:96px">'
+        +hCubes(e.a)+'</div></div>';
+    return h+'</div><p class="sous" style="margin-top:10px">'+e.b+' &times; '+e.a+'</p></div>';
+  },
+  classer:function(e,v){
+    if(v===e.a+e.b) return 'additionne';
+    if(v===e.b) return 'compte-paquets';
+    if(Math.abs(v-e.rep)<=e.a) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    var s=[],i,c=0;
+    for(i=0;i<e.b;i++){ c+=e.a; s.push(c); }
+    return {titre:e.b+' fois '+e.a+', c\'est '+e.a+' répété', corps:
+      '<div class="boites">'+s.map(function(x,i){
+        return (i?'<span class="fleche">+'+e.a+'</span>':'')+'<div class="boite'+(i===s.length-1?' trou':'')+'">'
+          +(i===s.length-1?'?':x)+'</div>'; }).join('')+'</div>'
+      +'<p class="sous" style="margin-top:16px">On ajoute '+e.a+' à chaque paquet.</p>'};
+  }
+};
+
+var HIST_CP = [
+  {t:'Léa a 12 billes.<br>Elle en perd 5.', sens:'moins', r:7},
+  {t:'Tom a 8 images.<br>Il en gagne 6.', sens:'plus', r:14},
+  {t:'Il y a 15 bonbons.<br>On en mange 4.', sens:'moins', r:11},
+  {t:'Sara a 9 cartes.<br>Sa sœur lui en donne 5.', sens:'plus', r:14},
+  {t:'Il y a 11 oiseaux.<br>3 s\'envolent.', sens:'moins', r:8},
+  {t:'Noé a 7 gommes.<br>Il en achète 6.', sens:'plus', r:13},
+  {t:'Il reste 14 gâteaux.<br>Papa en prend 6.', sens:'moins', r:8},
+  {t:'Zoé a 6 perles.<br>Elle en trouve 9.', sens:'plus', r:15}
+];
+var HIST_CE1 = [
+  {t:'Léa a 34 billes.<br>Elle en perd 8.', sens:'moins', r:26},
+  {t:'Tom a 47 images.<br>Il en gagne 15.', sens:'plus', r:62},
+  {t:'Il y a 52 bonbons.<br>On en mange 9.', sens:'moins', r:43},
+  {t:'Sara a 28 cartes.<br>On lui en donne 24.', sens:'plus', r:52},
+  {t:'La boîte contient 60 clous.<br>Le menuisier en utilise 17.', sens:'moins', r:43},
+  {t:'Il y a 39 élèves.<br>13 arrivent en plus.', sens:'plus', r:52}
+];
+T.prob = {
+  nom:'Problèmes', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var h=pick(niv==='CE1'?HIST_CE1:HIST_CP);
+    return {mode:'histoire', hist:h, etape:1, rep:h.r, consigne:'Qu\'est-ce qui se passe ?'};
+  },
+  visuel:function(e){ return '<div class="carte"><p style="font-size:17px;line-height:1.65;margin:0">'+e.hist.t+'</p></div>'; },
+  classer:function(e,v){
+    if(e.etape===1) return 'sens';
+    if(v===e.hist.r+1||v===e.hist.r-1) return 'surcomptage';
+    return 'calcul';
+  },
+  remede:function(e,v,f){
+    if(f==='sens'||e.etape===1){
+      return {titre: e.hist.sens==='moins'?'Il y en a moins qu\'avant':'Il y en a plus qu\'avant', corps:
+        '<div class="carte"><p style="font-size:17px;line-height:1.65;margin:0">'+e.hist.t+'</p></div>'
+        +'<p class="sous" style="margin-top:16px">'+(e.hist.sens==='moins'
+          ? 'Perdre, manger, utiliser, partir : la quantité devient plus petite.'
+          : 'Gagner, recevoir, acheter, arriver : la quantité devient plus grande.')+'</p>'};
+    }
+    return {titre:'Reprends le calcul doucement', corps:
+      '<div class="carte"><p style="font-size:16px;line-height:1.6;margin:0">'+e.hist.t+'</p>'
+      +'<div class="badge '+(e.hist.sens==='plus'?'v':'o')+'" style="margin-top:10px">'
+      +(e.hist.sens==='plus'?'&uarr; il y en a plus':'&darr; il y en a moins')+'</div></div>'
+      +'<p class="sous" style="margin-top:16px">Tu as trouvé le bon sens. Il reste seulement à '
+      +(e.hist.sens==='plus'?'ajouter':'enlever')+'.</p>'};
+  }
+};
+
+T.monnaie = {
+  nom:'La monnaie', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var dispo = niv==='CE1' ? PIECES : PIECES.slice(0,4);
+    var n=rnd(2,niv==='CE1'?5:4), liste=[], tot=0, p, i;
+    for(i=0;i<n;i++){ p=pick(dispo); liste.push(p); tot+=p.v; }
+    return {mode:'pave', liste:liste, rep:tot, consigne:'Combien d\'argent ?'};
+  },
+  visuel:function(e){ return '<div class="carte">'+hArgent(e.liste)+'</div>'; },
+  classer:function(e,v){
+    if(v===e.liste.length) return 'compte-pieces';
+    if(Math.abs(v-e.rep)<=2) return 'proche';
+    return 'autre';
+  },
+  remede:function(e){
+    var c=0, h='<div class="boites" style="gap:6px">';
+    e.liste.forEach(function(p,i){ c+=p.v; h+=(i?'<span class="fleche">+</span>':'')
+      +'<div class="boite" style="min-width:44px;font-size:19px">'+p.v+'</div>'; });
+    h+='<span class="fleche">&rarr;</span><div class="boite trou">?</div></div>';
+    return {titre:'Chaque pièce ne vaut pas 1', corps:
+      '<div class="carte">'+hArgent(e.liste)+'</div>'+h
+      +'<p class="sous" style="margin-top:14px">On additionne ce qui est écrit dessus, pas le nombre de pièces.</p>'};
+  }
+};
+
+T.heure = {
+  nom:'Lire l\'heure', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var h=rnd(1,12), m = niv==='CE1' ? pick([0,30,15,45]) : 0;
+    var fmt=function(hh,mm){ return mm===0 ? hh+' h' : hh+' h '+mm; };
+    var bonne=fmt(h,m), autres=[];
+    var cand=[fmt(m>=30?h+1>12?1:h+1:h===12?1:h+1, m), fmt(h===1?12:h-1, m), fmt(h, m===0?30:0), fmt(h, m===15?45:15)];
+    cand.forEach(function(x){ if(x!==bonne && autres.indexOf(x)<0 && autres.length<3) autres.push(x); });
+    while(autres.length<3){ var f=fmt(rnd(1,12),niv==='CE1'?pick([0,30]):0); if(f!==bonne && autres.indexOf(f)<0) autres.push(f); }
+    var opts=melange([bonne].concat(autres));
+    return {mode:'choix', h:h, m:m, options:opts.map(function(x){return {label:x,val:x}}),
+      rep:bonne, consigne:'Quelle heure est-il ?'};
+  },
+  visuel:function(e){ return hHorloge(e.h,e.m); },
+  classer:function(e,v){ return String(v).split(' ')[0]!==String(e.h) ? 'aiguilles' : 'minutes'; },
+  remede:function(e,v,f){
+    return {titre: f==='aiguilles' ? 'La petite aiguille donne l\'heure' : 'La grande aiguille donne les minutes',
+      corps: hHorloge(e.h,e.m)
+      +'<p class="sous" style="margin-top:14px">'
+      +'<span style="color:#26215C;font-weight:700">La petite aiguille violette</span> pointe vers '+e.h+'.<br>'
+      +'<span style="color:#854F0B;font-weight:700">La grande aiguille orange</span> '
+      +(e.m===0?'est en haut, il n\'y a pas de minutes.':'donne les '+e.m+' minutes.')+'</p>'};
+  }
+};
+
+T.formes = {
+  nom:'Les figures', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var cles = niv==='CE1' ? ['carre','rectangle','triangle','cercle','losange'] : ['carre','rectangle','triangle','cercle'];
+    var bonne=pick(cles), autres=melange(cles.filter(function(c){return c!==bonne})).slice(0,3);
+    var opts=melange([bonne].concat(autres));
+    return {mode:'choix', cle:bonne, options:opts.map(function(c){return {label:FORMES[c].nom, val:c}}),
+      rep:bonne, consigne:'Quelle est cette figure ?'};
+  },
+  visuel:function(e){ return hForme(e.cle); },
+  classer:function(){ return 'figure'; },
+  remede:function(e){
+    var d={carre:'4 côtés de la même longueur et 4 coins droits',
+      rectangle:'4 coins droits, les côtés opposés sont égaux',
+      triangle:'3 côtés et 3 coins',
+      cercle:'aucun côté, aucun coin, tout est rond',
+      losange:'4 côtés égaux, mais les coins ne sont pas droits'};
+    return {titre:'C\'est '+FORMES[e.cle].nom, corps: hForme(e.cle)
+      +'<p class="sous" style="margin-top:14px">On le reconnaît à ça : '+d[e.cle]+'.</p>'};
+  }
+};
+
+T.quadrillage = {
+  nom:'Se repérer', matiere:'maths', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var C=4, R=4;
+    var c0=rnd(0,C-1), r0=rnd(0,R-1);
+    var dx=0, dy=0, txt=[];
+    var mkX=function(){
+      var n=rnd(1,2), dr=Math.random()<0.5?1:-1;
+      if(c0+dr*n<0||c0+dr*n>C-1) dr=-dr;
+      if(c0+dr*n<0||c0+dr*n>C-1) return 0;
+      dx=dr*n; txt.push(n+' case'+(n>1?'s':'')+' vers la '+(dr>0?'droite':'gauche')); return 1;
+    };
+    var mkY=function(){
+      var n=rnd(1,2), dr=Math.random()<0.5?1:-1;
+      if(r0+dr*n<0||r0+dr*n>R-1) dr=-dr;
+      if(r0+dr*n<0||r0+dr*n>R-1) return 0;
+      dy=dr*n; txt.push(n+' case'+(n>1?'s':'')+' vers le '+(dr>0?'bas':'haut')); return 1;
+    };
+    mkX(); if(niv==='CE1') mkY();
+    if(txt.length===0){ dx=1; txt.push('1 case vers la droite'); if(c0===C-1){ dx=-1; txt[0]='1 case vers la gauche'; } }
+    var c1=c0+dx, r1=r0+dy;
+    return {mode:'grille', C:C, R:R, c0:c0, r0:r0, dx:dx, dy:dy,
+      rep:String(r1*C+c1), texte:txt.join(', puis '), consigne:'Où arrive le jeton ?'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(e,v){
+    var i=Number(v), c=i%e.C, r=Math.floor(i/e.C);
+    if(c===e.c0 && r===e.r0) return 'bouge-pas';
+    if(c===e.c0-e.dx && r===e.r0+e.dy) return 'direction';
+    return 'nombre';
+  },
+  remede:function(e){
+    var h='<p class="sous">'+e.texte+'</p><div class="grille" style="grid-template-columns:repeat('+e.C+',56px)">';
+    for(var r=0;r<e.R;r++) for(var c=0;c<e.C;c++){
+      var dep=(c===e.c0&&r===e.r0), arr=(c===e.c0+e.dx&&r===e.r0+e.dy);
+      h+='<div class="cell'+(dep?' depart':'')+'" style="'+(arr?'border-color:#1D9E75;border-width:3px;background:#E1F5EE':'')+'">'
+        +(dep?'&#9679;':(arr?'&#10003;':''))+'</div>';
+    }
+    h+='</div>';
+    return {titre:'Compte les cases une par une', corps:h
+      +'<p class="sous" style="margin-top:14px">Pose ton doigt sur le point, puis avance case par case en comptant à voix haute.</p>'};
+  }
+};
+
+/* ---------- FRANÇAIS ---------- */
+
+var SONS_RIME = [
+  {m:'chat',son:'a'},{m:'rat',son:'a'},{m:'plat',son:'a'},{m:'chocolat',son:'a'},
+  {m:'ballon',son:'on'},{m:'maison',son:'on'},{m:'poisson',son:'on'},{m:'crayon',son:'on'},
+  {m:'fleur',son:'eur'},{m:'couleur',son:'eur'},{m:'moteur',son:'eur'},{m:'peur',son:'eur'},
+  {m:'souris',son:'i'},{m:'tapis',son:'i'},{m:'nid',son:'i'},{m:'lit',son:'i'},
+  {m:'gâteau',son:'o'},{m:'chapeau',son:'o'},{m:'bateau',son:'o'},{m:'vélo',son:'o'},
+  {m:'main',son:'in'},{m:'pain',son:'in'},{m:'lapin',son:'in'},{m:'sapin',son:'in'}
+];
+T.rimes = {
+  nom:'Les rimes', matiere:'francais', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var cible=pick(SONS_RIME);
+    var meme=SONS_RIME.filter(function(x){return x.son===cible.son && x.m!==cible.m;});
+    var bonne=pick(meme);
+    var autres=melange(SONS_RIME.filter(function(x){return x.son!==cible.son;})).slice(0,niv==='CE1'?3:2);
+    var opts=melange([bonne].concat(autres)).map(function(x){return {label:x.m, val:x.m};});
+    return {mode:'choix', cible:cible.m, options:opts, rep:bonne.m, consigne:'Quel mot rime avec "'+cible.m+'" ?'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(){ return 'son-different'; },
+  remede:function(e){
+    return {titre:'"'+e.cible+'" et "'+e.rep+'" se terminent pareil', corps:
+      '<div style="text-align:center;font-size:22px;font-weight:700">'+e.cible+'<br>'+e.rep+'</div>'
+      +'<p class="sous" style="margin-top:14px">Dis les deux mots à voix haute : la fin du mot sonne pareil.</p>'};
+  }
+};
+
+var MOTS_SYLL = [
+  {m:'chat',n:1},{m:'lit',n:1},{m:'pain',n:1},{m:'nid',n:1},
+  {m:'vélo',n:2},{m:'ballon',n:2},{m:'maison',n:2},{m:'tortue',n:2},{m:'lapin',n:2},{m:'cheval',n:2},
+  {m:'crocodile',n:3},{m:'papillon',n:3},{m:'chocolat',n:3},{m:'kangourou',n:3},{m:'éléphant',n:3},{m:'dinosaure',n:3},
+  {m:'ordinateur',n:4},{m:'hippopotame',n:4},{m:'anniversaire',n:4}
+];
+var DECOUPES = {
+  chat:'chat', lit:'lit', pain:'pain', nid:'nid',
+  'vélo':'vé • lo', ballon:'bal • lon', maison:'mai • son', tortue:'tor • tue', lapin:'la • pin', cheval:'che • val',
+  crocodile:'cro • co • dile', papillon:'pa • pi • llon', chocolat:'cho • co • lat', kangourou:'kan • gou • rou',
+  'éléphant':'é • lé • phant', dinosaure:'di • no • saure',
+  ordinateur:'or • di • na • teur', hippopotame:'hip • po • po • tame', anniversaire:'an • ni • ver • saire'
+};
+T.syllabes = {
+  nom:'Compter les syllabes', matiere:'francais', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var mots = niv==='CE1' ? MOTS_SYLL : MOTS_SYLL.filter(function(x){return x.n<=3;});
+    var m=pick(mots);
+    var vals=[1,2,3,4]; if(niv==='CE1') vals.push(5);
+    var opts=vals.filter(function(v){return Math.abs(v-m.n)<=2;}).slice(0, niv==='CE1'?4:3);
+    if(opts.indexOf(m.n)<0) opts.push(m.n);
+    opts=melange(opts).map(function(v){return {label:String(v), val:String(v)};});
+    return {mode:'choix', mot:m.m, options:opts, rep:String(m.n), consigne:'Combien de syllabes dans "'+m.m+'" ?'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(e,v){ return (Number(v)-Number(e.rep))>0 ? 'sur-decoupe' : 'sous-decoupe'; },
+  remede:function(e){
+    var parts=DECOUPES[e.mot] || e.mot;
+    return {titre:'Tape des mains à chaque syllabe', corps:
+      '<div style="text-align:center;font-size:26px;font-weight:700;letter-spacing:2px">'+parts+'</div>'
+      +'<p class="sous" style="margin-top:14px">"'+e.mot+'" se découpe en '+e.rep+' syllabe'+(e.rep>1?'s':'')+'.</p>'};
+  }
+};
+
+var MOTS_GENRE = [
+  {m:'chat',g:'m'},{m:'table',g:'f'},{m:'ballon',g:'m'},{m:'maison',g:'f'},{m:'crayon',g:'m'},
+  {m:'fleur',g:'f'},{m:'livre',g:'m'},{m:'chaise',g:'f'},{m:'soleil',g:'m'},{m:'lune',g:'f'},
+  {m:'chien',g:'m'},{m:'voiture',g:'f'},{m:'arbre',g:'m'},{m:'porte',g:'f'},{m:'bateau',g:'m'},{m:'école',g:'f'},
+  {m:'vélo',g:'m'},{m:'fenêtre',g:'f'},{m:'jardin',g:'m'},{m:'pomme',g:'f'}
+];
+T.genre = {
+  nom:'Le ou la ?', matiere:'francais', niveaux:['CP','CE1'],
+  faire:function(){
+    var m=pick(MOTS_GENRE);
+    return {mode:'choix', mot:m.m, options:[{label:'le '+m.m, val:'m'},{label:'la '+m.m, val:'f'}],
+      rep:m.g, consigne:'Choisis le bon mot'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(){ return 'genre'; },
+  remede:function(e){
+    return {titre:'On dit "'+(e.rep==='m'?'le':'la')+' '+e.mot+'"', corps:
+      '<div style="text-align:center;font-size:26px;font-weight:700">'+(e.rep==='m'?'le':'la')+' '+e.mot+'</div>'
+      +'<p class="sous" style="margin-top:14px">Essaie de le redire plusieurs fois, l\'oreille s\'habitue.</p>'};
+  }
+};
+
+var ALPHA='abcdefghijklmnopqrstuvwxyz';
+T.alphabet = {
+  nom:'L\'alphabet', matiere:'francais', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var apres=Math.random()<0.5;
+    var i = apres ? rnd(0,23) : rnd(2,25);
+    var lettre=ALPHA[i];
+    var rep = apres ? ALPHA[i+1] : ALPHA[i-1];
+    var distract=[];
+    while(distract.length < (niv==='CE1'?3:2)){
+      var j=rnd(Math.max(0,i-4),Math.min(25,i+4));
+      var l=ALPHA[j];
+      if(l!==rep && l!==lettre && distract.indexOf(l)<0) distract.push(l);
+    }
+    var opts=melange([rep].concat(distract)).map(function(l){return {label:l.toUpperCase(), val:l};});
+    return {mode:'choix', lettre:lettre, apres:apres, options:opts, rep:rep,
+      consigne: apres? 'Quelle lettre vient après "'+lettre.toUpperCase()+'" ?' : 'Quelle lettre vient avant "'+lettre.toUpperCase()+'" ?'};
+  },
+  visuel:function(e){ return hSuite(e.apres?[e.lettre.toUpperCase(),'?']:['?',e.lettre.toUpperCase()], e.apres?1:0, 'droite'); },
+  classer:function(e,v){ return v===e.lettre?'repete':'sens'; },
+  remede:function(e){
+    var i=ALPHA.indexOf(e.lettre);
+    var deb=Math.max(0,i-2);
+    var seq=ALPHA.slice(deb,Math.min(26,deb+5)).toUpperCase().split('');
+    return {titre:'Récite l\'alphabet depuis A', corps:
+      hSuite(seq, -1, 'droite')
+      +'<p class="sous" style="margin-top:14px">'+(e.apres?'Après ':'Avant ')+'"'+e.lettre.toUpperCase()+'", c\'est "'+e.rep.toUpperCase()+'".</p>'};
+  }
+};
+
+var CATS_FR = {
+  animaux:['chat','chien','lion','tigre','vache','poule','souris','cheval'],
+  fruits:['pomme','banane','fraise','poire','orange','cerise','citron'],
+  vetements:['pantalon','robe','chaussette','manteau','pull','chapeau'],
+  couleurs:['rouge','bleu','vert','jaune','violet','rose'],
+  vehicules:['voiture','vélo','train','avion','bateau','camion']
+};
+var NOMS_CAT_FR = {animaux:'animaux', fruits:'fruits', vetements:'vêtements', couleurs:'couleurs', vehicules:'véhicules'};
+T.intrus = {
+  nom:'L\'intrus', matiere:'francais', niveaux:['CP','CE1'],
+  faire:function(){
+    var cles=Object.keys(CATS_FR);
+    var c1=pick(cles), c2=pick(cles.filter(function(c){return c!==c1;}));
+    var base=melange(CATS_FR[c1]).slice(0,3);
+    var intrus=pick(CATS_FR[c2]);
+    var opts=melange(base.concat([intrus])).map(function(m){return {label:m, val:m};});
+    return {mode:'choix', options:opts, rep:intrus, cat:c1, consigne:'Trouve le mot qui ne va pas avec les autres'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(){ return 'categorie'; },
+  remede:function(e){
+    var reste=e.options.map(function(o){return o.val;}).filter(function(m){return m!==e.rep;});
+    return {titre:'"'+reste.join('", "')+'" vont ensemble', corps:
+      '<p class="sous">Ce sont tous des '+NOMS_CAT_FR[e.cat]+'.</p>'
+      +'<div class="badge o" style="margin-top:10px;font-size:18px">'+e.rep+'</div>'
+      +'<p class="sous" style="margin-top:10px">lui, ce n\'est pas pareil.</p>'};
+  }
+};
+
+/* ---------- QUESTIONNER LE MONDE ---------- */
+
+var JOURS=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+T.jours = {
+  nom:'Les jours de la semaine', matiere:'monde', niveaux:['CP','CE1'],
+  faire:function(niv){
+    var i=rnd(0,6), apres=Math.random()<0.5;
+    var j=JOURS[i];
+    var rep = apres ? JOURS[(i+1)%7] : JOURS[(i+6)%7];
+    var distract=melange(JOURS.filter(function(x){return x!==j && x!==rep;})).slice(0,niv==='CE1'?3:2);
+    var opts=melange([rep].concat(distract)).map(function(x){return {label:cap(x), val:x};});
+    return {mode:'choix', jour:j, apres:apres, options:opts, rep:rep,
+      consigne: apres?'Quel jour vient après '+j+' ?':'Quel jour vient avant '+j+' ?'};
+  },
+  visuel:function(e){ return hSuite(e.apres?[cap(e.jour),'?']:['?',cap(e.jour)], e.apres?1:0,'droite'); },
+  classer:function(e,v){ return v===e.jour?'repete':'sens'; },
+  remede:function(e){
+    return {titre:'La semaine tourne toujours dans le même ordre', corps:
+      hSuite(JOURS.map(cap), -1, 'droite')
+      +'<p class="sous" style="margin-top:14px">'+(e.apres?'Après ':'Avant ')+cap(e.jour)+', c\'est '+cap(e.rep)+'.</p>'};
+  }
+};
+
+var CLUES_SAISON = [
+  {t:'On met un manteau et des gants.', s:'hiver'},
+  {t:'La neige tombe dans le jardin.', s:'hiver'},
+  {t:'Les fleurs poussent partout.', s:'printemps'},
+  {t:'Les oiseaux reviennent et chantent.', s:'printemps'},
+  {t:'On va à la plage en maillot de bain.', s:'été'},
+  {t:'Il fait très chaud, on boit beaucoup d\'eau.', s:'été'},
+  {t:'Les feuilles tombent des arbres.', s:'automne'},
+  {t:'On ramasse les châtaignes.', s:'automne'}
+];
+T.saisons = {
+  nom:'Les saisons', matiere:'monde', niveaux:['CP','CE1'],
+  faire:function(){
+    var c=pick(CLUES_SAISON);
+    var toutes=['hiver','printemps','été','automne'];
+    var opts=melange(toutes).map(function(s){return {label:cap(s), val:s};});
+    return {mode:'choix', texte:c.t, options:opts, rep:c.s, consigne:'C\'est quelle saison ?'};
+  },
+  visuel:function(e){ return '<div class="carte"><p style="font-size:17px;line-height:1.6;margin:0;text-align:center">'+e.texte+'</p></div>'; },
+  classer:function(){ return 'saison'; },
+  remede:function(e){
+    return {titre:'C\'est '+cap(e.rep), corps:
+      '<div class="carte"><p style="font-size:16px;line-height:1.6;margin:0">'+e.texte+'</p></div>'
+      +'<div class="badge v" style="margin-top:12px;font-size:18px">'+cap(e.rep)+'</div>'};
+  }
+};
+
+var CLASSER_MONDE = [
+  {m:'la pomme', cat:'un fruit'}, {m:'la carotte', cat:'un légume'},
+  {m:'le chat', cat:'un animal'}, {m:'la voiture', cat:'un moyen de transport'},
+  {m:'le lion', cat:'un animal'}, {m:'la banane', cat:'un fruit'},
+  {m:'le vélo', cat:'un moyen de transport'}, {m:'la pomme de terre', cat:'un légume'},
+  {m:'le train', cat:'un moyen de transport'}, {m:'la salade', cat:'un légume'},
+  {m:'l\'orange', cat:'un fruit'}, {m:'le chien', cat:'un animal'}
+];
+T.trier = {
+  nom:'Trier les objets', matiere:'monde', niveaux:['CP','CE1'],
+  faire:function(){
+    var it=pick(CLASSER_MONDE);
+    var cats=[];
+    CLASSER_MONDE.forEach(function(x){ if(cats.indexOf(x.cat)<0) cats.push(x.cat); });
+    var autres=melange(cats.filter(function(c){return c!==it.cat;})).slice(0,2);
+    var opts=melange([it.cat].concat(autres)).map(function(c){return {label:c, val:c};});
+    return {mode:'choix', mot:it.m, options:opts, rep:it.cat, consigne:cap(it.m)+', c\'est...'};
+  },
+  visuel:function(){ return ''; },
+  classer:function(){ return 'categorie'; },
+  remede:function(e){
+    return {titre:cap(e.mot)+', c\'est '+e.rep, corps:
+      '<div class="badge v" style="font-size:18px">'+cap(e.mot)+'</div>'
+      +'<p class="sous" style="margin-top:14px">&rarr; '+e.rep+'</p>'};
+  }
+};
+
+/* ================= matières ================= */
+var MATIERES = {
+  maths:{nom:'Mathématiques', classe:'violet', longueur:5},
+  francais:{nom:'Français', classe:'corail', longueur:5},
+  monde:{nom:'Questionner le monde', classe:'turquoise', longueur:4}
+};
+
+/* ================= état ================= */
+var CLES = Object.keys(T);
+var COULEURS = ['#5DCAA5','#F0997B','#AFA9EC','#EF9F27','#85B7EB','#F4C0D1','#C0DD97','#FAC775'];
+
+function etatNeuf(){
+  var c={}; CLES.forEach(function(k){ c[k]={ok:0,err:0,suite:0,ech:2,fautes:{}}; });
+  return {niveau:null, etoiles:0, diamants:0, or:0, pieces:0, comp:c, sessions:0, son:true};
+}
+var S=null;
+function sauver(){ Store.set('maths-v2', JSON.stringify(S)); }
+function typesDispo(matieres){
+  return CLES.filter(function(k){ return matieres.indexOf(T[k].matiere)>=0 && T[k].niveaux.indexOf(S.niveau)>=0; });
+}
+function choisirType(matieres){
+  var dispo=typesDispo(matieres);
+  var tri=dispo.slice().sort(function(a,b){
+    var A=S.comp[a], B=S.comp[b];
+    var sa=(A.ok+A.err)===0?-1:A.ok/(A.ok+A.err);
+    var sb=(B.ok+B.err)===0?-1:B.ok/(B.ok+B.err);
+    return sa-sb;
+  });
+  return Math.random()<0.55 ? tri[0] : tri[rnd(0,Math.min(2,tri.length-1))];
+}
+
+/* ================= session ================= */
+var Sess=null;
+
+function fabriquer(cle){
+  var ex=T[cle].faire(S.niveau, S.comp[cle].ech);
+  ex.type=cle; ex.ech=S.comp[cle].ech; ex.niveau=S.niveau;
+  return ex;
+}
+
+function lancerSession(sel){
+  Veille.garder();
+  var matieres = sel==='toutes' ? Object.keys(MATIERES) : [sel];
+  var n = sel==='toutes' ? 6 : (MATIERES[sel] ? MATIERES[sel].longueur : 5);
+  var file=[], vus=[], k, essais;
+  for(var i=0;i<n;i++){
+    k=choisirType(matieres); essais=0;
+    while(vus.filter(function(x){return x===k}).length>=2 && essais<8){ k=choisirType(matieres); essais++; }
+    vus.push(k); file.push(fabriquer(k));
+  }
+  Sess={sel:sel, matieres:matieres, nInitial:n, file:file, i:0, etoiles:0, diamants:0, or:0, phase:'essai', donne:null, faute:null};
+  ecranExo();
+}
+function exo(){ return Sess.file[Sess.i]; }
+
+function valider(donne){
+  var e=exo(), c=S.comp[e.type];
+  if(String(donne)===String(e.rep)){
+    c.ok++; c.suite++;
+    if(c.suite>=3 && c.ech>0){ c.ech--; c.suite=0; }
+    S.or++; Sess.or++;
+    if(Sess.phase==='essai'){ S.etoiles++; Sess.etoiles++; Son.jouer('etoile'); sauver(); ecranGagne('etoile'); }
+    else if(Sess.phase==='jumeau'){ S.diamants++; Sess.diamants++; Son.jouer('diamant'); sauver(); ecranGagne('diamant'); }
+    else { Son.jouer('juste'); sauver(); suivant(); }
+    return;
+  }
+  Son.jouer('doux');
+  c.err++; c.suite=0;
+  var f=T[e.type].classer(e,typeof donne==='number'?donne:(isNaN(Number(donne))?donne:Number(donne)));
+  c.fautes[f]=(c.fautes[f]||0)+1;
+  Sess.donne=donne; Sess.faute=f;
+  sauver(); ecranRegarde();
+}
+
+function demanderAide(){
+  var e=exo(), c=S.comp[e.type];
+  c.fautes['aide']=(c.fautes['aide']||0)+1; c.suite=0;
+  Sess.donne=null; Sess.faute='aide';
+  sauver(); ecranRegarde();
+}
+
+function programmerJumeau(){
+  var e=exo();
+  if(Sess.file.some(function(x){ return x.jumeau && x.type===e.type; })) return;
+  if(Sess.file.length >= Sess.nInitial+2) return;
+  var j=fabriquer(e.type); j.jumeau=true; Sess.file.push(j);
+}
+
+function suivant(){
+  Sess.i++;
+  if(Sess.i>=Sess.file.length){ ecranFin(); return; }
+  Sess.phase = exo().jumeau ? 'jumeau' : 'essai';
+  Sess.donne=null; Sess.faute=null;
+  ecranExo();
+}
+
+/* ================= écrans ================= */
+var app=document.getElementById('app');
+function poser(h){ app.innerHTML=h; }
+function hChouette(mini){
+  return '<div class="chouette'+(mini?' mini':'')+'"><div class="oeil"><div class="pupille"></div></div>'
+    +'<div class="oeil"><div class="pupille"></div></div><div class="bec"></div></div>';
+}
+function hPoints(){
+  var h='<div class="points">';
+  for(var i=0;i<Sess.file.length;i++)
+    h+='<div class="pt'+(i<Sess.i?' fait':(i===Sess.i?' now':''))+'"></div>';
+  return h+'</div>';
+}
+function hNav(){
+  return '<div class="navtop"><button class="navbtn" id="navRetour">&larr; Retour</button>'
+    +'<button class="navbtn" id="navAccueil">&#8962; Accueil</button></div>';
+}
+function attacherNav(retourFn){
+  var r=document.getElementById('navRetour'); if(r) r.onclick=retourFn;
+  var a=document.getElementById('navAccueil');
+  if(a) a.onclick=function(){ Veille.lacher(); Sess=null; ecranNiveau(); };
+}
+function abandonnerSession(){ Veille.lacher(); Sess=null; ecranMatieres(); }
+
+function ecranNiveau(){
+  Veille.lacher(); Sess=null;
+  poser(
+    '<div class="grow"></div>'+hChouette()
+    +'<h1>Bonjour !</h1>'
+    +'<p class="sous" style="margin-top:10px">Tu es en quelle classe ?</p>'
+    +'<div style="margin-top:26px"><button class="gros '+(S.niveau==='CP'?'orange':'blanc')+'" id="cp">CP</button></div>'
+    +'<div style="margin-top:12px"><button class="gros '+(S.niveau==='CE1'?'violet':'blanc')+'" id="ce1">CE1</button></div>'
+    +'<div class="grow"></div>'
+    +'<p class="sous" style="font-size:13px;color:var(--gris-clair)">Un adulte peut changer ça plus tard.</p>'
+  );
+  var choisir=function(n){ return function(){ Son.init(); S.niveau=n; sauver(); ecranAccueil(); }; };
+  document.getElementById('cp').onclick=choisir('CP');
+  document.getElementById('ce1').onclick=choisir('CE1');
+}
+
+function ecranAccueil(){
+  Veille.lacher(); Sess=null;
+  if(!S.niveau) return ecranNiveau();
+  var p='';
+  for(var i=0;i<8;i++)
+    p += i<S.pieces ? '<div class="piece on" style="background:'+COULEURS[i]+'"></div>' : '<div class="piece"></div>';
+  poser(
+    '<div class="top">'
+    +'<div class="grp"><button class="pilule" id="niv">'+S.niveau+'</button>'
+    +'<button class="hp" id="son" aria-label="Son">'+(S.son?'&#128266;':'&#128263;')+'</button></div>'
+    +'<div class="grp" style="flex-wrap:wrap;justify-content:flex-end">'
+    +'<span class="jeton etoile">&#9733; '+S.etoiles+'</span>'
+    +'<span class="jeton diam">&#9670; '+S.diamants+'</span>'
+    +'<span class="jeton or"><span class="piece-or"></span> '+S.or+'</span></div></div>'
+    +'<div style="margin-top:22px">'+hChouette()+'</div>'
+    +'<h1>Salut !</h1>'
+    +'<div style="margin-top:22px"><button class="gros orange" id="alea">Questions au hasard</button></div>'
+    +'<div style="margin-top:12px"><button class="gros violet" id="mat">Choisir une matière</button></div>'
+    +'<p style="font-size:13px;font-weight:700;margin:24px 0 8px">Ma collection</p>'
+    +'<div class="collec">'+p+'</div>'
+    +'<div class="grow"></div>'
+    +'<button class="adulte" id="adulte">&#128274; Espace adulte</button>'
+  );
+  document.getElementById('alea').onclick=function(){ Son.init(); lancerSession('toutes'); };
+  document.getElementById('mat').onclick=function(){ Son.init(); ecranMatieres(); };
+  document.getElementById('niv').onclick=ecranNiveau;
+  document.getElementById('adulte').onclick=ecranVerrou;
+  document.getElementById('son').onclick=function(){
+    S.son=!S.son; Son.actif=S.son;
+    if(S.son){ Son.init(); Son.jouer('juste'); }
+    sauver(); ecranAccueil();
+  };
+}
+
+function ecranMatieres(){
+  var h=hNav()+'<h1 style="margin-top:10px">Choisis une matière</h1>';
+  Object.keys(MATIERES).forEach(function(k){
+    if(typesDispo([k]).length===0) return;
+    h+='<button class="carte-matiere '+MATIERES[k].classe+'" data-m="'+k+'">'+MATIERES[k].nom+'</button>';
+  });
+  h+='<div class="grow"></div>';
+  poser(h);
+  attacherNav(function(){ ecranAccueil(); });
+  Array.prototype.forEach.call(app.querySelectorAll('.carte-matiere'),function(b){
+    b.onclick=function(){ Son.init(); lancerSession(b.getAttribute('data-m')); };
+  });
+}
+
+/* --- dispatcher --- */
+function ecranExo(){
+  var e=exo(), def=T[e.type];
+  if(e.mode==='histoire' && e.etape===1) return ecranHistoire1();
+  var visuel = def.visuel(e);
+  var entete = hNav()+hPoints()
+    +'<div class="ligne-consigne"><p class="consigne">'+e.consigne+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div>';
+  var voix = e.consigne;
+
+  if(e.mode==='pave' || e.mode==='histoire'){
+    poser(entete+(visuel?'<div style="margin-top:12px">'+visuel+'</div>':'')
+      +'<div style="margin-top:12px"><div class="champ" id="champ"><span class="curseur">|</span></div></div>'
+      +'<p class="alerte" id="alerte"></p><div class="pave" id="pave"></div>'
+      +'<button class="aide" id="aide">Je ne sais pas</button>');
+    monterPave();
+  }
+  else if(e.mode==='construire'){ return ecranConstruire(); }
+  else if(e.mode==='choix'){
+    var o=e.options.map(function(x,i){ return '<button class="opt" data-v="'+x.val+'" id="o'+i+'">'+x.label+'</button>'; }).join('');
+    poser(entete+(visuel?'<div style="margin-top:10px">'+visuel+'</div>':'')
+      +'<div style="margin-top:12px">'+o+'</div>'
+      +'<div class="grow"></div><button class="aide" id="aide">Je ne sais pas</button>');
+    Array.prototype.forEach.call(app.querySelectorAll('.opt'), function(b){
+      b.onclick=function(){ Son.jouer('clic'); valider(b.getAttribute('data-v')); };
+    });
+  }
+  else if(e.mode==='ordre'){ return ecranOrdre(); }
+  else if(e.mode==='ligne'){ return ecranLigne(); }
+  else if(e.mode==='grille'){ return ecranGrille(); }
+
+  var hp=document.getElementById('hp'); if(hp) hp.onclick=function(){ dire(voix); };
+  var ai=document.getElementById('aide'); if(ai) ai.onclick=demanderAide;
+  attacherNav(abandonnerSession);
+}
+
+/* --- pavé --- */
+var saisie='';
+function monterPave(){
+  saisie='';
+  var p=document.getElementById('pave');
+  ['1','2','3','4','5','6','7','8','9','eff','0','ok'].forEach(function(t){
+    var b=document.createElement('button');
+    if(t==='eff'){ b.className='touche eff'; b.innerHTML='&#9003;'; b.setAttribute('aria-label','Effacer'); }
+    else if(t==='ok'){ b.className='touche ok'; b.innerHTML='&#10003;'; b.setAttribute('aria-label','Valider'); }
+    else { b.className='touche'; b.textContent=t; }
+    b.onclick=function(){ appuyer(t); };
+    p.appendChild(b);
+  });
+}
+function afficherSaisie(){
+  var c=document.getElementById('champ');
+  c.innerHTML = saisie==='' ? '<span class="curseur">|</span>' : saisie+'<span class="curseur">|</span>';
+}
+function appuyer(t){
+  if(t!=='ok') Son.jouer('clic');
+  var al=document.getElementById('alerte');
+  if(t==='eff'){ saisie=saisie.slice(0,-1); al.textContent=''; return afficherSaisie(); }
+  if(t==='ok'){
+    if(saisie===''){ al.textContent='Écris un nombre d\'abord'; return; }
+    return valider(parseInt(saisie,10));
+  }
+  if(saisie.length>=4) return;
+  al.textContent=''; saisie+=t; afficherSaisie();
+}
+
+/* --- construire --- */
+var plateau={d:0,u:0};
+function ecranConstruire(){
+  var e=exo();
+  plateau={d:0,u:0};
+  poser(hNav()+hPoints()
+    +'<div class="ligne-consigne"><p class="consigne">'+e.consigne+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div>'
+    +'<div class="carte" style="margin-top:12px;min-height:140px" id="plateau"></div>'
+    +'<p class="sous" style="margin-top:6px;font-size:13px">Appuie sur une pièce pour l\'enlever</p>'
+    +'<div style="display:flex;gap:10px;margin-top:12px">'
+    +'<button class="gros blanc moyen" id="addb">+ barre</button>'
+    +'<button class="gros blanc moyen" id="addc">+ cube</button></div>'
+    +'<p class="alerte" id="alerte"></p>'
+    +'<button class="gros turquoise" id="valid">C\'est bon</button>'
+    +'<button class="aide" id="aide">Je ne sais pas</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('hp').onclick=function(){ dire(e.consigne); };
+  document.getElementById('addb').onclick=function(){ if(plateau.d<9){ Son.jouer('clic'); plateau.d++; dessinerPlateau(); } };
+  document.getElementById('addc').onclick=function(){ if(plateau.u<19){ Son.jouer('clic'); plateau.u++; dessinerPlateau(); } };
+  document.getElementById('valid').onclick=function(){
+    if(plateau.d===0 && plateau.u===0){ document.getElementById('alerte').textContent='Pose d\'abord des pièces'; return; }
+    valider(plateau.d*10+plateau.u);
+  };
+  document.getElementById('aide').onclick=demanderAide;
+  dessinerPlateau();
+}
+function dessinerPlateau(){
+  var p=document.getElementById('plateau'), h='<div class="pile">', i;
+  for(i=0;i<plateau.d;i++) h+=hBarre(2);
+  h+='</div><div class="sep"></div><div class="rang">'+hCubes(plateau.u)+'</div>';
+  p.innerHTML=h;
+  Array.prototype.forEach.call(p.querySelectorAll('.barre'),function(b){ b.onclick=function(){ plateau.d--; dessinerPlateau(); }; });
+  Array.prototype.forEach.call(p.querySelectorAll('.cube'),function(b){ b.onclick=function(){ plateau.u--; dessinerPlateau(); }; });
+}
+
+/* --- ranger --- */
+var choisis=[];
+function ecranOrdre(){
+  var e=exo();
+  choisis=[];
+  poser(hNav()+hPoints()
+    +'<div class="ligne-consigne"><p class="consigne">'+e.consigne+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div>'
+    +'<p class="sous" style="margin-top:6px;font-size:13px">Appuie dans le bon ordre</p>'
+    +'<div class="boites" style="margin-top:20px" id="src"></div>'
+    +'<div class="boites" style="margin-top:26px;min-height:56px" id="dst"></div>'
+    +'<div class="grow"></div><button class="aide" id="aide">Je ne sais pas</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('hp').onclick=function(){ dire(e.consigne); };
+  document.getElementById('aide').onclick=demanderAide;
+  dessinerOrdre();
+}
+function dessinerOrdre(){
+  var e=exo(), src=document.getElementById('src'), dst=document.getElementById('dst');
+  src.innerHTML=''; dst.innerHTML='';
+  e.items.forEach(function(v){
+    if(choisis.indexOf(v)>=0) return;
+    var b=document.createElement('button');
+    b.className='boite'; b.textContent=v;
+    b.onclick=function(){
+      Son.jouer('clic'); choisis.push(v);
+      if(choisis.length===e.items.length) return valider(choisis.join('-'));
+      dessinerOrdre();
+    };
+    src.appendChild(b);
+  });
+  choisis.forEach(function(v,i){
+    if(i) dst.insertAdjacentHTML('beforeend','<span class="fleche">&lt;</span>');
+    dst.insertAdjacentHTML('beforeend','<div class="boite mis">'+v+'</div>');
+  });
+}
+
+/* --- ligne numérique --- */
+function ecranLigne(){
+  var e=exo(), h='<div class="lignum">'+'<div class="axe"></div>', i, x, v;
+  for(i=0;i<=10;i++){
+    x=(i/10)*100; v=i*e.pas;
+    h+='<button class="tick but" data-v="'+v+'" style="left:'+x+'%"><div class="tbar"></div>'
+      +'<span class="tlab">'+((i===0||i===5||i===10)?v:'')+'</span></button>';
+  }
+  h+='</div>';
+  poser(hNav()+hPoints()
+    +'<div class="ligne-consigne"><p class="consigne">'+e.consigne+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div>'
+    +'<p class="sous" style="margin-top:6px;font-size:13px">Appuie sur le bon trait</p>'
+    +h+'<div class="grow"></div><button class="aide" id="aide">Je ne sais pas</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('hp').onclick=function(){ dire(e.consigne); };
+  document.getElementById('aide').onclick=demanderAide;
+  Array.prototype.forEach.call(app.querySelectorAll('.tick'),function(b){
+    b.onclick=function(){ Son.jouer('clic'); valider(Number(b.getAttribute('data-v'))); };
+  });
+}
+
+/* --- quadrillage --- */
+function ecranGrille(){
+  var e=exo(), h='<div class="grille" style="grid-template-columns:repeat('+e.C+',56px)">', c, r, dep;
+  for(r=0;r<e.R;r++) for(c=0;c<e.C;c++){
+    dep=(c===e.c0 && r===e.r0);
+    h+='<button class="cell'+(dep?' depart':'')+'" data-i="'+(r*e.C+c)+'">'+(dep?'&#9679;':'')+'</button>';
+  }
+  h+='</div>';
+  poser(hNav()+hPoints()
+    +'<div class="ligne-consigne"><p class="consigne">'+e.consigne+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div>'
+    +'<div class="carte" style="margin-top:12px"><p style="margin:0;font-size:16px;line-height:1.5">Le jeton avance de '+e.texte+'.</p></div>'
+    +h+'<div class="grow"></div><button class="aide" id="aide">Je ne sais pas</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('hp').onclick=function(){ dire('Le jeton avance de '+e.texte); };
+  document.getElementById('aide').onclick=demanderAide;
+  Array.prototype.forEach.call(app.querySelectorAll('.cell'),function(b){
+    b.onclick=function(){ Son.jouer('clic'); valider(b.getAttribute('data-i')); };
+  });
+}
+
+/* --- problème étape 1 --- */
+function ecranHistoire1(){
+  var e=exo();
+  poser(hNav()+hPoints()
+    +'<div class="carte"><div style="display:flex;justify-content:space-between;gap:8px">'
+    +'<p style="font-size:17px;line-height:1.65;margin:0">'+e.hist.t+'</p>'
+    +'<button class="hp" id="hp" aria-label="Écouter">&#128266;</button></div></div>'
+    +'<p class="consigne" style="margin-top:20px">Qu\'est-ce qui se passe ?</p>'
+    +'<p class="sous" style="margin:4px 0 12px;font-size:13px">On ne calcule pas encore</p>'
+    +'<button class="opt" id="plus" style="background:var(--turquoise-pale);border-color:var(--turquoise);color:var(--turquoise-fonce)">'
+    +'<span style="font-size:24px">&uarr;</span> Il y en a plus</button>'
+    +'<button class="opt" id="moins" style="background:var(--corail-pale);border-color:var(--corail);color:var(--corail-fonce)">'
+    +'<span style="font-size:24px">&darr;</span> Il y en a moins</button>'
+    +'<div class="grow"></div><button class="aide" id="aide">Je ne sais pas</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('hp').onclick=function(){ dire(e.hist.t.replace(/<br>/g,' ')); };
+  document.getElementById('plus').onclick=function(){ repondreSens('plus'); };
+  document.getElementById('moins').onclick=function(){ repondreSens('moins'); };
+  document.getElementById('aide').onclick=demanderAide;
+}
+function repondreSens(v){
+  var e=exo();
+  if(v===e.hist.sens){
+    Son.jouer('juste'); e.etape=2;
+    e.consigne = e.hist.sens==='plus' ? 'Combien ça fait en tout ?' : 'Combien il en reste ?';
+    ecranExo();
+  } else {
+    Son.jouer('doux');
+    var c=S.comp.prob; c.err++; c.suite=0; c.fautes['sens']=(c.fautes['sens']||0)+1;
+    Sess.donne=null; Sess.faute='sens'; sauver(); ecranRegarde();
+  }
+}
+
+/* --- remédiation --- */
+function ecranRegarde(){
+  var e=exo(), rem=T[e.type].remede(e, Sess.donne, Sess.faute);
+  var entete='';
+  if(Sess.donne!==null && Sess.donne!==undefined)
+    entete='<div class="carte" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="font-size:15px;color:var(--gris)">Tu as répondu</span>'
+      +'<span style="font-size:20px;font-weight:700">'+String(Sess.donne).replace(/-/g,' &lt; ')+'</span></div>';
+  poser(hNav()+'<div style="display:flex;align-items:center;gap:10px">'+hChouette(true)
+    +'<p style="font-size:19px;font-weight:700;margin:0">Tiens, regarde</p></div>'
+    +entete
+    +'<p style="font-size:17px;font-weight:700;text-align:center;margin:16px 0 12px">'+rem.titre+'</p>'
+    +rem.corps
+    +'<div class="grow"></div>'
+    +'<div style="margin-top:18px"><button class="gros orange" id="rz">Je réessaie</button></div>');
+  attacherNav(abandonnerSession);
+  document.getElementById('rz').onclick=function(){
+    programmerJumeau();
+    if(Sess.phase==='essai') Sess.phase='reprise';
+    Sess.donne=null;
+    if(e.mode==='histoire' && e.etape===1) return ecranHistoire1();
+    ecranExo();
+  };
+}
+
+function ecranGagne(type){
+  poser(hNav()+'<div class="grow"></div>'+hChouette()
+    +'<div class="recomp '+(type==='diamant'?'diam':'star')+'">'+(type==='diamant'?'&#9670;':'&#9733;')+'</div>'
+    +'<h1>'+(type==='diamant'?'Tu as compris !':'Bravo !')+'</h1>'
+    +'<p class="sous" style="margin:10px 20px 0;line-height:1.6">'
+    +(type==='diamant'?'Tu t\'es trompée, et après tu as trouvé. C\'est le plus difficile.':'Tu as trouvé du premier coup.')
+    +'</p>'
+    +'<p style="text-align:center;margin-top:10px;font-size:15px;color:var(--or-fonce)"><span class="piece-or"></span> + 1 pièce d\'or</p>'
+    +'<div class="grow"></div><button class="gros turquoise" id="suite">Continuer</button>');
+  attacherNav(abandonnerSession);
+  document.getElementById('suite').onclick=suivant;
+}
+
+function ecranFin(){
+  Son.jouer('fin');
+  S.sessions++;
+  var neuve=-1;
+  if(S.pieces<8){ neuve=S.pieces; S.pieces++; }
+  sauver();
+  var p='';
+  for(var i=0;i<8;i++)
+    p += i<S.pieces ? '<div class="piece on'+(i===neuve?' neuve':'')+'" style="background:'+COULEURS[i]+'"></div>'
+                    : '<div class="piece"></div>';
+  poser(hNav()+'<div class="points" style="margin-top:6px">'
+    +Sess.file.map(function(){ return '<div class="pt fait"></div>'; }).join('')+'</div>'
+    +'<h1 style="margin-top:18px">Bravo !</h1>'
+    +'<p class="sous">'+Sess.file.length+' jeux terminés</p>'
+    +'<div class="stat">'
+    +'<div style="background:var(--orange-clair)"><span style="font-size:24px;color:#854F0B">&#9733;</span>'
+    +'<p class="n" style="color:var(--orange-fonce)">'+Sess.etoiles+'</p></div>'
+    +'<div style="background:var(--bleu-pale)"><span style="font-size:24px;color:#185FA5">&#9670;</span>'
+    +'<p class="n" style="color:var(--bleu-fonce)">'+Sess.diamants+'</p></div>'
+    +'<div style="background:var(--or-clair)"><span class="piece-or" style="width:22px;height:22px"></span>'
+    +'<p class="n" style="color:var(--or-fonce)">'+Sess.or+'</p></div></div>'
+    +(neuve>=0?'<p class="sous" style="margin-top:20px">Tu as gagné une pièce</p>'
+              :'<p class="sous" style="margin-top:20px">Ta collection est complète</p>')
+    +'<div class="collec" style="margin-top:10px">'+p+'</div>'
+    +'<div class="grow"></div><button class="gros turquoise" id="fin">Terminé</button>'
+    +'<button class="adulte" id="adulte" style="margin-top:6px">&#128274; Espace adulte</button>');
+  attacherNav(function(){ ecranAccueil(); });
+  document.getElementById('fin').onclick=ecranAccueil;
+  document.getElementById('adulte').onclick=ecranVerrou;
+}
+
+/* ================= espace adulte ================= */
+function ecranVerrou(){
+  Veille.lacher();
+  poser('<button class="retour" id="ret">&larr; Retour</button>'
+    +'<div style="margin-top:50px;text-align:center">'
+    +'<p style="font-size:17px;font-weight:700">Espace adulte</p>'
+    +'<p class="sous" style="margin-top:8px">Combien font 7 &times; 8 ?</p>'
+    +'<input id="code" inputmode="numeric" style="font-family:inherit;font-size:26px;text-align:center;width:120px;'
+    +'padding:10px;margin-top:16px;border:2px solid var(--bord);border-radius:12px;background:var(--blanc)">'
+    +'<p class="alerte" id="alerte"></p>'
+    +'<div style="margin-top:8px"><button class="gros blanc moyen" id="ok">Entrer</button></div></div>');
+  document.getElementById('ret').onclick=ecranAccueil;
+  document.getElementById('ok').onclick=function(){
+    if(document.getElementById('code').value.trim()==='56') ecranAdulte();
+    else document.getElementById('alerte').textContent='Ce n\'est pas ça';
+  };
+}
+
+var FAUTES = {
+  inversion:'inverse les chiffres', 'barre-vaut-un':'compte une barre pour 1',
+  'unites-seules':'oublie les dizaines', 'oubli-centaines':'oublie les centaines',
+  proche:'se trompe d\'un rang', repete:'redonne le nombre de départ', total:'donne le total au lieu du manque',
+  surcomptage:'décalage de 1 en comptant', soustrait:'soustrait au lieu d\'ajouter',
+  juxtapose:'colle les deux chiffres', ajoute:'ajoute au lieu d\'enlever', sens:'confond ajouter et enlever',
+  calcul:'bloque sur le calcul', avance:'compte en avant au lieu de reculer',
+  'compte-par-un':'compte de 1 en 1 au lieu des sauts', longueur:'compare le premier chiffre seulement',
+  ordre:'ordre à revoir', 'trop-petit':'place le nombre trop à gauche', 'trop-grand':'place le nombre trop à droite',
+  voisin:'presque au bon endroit', inverse:'confond double et moitié', additionne:'additionne au lieu de multiplier',
+  'compte-paquets':'compte les paquets, pas le contenu', 'compte-pieces':'compte les pièces, pas leur valeur',
+  aiguilles:'confond les deux aiguilles', minutes:'hésite sur les minutes', figure:'figure à revoir',
+  direction:'se trompe de direction', nombre:'se trompe de nombre de cases', 'bouge-pas':'ne déplace pas le jeton',
+  'son-different':'ne repère pas la rime', 'sur-decoupe':'découpe trop de syllabes', 'sous-decoupe':'découpe pas assez',
+  genre:'hésite entre le et la', categorie:'catégorie à revoir', saison:'saison à revoir',
+  aide:'a demandé de l\'aide', autre:'réponse inattendue'
+};
+var CONSEILS = {
+  lire:'Faites des paquets de 10 avec des allumettes ou des pâtes, entourés d\'un élastique. Elle compte les paquets, puis les restes.',
+  fab:'Vous dites un nombre à voix haute, elle prend le bon nombre de paquets de 10 et d\'unités.',
+  suite:'Récitez la file des nombres à deux, en alternance, et arrêtez-vous n\'importe où.',
+  recul:'Comptez à reculons en montant les marches à l\'envers, ou en décomptant avant un décollage de fusée.',
+  sauts:'Comptez les paires de chaussures par 2, les doigts par 5, les paquets de 10.',
+  compare:'Deux tas d\'objets, elle dit lequel est le plus grand avant de compter, puis vérifie.',
+  ligne:'Tracez une ligne à la craie dans la cour avec 0 et 100 aux extrémités, elle marche jusqu\'au nombre.',
+  c10:'Boîte à 10 cases avec des jetons : vous en posez, elle complète sans recompter les pleines.',
+  dm:'Partagez des bonbons en deux parts égales, puis doublez une recette ensemble.',
+  add:'Avec les doigts : elle part du plus grand nombre et avance, au lieu de tout recompter depuis 1.',
+  sous:'Posez des objets, retirez-en devant elle, elle annonce ce qui reste sans tout recompter.',
+  mult:'Rangez les couverts par tas de 4, comptez de 4 en 4 plutôt qu\'un par un.',
+  prob:'Racontez une petite histoire au repas, elle mime avec des objets avant de répondre.',
+  monnaie:'Donnez-lui de la vraie monnaie et faites-lui payer un petit achat.',
+  heure:'Une horloge à aiguilles visible dans la cuisine, et vous lui demandez l\'heure au goûter.',
+  formes:'Cherchez des carrés, cercles et triangles dans la rue pendant un trajet.',
+  quadrillage:'Jouez à la bataille navale simplifiée sur une grille 4 par 4.',
+  rimes:'Chantez des comptines et insistez sur les mots qui riment à la fin.',
+  syllabes:'Tapez dans les mains en disant un mot morceau par morceau.',
+  genre:'Associez toujours le mot à "un" ou "une" quand vous le dites à voix haute.',
+  alphabet:'Chantez la chanson de l\'alphabet ensemble, plusieurs fois par semaine.',
+  intrus:'Jouez à "cherche l\'intrus" avec des objets réels de la maison.',
+  jours:'Affichez un calendrier de la semaine et pointez le jour chaque matin.',
+  saisons:'Observez ensemble ce que vous portez et ce qu\'il y a dehors selon la saison.',
+  trier:'Au marché ou au supermarché, faites-lui trier les fruits, les légumes, et le reste.'
+};
+
+function ecranAdulte(){
+  var ligne=function(k){
+    var c=S.comp[k], tot=c.ok+c.err, p, cl;
+    if(tot===0){ p='pas vu'; cl='p-vide'; }
+    else { var r=c.ok/tot; p = r>=0.8?'acquis' : (r>=0.5?'en cours':'à travailler'); cl = r>=0.8?'p-ok':(r>=0.5?'p-cours':'p-dur'); }
+    var f=Object.keys(c.fautes).sort(function(a,b){ return c.fautes[b]-c.fautes[a]; })[0];
+    var d=f?'<br><span style="font-size:12px;color:var(--gris-clair)">'+(FAUTES[f]||f)+'</span>':'';
+    return '<tr><td>'+T[k].nom+d+'</td><td><span class="pastille '+cl+'">'+p+'</span></td></tr>';
+  };
+  var sections='';
+  Object.keys(MATIERES).forEach(function(mk){
+    var types=typesDispo([mk]);
+    if(types.length===0) return;
+    sections+='<p class="titrine">'+MATIERES[mk].nom+'</p><table class="tab">'+types.map(ligne).join('')+'</table>';
+  });
+  var tous=CLES.filter(function(k){ return T[k].niveaux.indexOf(S.niveau)>=0; });
+  var faible=tous.slice().sort(function(a,b){
+    var A=S.comp[a], B=S.comp[b], ta=A.ok+A.err, tb=B.ok+B.err;
+    if(ta===0) return 1; if(tb===0) return -1;
+    return (A.ok/ta)-(B.ok/tb);
+  })[0];
+
+  poser('<button class="retour" id="ret">&larr; Retour</button>'
+    +'<p style="font-size:20px;font-weight:700;margin:8px 0 0">Où elle en est</p>'
+    +'<p class="sous" style="text-align:left;margin:4px 0 0">Niveau '+S.niveau+' &middot; '+S.sessions+' séance(s) &middot; '
+    +S.etoiles+' &#9733; &middot; '+S.diamants+' &#9670; &middot; '+S.or+' pièce'+(S.or>1?'s':'')+' d\'or</p>'
+    +'<p class="sous" style="text-align:left;margin:6px 0 0;font-size:13px">Écran maintenu allumé : '
+    +(Veille.dispo()?'oui':'non &mdash; ouvrir la page en https')+'</p>'
+    +sections
+    +'<div class="note"><strong>À faire avec elle, sans écran</strong><br>'+(CONSEILS[faible]||'')+'</div>'
+    +'<p class="titrine">Niveau</p>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button class="gros '+(S.niveau==='CP'?'violet':'blanc')+' moyen" id="ncp">CP</button>'
+    +'<button class="gros '+(S.niveau==='CE1'?'violet':'blanc')+' moyen" id="nce1">CE1</button></div>'
+    +'<div class="grow"></div>'
+    +'<button class="adulte" id="raz" style="margin-top:18px">Tout remettre à zéro</button>');
+  document.getElementById('ret').onclick=ecranAccueil;
+  document.getElementById('ncp').onclick=function(){ S.niveau='CP'; sauver(); ecranAdulte(); };
+  document.getElementById('nce1').onclick=function(){ S.niveau='CE1'; sauver(); ecranAdulte(); };
+  document.getElementById('raz').onclick=function(){
+    if(confirm('Effacer toute la progression ?')){ S=etatNeuf(); sauver(); ecranAccueil(); }
+  };
+}
+
+/* ================= démarrage ================= */
+Store.get('maths-v2').then(function(brut){
+  try{
+    S = brut ? JSON.parse(brut) : etatNeuf();
+    CLES.forEach(function(k){ if(!S.comp[k]) S.comp[k]={ok:0,err:0,suite:0,ech:2,fautes:{}}; });
+    if(typeof S.pieces!=='number') S.pieces=0;
+    if(typeof S.or!=='number') S.or=0;
+    if(typeof S.son!=='boolean') S.son=true;
+    if(S.niveau!=='CP' && S.niveau!=='CE1') S.niveau=null;
+    Son.actif=S.son;
+  }catch(e){ S=etatNeuf(); }
+  S.niveau ? ecranAccueil() : ecranNiveau();
+});
+</script>
+</body>
+</html>
