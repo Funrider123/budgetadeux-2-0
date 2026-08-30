@@ -585,7 +585,8 @@ const DEFAULT = {
   projects:[],
   moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
   budgetHistory:[],
-  budgetTimeline:{} // instantané du budget de chaque catégorie par mois (clé "YYYY-M"), pour la vue annuelle
+  budgetTimeline:{}, // instantané du budget de chaque catégorie par mois (clé "YYYY-M"), pour la vue annuelle
+  deleted:{} // ids supprimés (id -> date ISO), synchronisés pour qu'une suppression tienne des deux côtés
 };
 
 function e(){ return 'x'+Math.random().toString(36).slice(2,9); }
@@ -620,6 +621,7 @@ function migrate(s){
     };
   }
   const needsProjectsSnapshot = (s.projectsSnapshot===undefined || s.projectsSnapshot===null);
+  if(!s.deleted || typeof s.deleted!=='object') s.deleted = {}; // ardoises de suppression (cf. markDeleted)
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
@@ -670,7 +672,7 @@ function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify
    couple dans la table `couple_state`, avec mise à jour temps réel.
    ============================================================ */
 // Champs partagés entre partenaires ; le reste (auth/partner/ui) reste local à l'appareil.
-const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot'];
+const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot','deleted'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
 // État affiché par la pastille de connexion/synchro (voir renderAppbar + openConnStatusHelp).
@@ -702,7 +704,19 @@ function connStatusPillHtml(){
 // avant connexion) : appelé depuis les écouteurs online/offline et syncError.
 function refreshConnStatusUI(){ if($('#main') && !$('#main').classList.contains('hidden')) renderAppbar(); }
 function sharedSnapshot(){ const o={}; SYNC_KEYS.forEach(k=>{ o[k]=S[k]; }); return o; }
-function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
+function applyShared(data){
+  if(!data) return;
+  SYNC_KEYS.forEach(k=>{
+    // Les ardoises se réunissent au lieu de se remplacer : un état distant plus ancien, qui
+    // ignore encore une suppression faite ici, ne doit pas l'annuler.
+    if(k==='deleted'){
+      if(data.deleted && typeof data.deleted==='object') S.deleted=Object.assign({}, data.deleted, S.deleted||{});
+      return;
+    }
+    if(data[k]!==undefined) S[k]=data[k];
+  });
+  applyTombstones();
+}
 // Fusionne les listes par id (union) au lieu d'un remplacement complet, pour éviter
 // qu'une dépense/charge/catégorie/commerce/projet ajouté chez un partenaire soit
 // effacé si l'autre pousse juste après sans l'avoir encore reçu. Limite connue : si
@@ -710,14 +724,56 @@ function applyShared(data){ if(!data) return; SYNC_KEYS.forEach(k=>{ if(data[k]!
 // toujours la version qui pousse en dernier qui gagne — cas rare, non traité ici ;
 // une vraie garantie demanderait une fusion côté serveur (fonction Postgres).
 const MERGE_ARRAY_KEYS = ['categories','charges','merchants','expenses','projects'];
+// Ardoises de suppression (« tombstones »). Sans elles, une suppression ne tient pas :
+// pushState relit l'état distant avant d'écrire — pour ne pas écraser un ajout du partenaire —
+// y retrouve la ligne qu'on vient d'effacer (le distant ignore encore la suppression), et la
+// réintroduit. La dépense supprimée réapparaissait donc toute seule. On mémorise les ids
+// supprimés, et cette liste est synchronisée : une suppression faite sur un téléphone doit
+// aussi valoir sur l'autre, sinon c'est lui qui la repousserait au prochain envoi.
+const TOMBSTONE_TTL_DAYS = 180;
+function markDeleted(...ids){
+  if(!S.deleted) S.deleted={};
+  const now=new Date().toISOString();
+  ids.flat().forEach(id=>{ if(id) S.deleted[id]=now; });
+}
+function isDeleted(id){ return !!(S.deleted && S.deleted[id]); }
+// Au-delà du délai, l'élément a forcément disparu des deux côtés : garder l'ardoise ne sert
+// plus qu'à faire grossir l'état synchronisé indéfiniment.
+function pruneTombstones(){
+  if(!S.deleted) return;
+  const limite=Date.now()-TOMBSTONE_TTL_DAYS*86400000;
+  Object.entries(S.deleted).forEach(([id,t])=>{
+    const ms=Date.parse(t); if(Number.isFinite(ms) && ms<limite) delete S.deleted[id];
+  });
+}
+// Retire des listes tout ce qui a été supprimé, ici ou chez le partenaire.
+function applyTombstones(){
+  if(!S.deleted || !Object.keys(S.deleted).length) return false;
+  let changed=false;
+  MERGE_ARRAY_KEYS.forEach(k=>{
+    if(!Array.isArray(S[k])) return;
+    const avant=S[k].length;
+    S[k]=S[k].filter(x=>!(x && x.id && S.deleted[x.id]));
+    if(S[k].length!==avant) changed=true;
+  });
+  return changed;
+}
 function mergeArraysWithRemote(remoteData){
   if(!remoteData) return false;
   let changed=false;
+  // 1. Réunion des ardoises des deux côtés, avant tout le reste.
+  if(remoteData.deleted && typeof remoteData.deleted==='object'){
+    if(!S.deleted) S.deleted={};
+    Object.entries(remoteData.deleted).forEach(([id,t])=>{ if(!S.deleted[id]){ S.deleted[id]=t; changed=true; } });
+  }
+  // 2. Ce qui a été supprimé quitte les listes locales…
+  if(applyTombstones()) changed=true;
+  // 3. …et on ne récupère du distant que ce qui n'a pas été supprimé.
   MERGE_ARRAY_KEYS.forEach(k=>{
     const remoteArr=remoteData[k];
     if(!Array.isArray(remoteArr) || !Array.isArray(S[k])) return;
     const localIds=new Set(S[k].map(x=>x.id));
-    const onlyRemote=remoteArr.filter(x=>x && x.id && !localIds.has(x.id));
+    const onlyRemote=remoteArr.filter(x=>x && x.id && !localIds.has(x.id) && !isDeleted(x.id));
     if(onlyRemote.length){ S[k]=S[k].concat(onlyRemote); changed=true; }
   });
   return changed;
@@ -755,6 +811,7 @@ async function pushState(){
       applyingRemote=true; save(); applyingRemote=false;
       if(!$('#main').classList.contains('hidden')){ renderAppbar(); renderSetupBanner(); go(current); }
     }
+    pruneTombstones();
     const snapshot=sharedSnapshot();
     const snapshotJson=JSON.stringify(snapshot);
     if(snapshotJson===lastPushedSnapshot) return; // rien de partagé n'a changé (ex: juste un thème local)
@@ -3479,6 +3536,7 @@ function openExpenseSheet(id){
   $('#exDel').onclick=()=>{
     const hidx=S.cagnotte.history.findIndex(h=>h.expId===id);
     if(hidx>-1){ S.cagnotte.balance-=S.cagnotte.history[hidx].amount; S.cagnotte.history.splice(hidx,1); }
+    markDeleted(id);
     S.expenses=S.expenses.filter(e=>e.id!==id); save(); closeModal(); go(current); toast("Dépense supprimée","🗑");
   };
 }
@@ -3667,7 +3725,7 @@ function openEditProject(id, returnTo){
     if(id){ p.name=nm; p.target=t; p.saved=sv; p.months=mo; p.mensuel=mens; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; delete pilotSim[id]; }
     else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:sv,months:mo,mensuel:mens,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
     save(); closeModal(); go(returnTo); toast(id?"Projet modifié ✓":"Nouveau rêve créé 🌟","✓"); };
-  const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
+  const del=$('#npDel'); if(del) del.onclick=()=>{ closeModal(); openConfirm(`Supprimer « ${p.name} » ?`,"Cette action est définitive.",()=>{ markDeleted(id); S.projects=S.projects.filter(x=>x.id!==id); delete pilotSim[id]; save(); go(returnTo); toast("Projet supprimé 🗑"); }); };
 }
 function openRealloc(p, returnTo){
   returnTo = returnTo || 'projets';
@@ -3745,7 +3803,7 @@ function undoSurplusDecision(offset, catId, idx){
       const hidx=S.cagnotte.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount);
       if(hidx>-1) S.cagnotte.history.splice(hidx,1);
     } else { const p=S.projects.find(x=>x.id===decision.dest); if(p){ p.saved-=decision.amount; if(p.history){ const phidx=p.history.findIndex(h=>h.label===`Surplus ${c.name}` && h.amount===decision.amount); if(phidx>-1) p.history.splice(phidx,1); } } }
-    if(decision.expId) S.expenses=S.expenses.filter(x=>x.id!==decision.expId);
+    if(decision.expId){ markDeleted(decision.expId); S.expenses=S.expenses.filter(x=>x.id!==decision.expId); }
   }
   arr.splice(idx,1);
   save();
@@ -4064,6 +4122,7 @@ function bindMoneyDate(){
     save(); go('moneydate'); toast("Prévision ajoutée 🔮","✓");
   };
   document.querySelectorAll('[data-delprev]').forEach(b=>b.addEventListener('click',()=>{
+    markDeleted(b.dataset.delprev);
     S.expenses=S.expenses.filter(x=>x.id!==b.dataset.delprev); save(); go('moneydate'); toast("Prévision supprimée","🗑");
   }));
 }
@@ -4077,7 +4136,7 @@ function bindReglages(){
   document.querySelectorAll('[data-colortheme]').forEach(b=>b.addEventListener('click',()=>{ S.ui.colorTheme=b.dataset.colortheme; save(); go('reglages'); }));
   const sn=$('#syncNow'); if(sn) sn.onclick=async ()=>{ toast("Synchronisation…","🔄"); syncErrShown=false; window.__lastSyncError=null; lastAppliedStamp=null; await pullState(); if(current==='reglages') go('reglages'); if(!window.__lastSyncError) toast("Synchronisé ✓","✓"); };
   const ex=$('#exportCSV'); if(ex) ex.onclick=exportCSV;
-  const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
+  const re=$('#resetExp'); if(re) re.onclick=()=>openConfirm("Réinitialiser les dépenses ?","Toutes les dépenses du mois seront effacées. Les projets et réglages sont conservés.",()=>{markDeleted(S.expenses.filter(x=>!x.prevision).map(x=>x.id)); S.expenses=S.expenses.filter(x=>x.prevision); save(); go('reglages'); toast("Dépenses réinitialisées 🧹");});
   const lo=$('#logout'); if(lo) lo.onclick=()=>openConfirm("Se déconnecter ?","Vous reviendrez à l'écran de connexion.",async ()=>{ stopSync(); await sb.auth.signOut(); S.auth.loggedIn=false; save(); $('#main').classList.add('hidden'); $('#auth').classList.remove('hidden'); authStep="login"; renderAuth(); });
 }
 function exportCSV(){
@@ -4278,6 +4337,7 @@ function bindPilotage(){
   document.querySelectorAll('[data-editcat]').forEach(b=>b.addEventListener('click',()=>openEditCat(b.dataset.editcat)));
   const apr=$('#addProjPilot'); if(apr) apr.onclick=()=>openEditProject(null,'pilotage');
   document.querySelectorAll('[data-delcharge]').forEach(b=>b.addEventListener('click',()=>{
+    markDeleted(b.dataset.delcharge);
     S.charges=S.charges.filter(x=>x.id!==b.dataset.delcharge); save(); go('pilotage'); toast("Charge supprimée 🗑");
   }));
   document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
@@ -4292,7 +4352,7 @@ function bindPilotage(){
     // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
     if(S.settings.mode!=='custom') S.settings.custom={lui:50, elle:50};
     if(S.settings.mode!=='fixe') S.settings.fixed={lui:0, elle:0};
-    if(S.settings.mode!=='net') S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle');
+    if(S.settings.mode!=='net'){ markDeleted(S.charges.filter(c=>c.scope==='lui'||c.scope==='elle').map(c=>c.id)); S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle'); }
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
     // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
@@ -4420,7 +4480,7 @@ function openDeleteCat(id, returnTo){
   returnTo = returnTo || 'pilotage';
   const c=S.categories.find(x=>x.id===id); if(!c) return;
   const bal = c.rollover ? (catRolloverBalance(id,0)||0) : 0;
-  const wipe=(msg)=>{ S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast(msg||"Catégorie supprimée 🗑"); };
+  const wipe=(msg)=>{ markDeleted(id); S.categories=S.categories.filter(x=>x.id!==id); save(); closeModal(); go(returnTo); toast(msg||"Catégorie supprimée 🗑"); };
   // Pas de report, ou solde négligeable : suppression directe, comme avant.
   if(!c.rollover || Math.abs(bal)<0.5){ wipe(); return; }
 
