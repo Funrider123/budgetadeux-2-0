@@ -318,8 +318,8 @@ test.describe('Affichage du report', () => {
     await installer(page, seed(COURSE, 500));
     await page.evaluate(() => go('vue'));
     const txt = await page.innerText('#screen');
-    expect(txt).toMatch(/54\s?€ reportés du mois dernier/);
-    expect(txt).toMatch(/reste\s+312\s?€/);
+    expect(txt).toMatch(/54,29\s?€ reportés du mois dernier/);
+    expect(txt).toMatch(/reste\s+312,43\s?€/);
   });
 
   test('un report négatif est annoncé comme un rattrapage, pas comme une avance', async ({ page }) => {
@@ -327,7 +327,7 @@ test.describe('Affichage du report', () => {
     await page.evaluate(() => go('vue'));
     const txt = await page.innerText('#screen');
     // Fin juillet : -150,82 € hérités, donc août démarre en dette.
-    expect(txt).toMatch(/151\s?€ à rattraper du mois dernier/);
+    expect(txt).toMatch(/150,82\s?€ à rattraper du mois dernier/);
     expect(txt).not.toMatch(/à rattraper.*reportés/);
   });
 

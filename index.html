@@ -810,8 +810,30 @@ function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} 
    HELPERS
    ============================================================ */
 const $ = (s,el=document)=>el.querySelector(s);
-const fmt = n => (Math.round(n*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
-const fmt0 = n => Math.round(n).toLocaleString('fr-FR')+" €";
+// Arrondi au centime : évite les 29.989999999 des additions en virgule flottante.
+const round2 = n => Math.round((+n||0)*100)/100;
+// Un montant affiche ses centimes UNIQUEMENT s'il en a : 170 € reste « 170 € »,
+// 29,99 € s'affiche « 29,99 € ». Une seule règle sur tous les écrans, pour que ce qui
+// est affiché soit toujours exactement ce qui est compté — sur une app d'argent, lire
+// « 340 € » quand le total réel vaut 339,90 € est ce qui fait perdre confiance.
+const fmt = n => {
+  const v = round2(n);
+  return v.toLocaleString('fr-FR', Number.isInteger(v)
+    ? {maximumFractionDigits:0}
+    : {minimumFractionDigits:2, maximumFractionDigits:2}) + " €";
+};
+// Estimations (moyennes mensuelles, projections « à ce rythme », budget hebdomadaire) :
+// toujours arrondi. Ce ne sont pas des montants constatés mais des extrapolations ;
+// y afficher des centimes donnerait une précision que le chiffre n'a pas.
+const fmtEst = n => Math.round(+n||0).toLocaleString('fr-FR')+" €";
+// Valeur pré-remplie d'un champ montant : virgule française, sans « ,00 » inutile.
+// Sans risque puisque parseAmt relit indifféremment la virgule ou le point.
+const inputAmt = n => String(round2(n)).replace('.', ',');
+// Convertit une saisie utilisateur en montant. Accepte la virgule (clavier français) autant
+// que le point : les champs monétaires sont en type="text" + inputmode="decimal" justement
+// parce qu'un type="number" REJETTE la virgule — le navigateur vide alors .value et la saisie
+// est irrécupérable. Champ vide ou illisible : 0.
+const parseAmt = v => { const n=parseFloat(String(v==null?'':v).replace(',','.')); return Number.isFinite(n)?round2(n):0; };
 const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const catById = id => id==='__cagnotte__' ? {emoji:"👛",name:"Cagnotte commune",cls:"cagnotte",budget:0} : (S.categories.find(c=>c.id===id) || {emoji:"📦",name:"Autre",cls:"besoin",budget:0});
 const me = ()=> S.auth.profile, partnerOf = w => w==="lui"?"elle":"lui";
@@ -819,7 +841,19 @@ const nameOf = w => w===S.auth.profile ? S.auth.name : S.partner.name;
 // Avatar affiché dans l'appli : couleur du slot + initiale du prénom réel, jamais une photo genrée
 const avatarOf = w => makeAvatarSVG(w==='lui'?'#A84B32':'#5E7E8B', (nameOf(w)||'?').trim().charAt(0).toUpperCase()||'?');
 function monthLabel(offset=0){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset); return MOIS[d.getMonth()]+" "+d.getFullYear(); }
-function inMonth(dateStr, offset=0){ const d=new Date(dateStr), n=new Date(); n.setMonth(n.getMonth()+offset); return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear(); }
+// setDate(1) AVANT setMonth : sinon, un 30 ou 31 déborde sur le mois suivant quand le mois
+// visé est plus court (le 30 août, setMonth(-6) donne le 2 mars au lieu du 28 février), et
+// l'app lit alors les dépenses du mauvais mois pendant les 2 ou 3 derniers jours de chaque mois.
+// Ici seule l'identité du mois compte, donc on peut fixer le jour à 1 sans rien fausser.
+function inMonth(dateStr, offset=0){ const d=new Date(dateStr), n=new Date(); n.setDate(1); n.setMonth(n.getMonth()+offset); return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear(); }
+// Ajoute n mois en bornant au dernier jour du mois cible : « le 31 janvier + 1 mois » doit
+// donner le 28 février, pas le 3 mars.
+function addMonths(date, n){
+  const d=new Date(date), day=d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth()+n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return d;
+}
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 /* spending computations */
@@ -1769,7 +1803,7 @@ function renderVue(){
     <div style="font-size:11px; opacity:.75; margin-top:-6px">Catégories du quotidien — hors charges fixes et projets</div>
     <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${usedPct}%; background:#fff"></i></div>
     <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
-      <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetScoped)} prévu</span>
+      <span>${usedPct}% du budget utilisé</span><span>${fmt(budgetScoped)} prévu</span>
     </div>
   </div>
 
@@ -1788,7 +1822,7 @@ function renderVue(){
       </div>
       <div style="width:1px; align-self:stretch; background:var(--line)"></div>
       <div style="text-align:center; width:100px">
-        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
+        <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmtEst(Math.abs(diffAmount))}</div>
         <div class="small muted" style="line-height:1.3; margin-top:4px">À ce rythme, projection fin de ${weekly?'semaine':'mois'} <span class="link" data-projinfo style="font-weight:800">*</span></div>
       </div>
     </div>
@@ -1810,11 +1844,11 @@ function renderVue(){
       const cls=over?'over':pct>=85?'warn':'';
       const alert = over?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent)">Dépassé</span>` : pct>=85?`<span class="tag" style="color:var(--warn); background:color-mix(in srgb,var(--warn) 14%,transparent)">Presque atteint</span>`:'';
       const carry = roll ? catCarryIn(c.id,0) : 0;
-      const rollLine = roll ? `<div class="small muted" style="margin-top:5px">${Math.abs(carry)>=0.5?carryLabel(carry)+' · ':''}<b style="color:${bal<0?'var(--danger)':'var(--terra)'}">reste ${fmt0(bal)}</b></div>` : '';
+      const rollLine = roll ? `<div class="small muted" style="margin-top:5px">${Math.abs(carry)>=0.5?carryLabel(carry)+' · ':''}<b style="color:${bal<0?'var(--danger)':'var(--terra)'}">reste ${fmt(bal)}</b></div>` : '';
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:8px">
           <div class="row" style="gap:9px"><span style="font-size:18px">${c.emoji}</span><b style="font-size:14px">${c.name}</b> ${alert}</div>
-          <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(budgetC)}</span></span>
+          <span class="small mono-num" style="font-weight:700">${fmt(sp)} <span class="muted">/ ${fmt(budgetC)}</span></span>
         </div>
         <div class="bar thin ${cls}"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div>
         ${rollLine}
@@ -1906,7 +1940,7 @@ function renderAjouter(){
         // Sur une catégorie à report, le "reste" inclut le solde hérité des mois précédents :
         // c'est ce chiffre-là qui dit vraiment ce qu'on peut encore dépenser.
         const rest = c.id ? catAvailable(c.id,0)-spentByCat(c.id,0) : c.budget;
-        return `<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${rest<0?'var(--danger)':'var(--terra)'}">${fmt0(rest)}</b>${c.rollover?' <span style="font-size:11px">(report inclus)</span>':' / mois'}</div>`;
+        return `<div class="small muted" style="margin-top:8px">Reste sur « ${escapeHtml(c.name)} » : <b style="color:${rest<0?'var(--danger)':'var(--terra)'}">${fmt(rest)}</b>${c.rollover?' <span style="font-size:11px">(report inclus)</span>':' / mois'}</div>`;
       })():''}
     </div>
     ${isCagnotte?`<div class="small muted" style="margin:-10px 2px 14px">Ce montant sera prélevé sur la cagnotte commune, pas sur un budget catégorie.</div>`:''}
@@ -1934,7 +1968,7 @@ function renderAjouter(){
       <div class="switch ${draft.prevision?'on':''}" id="dPrev"></div>
     </div>
     <div class="between" style="padding:12px; border-radius:14px; background:var(--cream-2); margin-bottom:10px">
-      <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Cagnotte commune</div><div class="small muted">Prélevé sur la cagnotte plutôt qu'une catégorie · ${fmt0(S.cagnotte.balance)}</div></div></div>
+      <div class="row" style="gap:9px"><div><div class="small" style="font-weight:800">Cagnotte commune</div><div class="small muted">Prélevé sur la cagnotte plutôt qu'une catégorie · ${fmt(S.cagnotte.balance)}</div></div></div>
       <div class="switch ${isCagnotte?'on':''}" id="dCagnotteToggle"></div>
     </div>
     <div class="field" style="margin-bottom:16px"><label>Dépense effectuée par</label>
@@ -2090,8 +2124,8 @@ function renderProjets(){
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
       <div>
         <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px">Montant mensuel</div>
-        <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span id="vpUsedLbl" style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt0(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt0(dispo)}</span></div>
-        <p class="small" id="vpDeficit" style="color:var(--danger); margin-top:4px; display:${used>dispo?'block':'none'}">⚠️ Budget dépassé de <span id="vpDeficitAmt">${fmt0(Math.max(0,used-dispo))}</span></p>
+        <div style="font-family:var(--serif); font-size:32px; font-weight:600; margin-top:4px"><span id="vpUsedLbl" style="color:${used>dispo?'var(--danger)':'var(--terra)'}">${fmt(used)}</span><span style="color:var(--muted); font-size:20px"> / ${fmt(dispo)}</span></div>
+        <p class="small" id="vpDeficit" style="color:var(--danger); margin-top:4px; display:${used>dispo?'block':'none'}">⚠️ Budget dépassé de <span id="vpDeficitAmt">${fmt(Math.max(0,used-dispo))}</span></p>
       </div>
       <div>
       ${(()=>{
@@ -2129,12 +2163,12 @@ function projectCard(p, rank){
     <div style="${aband?'opacity:.6':''} ${paused?'opacity:.55; filter:grayscale(.6)':''}">
     <div class="between" style="margin-bottom:8px; gap:10px; ${locked?'padding-right:26px':''}">
       <div class="name" style="font-family:var(--serif); font-size:16px">${rank?`Prio ${rank} : `:''}${p.name}</div>
-      <b data-menslabel="${p.id}" style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt0(mens)} / mois`}</b>
+      <b data-menslabel="${p.id}" style="font-family:var(--serif); font-size:16px; color:var(--terra); white-space:nowrap; flex-shrink:0">${aband?'—':`${fmt(mens)} / mois`}</b>
     </div>
     <div class="sub" style="margin-bottom:11px"><span class="tag ${p.cls}">${clsLabel(p.cls)}</span> ${aband?'<span class="tag" style="background:var(--cream-2); color:var(--muted)">Abandonné</span>':''}</div>
     <div class="bar"><i style="width:${pct}%; ${paused||aband?'background:var(--blush-2)':''}"></i></div>
     <div class="between" style="margin-top:8px">
-      <span class="small muted">${reste>0?`${fmt0(p.saved)} sur ${fmt0(p.target)}`:'Objectif atteint ! 🎉'}</span>
+      <span class="small muted">${reste>0?`${fmt(p.saved)} sur ${fmt(p.target)}`:'Objectif atteint ! 🎉'}</span>
       <b class="small" style="color:var(--terra-d)">${pct}%</b>
     </div>
     <div class="pilot-collapse-hdr ${ui.adjOpen?'open':''}" data-projadj="${p.id}" style="margin-top:12px; background:var(--cream-2); border-radius:12px; padding:10px 14px">
@@ -2149,7 +2183,7 @@ function projectCard(p, rank){
       <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px; margin-bottom:4px">Mensualité</div>
       <div class="pilot-row" style="padding:0 0 8px">
         <input type="range" class="mini-slider" min="0" max="${sliderMax(mens, Math.max(disponiblePourProjets(),100))}" step="1" value="${mens}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
-        <input type="number" class="pamt-input" style="width:74px" value="${Math.round(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
+        <input type="text" inputmode="decimal" class="pamt-input" style="width:74px" value="${inputAmt(mens)}" data-projectmens="${p.id}" oninput="onProjectMensInput(this)">
       </div>
       <p class="small muted" data-etalabel="${p.id}" style="margin:0 0 4px">${reste>0?`Objectif atteint en ${projectEtaLabel(p)}`:''}</p>`):''}
       <div class="row" style="gap:7px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
@@ -2162,7 +2196,7 @@ function projectCard(p, rank){
           <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
           <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
         </div>
-        <input class="input" data-projamt="${p.id}" type="number" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
+        <input class="input" data-projamt="${p.id}" type="text" inputmode="decimal" placeholder="Montant" value="${ui.amt}" style="padding:11px 13px; font-size:13px">
         <button class="btn btn-primary btn-sm" data-projaddsave="${p.id}" style="margin-top:8px; width:100%">Ajouter le versement</button>
       </div>`:''}
       ${ui.histOpen?historyRowsHtml(p.history):''}
@@ -2264,8 +2298,8 @@ function catAvailable(catId, offset=0){
 function budgetedCats(){ return S.categories.filter(c=>c.budget>0 || c.rollover); }
 // Libellé court du report entrant, pour les cartes de catégorie.
 function carryLabel(carry){
-  return carry>=0 ? `↩ ${fmt0(carry)} reportés du mois dernier`
-                  : `↩ ${fmt0(Math.abs(carry))} à rattraper du mois dernier`;
+  return carry>=0 ? `↩ ${fmt(carry)} reportés du mois dernier`
+                  : `↩ ${fmt(Math.abs(carry))} à rattraper du mois dernier`;
 }
 function posteMeta(sel){
   if(sel && sel.startsWith('cat:')){ const c=catById(sel.slice(4)); return {emoji:c.emoji, name:c.name, color:c.cls||'besoin'}; }
@@ -2300,7 +2334,7 @@ function annualOverviewHtml(){
     <p class="small muted" style="margin-top:10px; text-align:center; padding:20px 0">Aucune dépense enregistrée pour l'instant${needsSetup()?' · <span class="link" data-go="pilotage">Configurez vos catégories →</span>':''}</p></div>`;
   }
   const seg = (v,color) => v>0 ? `<div style="height:${(v/max*H).toFixed(1)}px; background:var(${color}); margin-bottom:1.5px"></div>` : '';
-  const scaleMarks = [0,.25,.5,.75,1].map(f=>`<div style="position:absolute; left:0; top:${(H-f*H-6).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--muted)">${fmt0(max*f)}</div>`).join('');
+  const scaleMarks = [0,.25,.5,.75,1].map(f=>`<div style="position:absolute; left:0; top:${(H-f*H-6).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--muted)">${fmt(max*f)}</div>`).join('');
   const bars = months.map(m=>{
     return `<div data-anamonth="${m.off}" style="flex:1; display:flex; justify-content:center; align-items:flex-end; height:${H}px; cursor:pointer">
       <div style="position:relative; width:100%; max-width:20px; display:flex; flex-direction:column-reverse; ${m.cur?'outline:2px solid var(--terra); outline-offset:2px; border-radius:3px':''}">
@@ -2317,7 +2351,7 @@ function annualOverviewHtml(){
   if(annualIncludeCharges) budgetParts.push('charges fixes');
   if(annualIncludeProjects) budgetParts.push('mensualités de projets');
   return `<div class="card">
-    <div class="between" style="margin-bottom:2px"><b class="small">Dépenses par nature</b><span class="muted small">moy. ${fmt0(avg)}/mois</span></div>
+    <div class="between" style="margin-bottom:2px"><b class="small">Dépenses par nature</b><span class="muted small">moy. ${fmtEst(avg)}/mois</span></div>
     ${scopeToggle}
     <p class="small muted" style="margin:0 0 16px">La ligne pointillée « budget » = ${budgetParts.join(' + ')}.</p>
     <div style="position:relative; padding-left:32px">
@@ -2363,10 +2397,10 @@ function annualSuiviHtml(){
     const lineB = budg.map((v,k)=>`${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const overDots = actual.map((v,k)=> (budg[k]>0 && v>budg[k]) ? `<circle cx="${x(k).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="var(--danger)" stroke="var(--card)" stroke-width="1.5"/>`:'').join('');
     const labels = Mi.map((m,k)=>`<text x="${x(k).toFixed(1)}" y="${H+14}" font-size="9" font-weight="800" fill="var(--muted)" text-anchor="middle">${m}</text>`).join('');
-    const scaleMarks = [0,.25,.5,.75,1].map(f=>`<text x="0" y="${(y(max*f)-3).toFixed(1)}" font-size="9" font-weight="800" fill="var(--muted)">${fmt0(max*f)}</text>`).join('');
+    const scaleMarks = [0,.25,.5,.75,1].map(f=>`<text x="0" y="${(y(max*f)-3).toFixed(1)}" font-size="9" font-weight="800" fill="var(--muted)">${fmt(max*f)}</text>`).join('');
     return `<div class="card">
       <div class="between" style="margin-bottom:2px"><div class="row" style="gap:6px"><span style="font-size:16px">${meta.emoji}</span><b>${escapeHtml(meta.name)}</b></div>
-      ${nOver>0?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 14%,transparent)">${nOver} mois dépassés</span>`:`<span class="muted small">moy. ${fmt0(avgA)}/mois</span>`}</div>
+      ${nOver>0?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 14%,transparent)">${nOver} mois dépassés</span>`:`<span class="muted small">moy. ${fmtEst(avgA)}/mois</span>`}</div>
       <p class="small muted" style="margin:0 0 10px">Dépensé (trait plein)${hasBudget?' vs budget (pointillé)':''} sur 12 mois.</p>
       <svg viewBox="0 0 ${W} ${H+20}" style="width:100%; height:auto; overflow:visible">
         ${hasBudget?`<polyline points="${lineB}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 4" opacity="0.55"/>`:''}
@@ -2385,13 +2419,13 @@ function annualSuiviHtml(){
   if(maxV>1 && curBudget>0){
     if(tightened && actual[11]>curBudget){
       insight=`<div class="card-soft" style="margin-top:12px; display:flex; gap:10px; align-items:flex-start"><div style="font-size:20px">🔎</div>
-        <div><b class="small">Budget trop serré ?</b><p class="small muted" style="margin-top:3px">Vous avez resserré ce poste (${fmt0(budg[0])} → ${fmt0(curBudget)}) mais vous dépensez toujours ~${fmt0(avgA)}. Plus vous serrez, plus vous dépassez : il est sans doute <b>sous-budgété</b> — mieux vaut le remonter à un niveau tenable.</p></div></div>`;
+        <div><b class="small">Budget trop serré ?</b><p class="small muted" style="margin-top:3px">Vous avez resserré ce poste (${fmt(budg[0])} → ${fmt(curBudget)}) mais vous dépensez toujours ~${fmtEst(avgA)}. Plus vous serrez, plus vous dépassez : il est sans doute <b>sous-budgété</b> — mieux vaut le remonter à un niveau tenable.</p></div></div>`;
     } else if(avgA > curBudget*1.05){
       insight=`<div class="card-soft" style="margin-top:12px; display:flex; gap:10px; align-items:flex-start"><div style="font-size:20px">📈</div>
-        <div><b class="small">Au-dessus de la cible</b><p class="small muted" style="margin-top:3px">Ce poste tourne à ${fmt0(avgA)}/mois en moyenne pour une cible de ${fmt0(curBudget)}. Soit vous levez le pied, soit vous ajustez le budget pour qu'il colle à la réalité.</p></div></div>`;
+        <div><b class="small">Au-dessus de la cible</b><p class="small muted" style="margin-top:3px">Ce poste tourne à ${fmtEst(avgA)}/mois en moyenne pour une cible de ${fmt(curBudget)}. Soit vous levez le pied, soit vous ajustez le budget pour qu'il colle à la réalité.</p></div></div>`;
     } else if(avgA>0 && avgA < curBudget*0.9){
       insight=`<div class="card-soft" style="margin-top:12px; display:flex; gap:10px; align-items:flex-start"><div style="font-size:20px">✅</div>
-        <div><b class="small">Sous la cible</b><p class="small muted" style="margin-top:3px">${fmt0(avgA)}/mois en moyenne, sous votre budget de ${fmt0(curBudget)}. Vous avez de la marge — de quoi renforcer un autre poste qui vous tient à cœur.</p></div></div>`;
+        <div><b class="small">Sous la cible</b><p class="small muted" style="margin-top:3px">${fmtEst(avgA)}/mois en moyenne, sous votre budget de ${fmt(curBudget)}. Vous avez de la marge — de quoi renforcer un autre poste qui vous tient à cœur.</p></div></div>`;
     }
   }
   return `${chips}${chartCard}${insight}
@@ -2429,7 +2463,7 @@ function renderAnalyse(){
       const pct=grandTotal>0?Math.round(clsTotal/grandTotal*100):0;
       const open=!!analyseUI[cls];
       const unit=donutUnit;
-      const clsDisp=unit==='eur'?fmt0(clsTotal):`${pct}%`;
+      const clsDisp=unit==='eur'?fmt(clsTotal):`${pct}%`;
       return `<div style="padding:12px 0; border-top:1px solid var(--line)">
         <div class="between" data-anacls="${cls}" style="cursor:pointer">
           <div class="row" style="gap:6px"><b class="small">${clsLabel(cls)}</b><span class="chev" style="transition:transform .2s; transform:rotate(${open?'180deg':'0deg'})">▾</span></div>
@@ -2438,7 +2472,7 @@ function renderAnalyse(){
         ${open?`<div style="margin-top:8px">
           ${items.length?items.map(it=>{
             const itPct=clsTotal>0?Math.round(it.amount/clsTotal*100):0;
-            const itDisp=unit==='eur'?fmt0(it.amount):`${itPct}%`;
+            const itDisp=unit==='eur'?fmt(it.amount):`${itPct}%`;
             return `<div class="between small muted" style="padding:4px 0"><span>${it.icon} ${it.name}</span><span>${itDisp}</span></div>`;
           }).join(''):`<p class="small muted">Rien de rattaché à « ${clsLabel(cls)} » pour l'instant.</p>`}
         </div>`:''}
@@ -2466,7 +2500,7 @@ function donutUnitToggleHtml(){
 function donutCard(title,pct,eur,editableId,advice){
   const {besoin:b,envie:e,invest:inv,protection:pr}=pct;
   const unit=donutUnit;
-  const disp=k=>unit==='eur'?fmt0(eur[k]):`${pct[k]}%`;
+  const disp=k=>unit==='eur'?fmt(eur[k]):`${pct[k]}%`;
   return `<div class="card" style="padding:16px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; margin-top:0">
     <div class="small" style="font-weight:800; text-align:center; margin-bottom:10px; position:relative">${title}
       ${advice?`<button class="icon-btn" id="adviceBtn" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:24px; height:24px; font-size:13px" title="Notre conseil">💡</button>`:''}
@@ -2638,7 +2672,7 @@ function mdContent(step){
     const rollNote = rollCats.length ? `<div class="card-soft" style="margin-bottom:14px; text-align:left">
       <p class="small" style="margin:0 0 8px; font-weight:800">↩ Reporté automatiquement</p>
       ${rollCats.map(c=>{ const b=catRolloverBalance(c.id,offset)||0;
-        return `<div class="between" style="padding:3px 0"><span class="small">${c.emoji} ${escapeHtml(c.name)}</span><b class="small" style="color:${b<0?'var(--danger)':'var(--ok)'}">${b>=0?'+':'−'}${fmt0(Math.abs(b))}</b></div>`;
+        return `<div class="between" style="padding:3px 0"><span class="small">${c.emoji} ${escapeHtml(c.name)}</span><b class="small" style="color:${b<0?'var(--danger)':'var(--ok)'}">${b>=0?'+':'−'}${fmt(Math.abs(b))}</b></div>`;
       }).join('')}
       <p class="small muted" style="margin:8px 0 0">Ces soldes basculent seuls sur ${monthLabel(offset+1)}, en positif comme en négatif. Rien à décider ici.</p>
     </div>` : '';
@@ -2649,18 +2683,18 @@ function mdContent(step){
       return `<div style="padding:11px 0; border-top:1px solid var(--line)">
         <div class="between" style="margin-bottom:8px">
           <div class="row" style="gap:8px"><span style="font-size:16px">${c.emoji}</span><b class="small">${c.name}</b></div>
-          <b class="small" style="color:var(--terra)">+${fmt0(surplus)}</b>
+          <b class="small" style="color:var(--terra)">+${fmt(surplus)}</b>
         </div>
         ${decisions.map((d,i)=>{
           const canUndo = d.type==='kept' || d.dest==='cagnotte' || (S.projects.find(p=>p.id===d.dest && p.status!=='abandonne'));
           return `<div class="between" style="padding:3px 0">
-            <span class="small" style="color:var(--ok); font-weight:700">${d.type==='kept'?`✓ Gardé (${fmt0(d.amount)})`:`✓ Transféré (${fmt0(d.amount)}, mouvement interne)`}</span>
+            <span class="small" style="color:var(--ok); font-weight:700">${d.type==='kept'?`✓ Gardé (${fmt(d.amount)})`:`✓ Transféré (${fmt(d.amount)}, mouvement interne)`}</span>
             ${canUndo?`<span class="link" data-surplus-undo="${c.id}" data-idx="${i}" style="font-size:12px">Modifier</span>`:`<span class="small muted" style="font-size:11px">Définitif</span>`}
           </div>`;
         }).join('')}
         ${remaining>0.01?`<div class="row" style="gap:6px; margin-top:${decisions.length?8:0}px">
-            <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}" data-remaining="${remaining}">Transférer${decisions.length?` (${fmt0(remaining)})`:''}</button>
-            <button class="btn btn-ghost btn-sm" style="flex:1" data-surplus-keep="${c.id}" data-remaining="${remaining}">${decisions.length?`Garder (${fmt0(remaining)})`:'Garder pour le mois prochain'}</button>
+            <button class="btn btn-soft btn-sm" style="flex:1" data-surplus-transfer="${c.id}" data-remaining="${remaining}">Transférer${decisions.length?` (${fmt(remaining)})`:''}</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" data-surplus-keep="${c.id}" data-remaining="${remaining}">${decisions.length?`Garder (${fmt(remaining)})`:'Garder pour le mois prochain'}</button>
           </div>`:''}
       </div>`;
     }).join('');
@@ -2718,7 +2752,7 @@ function mdContent(step){
           <b class="small" style="color:var(--terra)">${pct}%</b>
         </div>
         <div class="bar thin" style="margin-bottom:8px"><i style="width:${Math.min(100,pct)}%"></i></div>
-        <div class="small muted">${fmt0(monthly)} / mois · atteint en ${pct>=100?'—':projectEtaLabel(p)}</div>
+        <div class="small muted">${fmt(monthly)} / mois · atteint en ${pct>=100?'—':projectEtaLabel(p)}</div>
       </div>`;
     }).join(''):'<p class="empty">Aucun projet actif pour l\'instant.</p>'}`;
   }
@@ -2728,7 +2762,7 @@ function mdContent(step){
     return `<p class="small muted" style="margin-bottom:10px">Anticipez ce qui est déjà prévu pour ${monthLabel(offset+1)}, pour réserver le budget dès maintenant.</p>
     ${nextPrevisions.length?`<div class="card-soft" style="margin-bottom:12px; text-align:left">${nextPrevisions.map(x=>`<div class="between" style="padding:6px 0"><span class="small">${catById(x.cat).emoji} ${escapeHtml(x.desc)}</span><span class="row" style="gap:8px"><b class="small">${fmt(x.amount)}</b><span class="link" data-delprev="${x.id}">✕</span></span></div>`).join('')}</div>`:''}
     <div class="field"><label>Dépense prévue</label><input class="input" id="mdPrevDesc" placeholder="Ex : Cadeau anniversaire"></div>
-    <div class="grid2"><div class="field"><label>Montant</label><input class="input" type="number" id="mdPrevAmount" placeholder="0,00 €"></div>
+    <div class="grid2"><div class="field"><label>Montant</label><input class="input" type="text" inputmode="decimal" id="mdPrevAmount" placeholder="0,00 €"></div>
     <div class="field"><label>Catégorie</label><select class="select" id="mdPrevCat">${S.categories.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('')}</select></div></div>
     <div class="field"><label>Date prévue</label><input class="input" type="date" id="mdPrevDate" value="${d.toISOString().slice(0,10)}"></div>
     <button class="btn btn-soft" id="mdPrevSave" style="width:100%">Ajouter cette prévision 🔮</button>`;
@@ -2752,7 +2786,7 @@ function moneyDateDone(){
   const activeProjects = S.projects.filter(p=>p.status==="actif");
 
   const summaryText = `📊 Notre bilan du mois (${monthLabel(offset)})\n\n`
-    + (catChanges.length ? catChanges.map(x=>`${x.c.emoji} ${x.c.name} : ${x.delta>=0?'+':''}${x.pct}% (${x.delta>=0?'+':''}${fmt0(x.delta)})`).join('\n') : "Pas encore assez d'historique pour comparer.")
+    + (catChanges.length ? catChanges.map(x=>`${x.c.emoji} ${x.c.name} : ${x.delta>=0?'+':''}${x.pct}% (${x.delta>=0?'+':''}${fmt(x.delta)})`).join('\n') : "Pas encore assez d'historique pour comparer.")
     + (activeProjects.length ? `\n\n🎯 Projets :\n`+activeProjects.map(p=>`${p.emoji} ${p.name} : ${Math.round(p.saved/p.target*100)}% atteint, encore ${p.months} mois`).join('\n') : '')
     + `\n\n❤️ Budget à Deux`;
 
@@ -2765,7 +2799,7 @@ function moneyDateDone(){
 
     <div class="section-title" style="text-align:left">Vs le mois dernier</div>
     <div class="card" style="text-align:left">
-      ${catChanges.length ? catChanges.map(x=>`<div class="between" style="padding:10px 0; border-top:1px solid var(--line)"><div class="row" style="gap:9px"><span class="emoji-badge">${x.c.emoji}</span><b class="small">${escapeHtml(x.c.name)}</b></div><b class="small" style="color:${x.delta>=0?'var(--danger)':'var(--ok)'}">${x.delta>=0?'+':''}${x.pct}% <span class="muted" style="font-weight:500">(${x.delta>=0?'+':''}${fmt0(x.delta)})</span></b></div>`).join('') : `<p class="small muted" style="padding:6px 0">Pas encore assez d'historique pour comparer.</p>`}
+      ${catChanges.length ? catChanges.map(x=>`<div class="between" style="padding:10px 0; border-top:1px solid var(--line)"><div class="row" style="gap:9px"><span class="emoji-badge">${x.c.emoji}</span><b class="small">${escapeHtml(x.c.name)}</b></div><b class="small" style="color:${x.delta>=0?'var(--danger)':'var(--ok)'}">${x.delta>=0?'+':''}${x.pct}% <span class="muted" style="font-weight:500">(${x.delta>=0?'+':''}${fmt(x.delta)})</span></b></div>`).join('') : `<p class="small muted" style="padding:6px 0">Pas encore assez d'historique pour comparer.</p>`}
     </div>
 
     ${activeProjects.length ? `
@@ -2879,7 +2913,7 @@ function pilotRow(opts){
     <div class="pmain">
       <div class="pnm-row">
         <span class="pnm">${name}${cls?` <span class="small muted" style="font-weight:500">(${cls})</span>`:''}${sub?` <span class="small muted" style="font-weight:500">${sub}</span>`:''}</span>
-        <input class="pamt-input" type="number" value="${Math.round(amount)}" data-id="${id}" ${onInputAttr} ${ro?'disabled':''}>
+        <input class="pamt-input" type="text" inputmode="decimal" value="${inputAmt(amount)}" data-id="${id}" ${onInputAttr} ${ro?'disabled':''}>
       </div>
       <input type="range" class="mini-slider" min="0" max="${max}" step="1" value="${amount}" data-id="${id}" ${onInputAttr} ${ro?'disabled':''}>
     </div>
@@ -2909,7 +2943,7 @@ function personCard(who){
     return `<div class="pers-card pers-compact">
       <div class="who">👤 ${escapeHtml(name)}</div>
       ${pctField}
-      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
+      <div class="pers-sal-edit"><input class="input" type="text" inputmode="decimal" id="${idSal}" value="${inputAmt(sal)}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
     </div>`;
   }
 
@@ -2918,15 +2952,15 @@ function personCard(who){
   return `<div class="pers-card">
     <div class="pers-hdr">
       <div class="who">👤 ${escapeHtml(name)} <span class="pct" id="persPct_${who}">${rep[who]}%</span></div>
-      <div style="text-align:right"><span class="tot-lbl">Disponible</span><span class="tot" id="persTot_${who}">${fmt0(disponible)}</span></div>
+      <div style="text-align:right"><span class="tot-lbl">Disponible</span><span class="tot" id="persTot_${who}">${fmt(disponible)}</span></div>
     </div>
     <div class="pers-sal-row">
       <b>Salaire</b>
-      <div class="pers-sal-edit"><input class="input" type="number" id="${idSal}" value="${sal}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
+      <div class="pers-sal-edit"><input class="input" type="text" inputmode="decimal" id="${idSal}" value="${inputAmt(sal)}" ${S.pilotFrozen?'disabled':''}><span>€</span></div>
     </div>
     <div class="pers-perso-hdr" data-toggleperso="${who}" style="pointer-events:auto">
       <b>Total charges fixes perso <span class="chev">${open?'▲':'▼'}</span></b>
-      <span class="tot" id="persoTot_${who}">${fmt0(persoTotal)}</span>
+      <span class="tot" id="persoTot_${who}">${fmt(persoTotal)}</span>
     </div>
     <div class="pers-perso-list" id="persoList_${who}" style="display:${open?'block':'none'}">
       ${persoList.length?persoList.map(c=>pilotRow({
@@ -2945,7 +2979,7 @@ function personCard(who){
 function totalMensuelCard(){
   return `<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
     <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em">💰 Montant total mensuel alimentant le compte commun</span>
-    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0" id="persTot_fixed">${fmt0(totalRevenuFoyer())}</span>
+    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0" id="persTot_fixed">${fmt(totalRevenuFoyer())}</span>
   </div>`;
 }
 // Encadré dédié (même famille visuelle que totalMensuelCard) pour bien mettre en évidence
@@ -2953,7 +2987,7 @@ function totalMensuelCard(){
 function disponibleProjetsCard(reste){
   return `<div class="panel-terra" style="margin-top:18px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
     <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.03em">🎯 Disponible pour nos projets <span style="cursor:pointer; opacity:.85; font-weight:500; text-transform:none; letter-spacing:0; pointer-events:auto" onclick="event.stopPropagation(); const t=document.getElementById('pilTip'); t.style.display=t.style.display==='none'?'block':'none';">ⓘ</span></span>
-    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0; color:${reste<0?'#FFD6C9':'#fff'}" id="pilReste">${fmt0(reste)}</span>
+    <span style="font-family:var(--serif); font-size:20px; font-weight:600; flex-shrink:0; color:${reste<0?'#FFD6C9':'#fff'}" id="pilReste">${fmt(reste)}</span>
   </div>`;
 }
 // Détermine le libellé/couleur/clignotement du solde final (montant total − charges −
@@ -2977,13 +3011,13 @@ function budgetRecapCard(){
   const info=budgetSoldeInfo(solde);
   return `<div class="panel-terra" style="margin-top:14px; padding:18px 20px" id="budgetRecap">
     <div class="lbl" style="font-size:10px; text-align:center">📊 Vue d'ensemble du mois</div>
-    <div class="between small" style="padding:8px 0 4px; opacity:.92"><span>Montant total mensuel</span><span style="font-weight:700" id="recapMontant">${fmt0(totalMensuel)}</span></div>
-    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Charges fixes communes</span><span style="font-weight:700" id="recapChg">${fmt0(chg)}</span></div>
-    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Catégories</span><span style="font-weight:700" id="recapCat">${fmt0(cat)}</span></div>
-    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt0(proj)}</span></div>
+    <div class="between small" style="padding:8px 0 4px; opacity:.92"><span>Montant total mensuel</span><span style="font-weight:700" id="recapMontant">${fmt(totalMensuel)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Charges fixes communes</span><span style="font-weight:700" id="recapChg">${fmt(chg)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Catégories</span><span style="font-weight:700" id="recapCat">${fmt(cat)}</span></div>
+    <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt(proj)}</span></div>
     <div class="between ${info.blink?'blink-danger':''}" style="padding:12px 14px; margin-top:10px; border-radius:12px; background:${info.bg}; ${info.bg==='transparent'?'border-top:2px solid rgba(255,255,255,.35); padding-left:0; padding-right:0':''}" id="recapRow">
       <b class="small" id="recapLabel" style="color:${info.color}">${info.label}</b>
-      <b id="recapSolde" style="font-family:var(--serif); font-size:22px; color:${info.color}">${solde>0?'+':''}${fmt0(solde)}</b>
+      <b id="recapSolde" style="font-family:var(--serif); font-size:22px; color:${info.color}">${solde>0?'+':''}${fmt(solde)}</b>
     </div>
     <p class="small" style="opacity:.85; text-align:center; margin-top:10px; display:${info.tip?'block':'none'}" id="recapTip">${info.tip}</p>
   </div>`;
@@ -2997,7 +3031,7 @@ function recapVirementsCard(rep, totVerser, activeProjects){
   const luiProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.lui:50)/100,0);
   const elleProjet=activeProjects.reduce((s,p)=>s+(pilotSim[p.id]||0)*(p.split?p.split.elle:50)/100,0);
   const personBlock=(name, communId, projetId, totalId, communVal, projetVal)=>`
-    <div class="small muted" style="font-weight:800; margin-bottom:8px">👤 ${escapeHtml(name)} <span id="${totalId}">(${fmt0(communVal+projetVal)})</span></div>
+    <div class="small muted" style="font-weight:800; margin-bottom:8px">👤 ${escapeHtml(name)} <span id="${totalId}">(${fmt(communVal+projetVal)})</span></div>
     <div class="row" style="justify-content:center; gap:12px; margin-bottom:6px">
       <div style="text-align:center"><div class="small muted">🏠 Compte commun</div><div style="font-family:var(--serif); font-size:18px; color:var(--terra)" id="${communId}">${fmt(communVal)}</div></div>
       <div style="align-self:center; font-size:16px; color:var(--muted); font-weight:700">+</div>
@@ -3050,9 +3084,9 @@ function renderPilotage(){
   <div class="section-title">⚖️ Mode de répartition des charges communes</div>
   ${repOption("fixe","Contribution fixe","Chacun verse un montant fixe",`
     <div class="rep-inline" onclick="event.stopPropagation()">
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="number" min="0" id="fixLui" value="${S.settings.fixed.lui}" ${S.pilotFrozen?'disabled':''}></div>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('lui'))}</span><input type="text" inputmode="decimal" id="fixLui" value="${inputAmt(S.settings.fixed.lui)}" ${S.pilotFrozen?'disabled':''}></div>
       <span class="rep-inline-sep">+</span>
-      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="number" min="0" id="fixElle" value="${S.settings.fixed.elle}" ${S.pilotFrozen?'disabled':''}></div>
+      <div class="rep-inline-col"><span>${escapeHtml(nameOf('elle'))}</span><input type="text" inputmode="decimal" id="fixElle" value="${inputAmt(S.settings.fixed.elle)}" ${S.pilotFrozen?'disabled':''}></div>
       <span class="rep-inline-unit">€/mois</span>
     </div>`,true)}
   ${repOption("salaire","Proportionnel aux revenus bruts","Basé sur les salaires")}
@@ -3064,7 +3098,7 @@ function renderPilotage(){
 
   <div class="pilot-collapse-hdr ${pilotOpen.charges?'open':''}" id="chgHdr" style="margin-top:18px; pointer-events:auto">
     <span class="section-title" style="margin:0">🧾 Charges fixes communes <span class="chev">▼</span></span>
-    <span class="tot" id="chgTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt0(chargesCommunes())}</span>
+    <span class="tot" id="chgTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt(chargesCommunes())}</span>
   </div>
   <div class="card" id="chgList" style="display:${pilotOpen.charges?'block':'none'}">
     ${(()=>{ const communes=S.charges.filter(c=>c.scope==='commune'); return communes.length?communes.map(c=>pilotRow({
@@ -3079,7 +3113,7 @@ function renderPilotage(){
 
   <div class="pilot-collapse-hdr ${pilotOpen.categories?'open':''}" id="catHdr" style="margin-top:18px; pointer-events:auto">
     <span class="section-title" style="margin:0">📦 Catégories <span class="chev">▼</span></span>
-    <span class="tot" id="catTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt0(totalBudget())}</span>
+    <span class="tot" id="catTotalLbl" style="font-size:13px; font-weight:800; color:var(--terra)">${fmt(totalBudget())}</span>
   </div>
   <div class="card" id="catList" style="display:${pilotOpen.categories?'block':'none'}">
     ${S.categories.map(c=>pilotRow({
@@ -3115,7 +3149,7 @@ function renderPilotage(){
           </div>
           <div class="row" style="gap:8px; align-items:center">
             <input type="range" class="mini-slider" min="0" max="${sliderMax(mensuel,Math.max(reste,100))}" step="1" value="${mensuel}" data-project="${p.id}" oninput="onProjectInput(this)">
-            <input type="number" class="pamt-input" value="${Math.round(mensuel)}" data-project="${p.id}" oninput="onProjectInput(this)">
+            <input type="text" inputmode="decimal" class="pamt-input" value="${inputAmt(mensuel)}" data-project="${p.id}" oninput="onProjectInput(this)">
           </div>
         </div>
       </div>`;
@@ -3128,7 +3162,7 @@ function renderPilotage(){
   ${budgetRecapCard()}
 
   ${recapVirementsCard(rep, totVerser, activeProjects)}
-  <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.</p>
+  <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt(fixedShortfall)} ou réduisez vos charges/catégories.</p>
 
   ${!S.pilotFrozen?`
   <div class="card-soft" style="margin-top:14px">
@@ -3434,7 +3468,7 @@ function openExpenseSheet(id){
 
 function openMoneyDateSchedule(){
   const cur=S.moneyDate.nextDate;
-  const d = cur ? new Date(cur) : (()=>{ const n=new Date(); n.setMonth(n.getMonth()+1); return n; })();
+  const d = cur ? new Date(cur) : addMonths(new Date(), 1);
   openModal(`<h3>📅 ${cur?'Modifier votre Money Date':'Votre premier Money Date'}</h3>
     <p class="small muted" style="margin-bottom:14px">Choisissez ensemble la date de votre ${cur?'prochain':'premier'} rendez-vous financier.</p>
     <div class="field"><label>Date</label><input class="input" type="date" id="mdScheduleDate" value="${d.toISOString().slice(0,10)}"></div>
@@ -3495,7 +3529,7 @@ function bindProjets(){
   }));
   document.querySelectorAll('[data-projaddsave]').forEach(b=>b.addEventListener('click',()=>{
     const id=b.dataset.projaddsave; const ui=projUIState(id); const p=S.projects.find(x=>x.id===id); if(!p) return;
-    const amt=parseFloat((ui.amt+'').replace(',','.'))||0;
+    const amt=parseAmt(ui.amt);
     if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
     p.saved+=amt; if(!p.history) p.history=[];
     p.history.unshift({date:iso(0), label:nameOf(ui.who), amount:+amt, who:ui.who});
@@ -3518,7 +3552,7 @@ function openProjectMenu(p){
       const mens=p.mensuel||0;
       const otherTotal=epargneProjetsMensuelle(p.id);
       const dispo=disponiblePourProjets();
-      if(otherTotal+mens>dispo+0.5){ closeModal(); toast(`Impossible de reprendre : budget dépassé (${fmt0(otherTotal+mens)} / ${fmt0(dispo)})`,"⚠️"); return; }
+      if(otherTotal+mens>dispo+0.5){ closeModal(); toast(`Impossible de reprendre : budget dépassé (${fmt(otherTotal+mens)} / ${fmt(dispo)})`,"⚠️"); return; }
     }
     closeModal(); p.status=paused?'actif':'pause'; save(); go('projets'); toast(paused?"Projet relancé ▶":"Projet mis en pause ⏸");
   };
@@ -3538,12 +3572,12 @@ function openEditProjectDay(p){
 }
 function openCagnotteAddLine(){
   openModal(`<h3>👛 Ajouter une ligne</h3>
-    <div class="field"><label>Montant</label><input class="input" type="number" id="cagAddAmt" placeholder="Ex : 150"></div>
+    <div class="field"><label>Montant</label><input class="input" type="text" inputmode="decimal" id="cagAddAmt" placeholder="Ex : 150"></div>
     <div class="field"><label>Description</label><input class="input" id="cagAddDesc" placeholder="Ex : Trop perçu EDF"></div>
     <div class="field"><label>Date</label><input class="input" type="date" id="cagAddDate" value="${iso(0)}"></div>
     <button class="btn btn-primary" id="cagAddSave">Ajouter</button>`, true);
   $('#cagAddSave').onclick=()=>{
-    const amt=parseFloat(($('#cagAddAmt').value+'').replace(',','.'))||0;
+    const amt=parseAmt($('#cagAddAmt').value);
     const desc=$('#cagAddDesc').value.trim();
     const date=$('#cagAddDate').value||iso(0);
     if(!amt||amt<=0||!desc){ toast("Montant et description requis","✏️"); return; }
@@ -3557,7 +3591,7 @@ function openEditCagnotteEntry(idx){
   const h=S.cagnotte.history[idx]; if(!h) return;
   openModal(`<h3>Modifier la ligne</h3>
     ${h.expId?`<p class="small muted" style="margin-bottom:14px">Ce mouvement correspond aussi à une ligne dans l'historique des dépenses : la modification ou la suppression s'appliquera aux deux.</p>`:''}
-    <div class="field"><label>Montant</label><input class="input" type="number" id="cagEditAmt" value="${h.amount}"></div>
+    <div class="field"><label>Montant</label><input class="input" type="text" inputmode="decimal" id="cagEditAmt" value="${inputAmt(h.amount)}"></div>
     <div class="field"><label>Description</label><input class="input" id="cagEditDesc" value="${escapeHtml(h.label)}"></div>
     <div class="field"><label>Date</label><input class="input" type="date" id="cagEditDate" value="${h.date}"></div>
     <div class="row" style="gap:10px; margin-top:8px">
@@ -3565,7 +3599,7 @@ function openEditCagnotteEntry(idx){
       <button class="btn btn-ghost btn-sm" id="cagEditDel" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">🗑 Supprimer</button>
     </div>`, true);
   $('#cagEditSave').onclick=()=>{
-    const newAmt=parseFloat(($('#cagEditAmt').value+'').replace(',','.'))||0;
+    const newAmt=parseAmt($('#cagEditAmt').value);
     const newDesc=$('#cagEditDesc').value.trim();
     const newDate=$('#cagEditDate').value||h.date;
     if(!newAmt||!newDesc){ toast("Montant et description requis","✏️"); return; }
@@ -3586,7 +3620,7 @@ function openEditProject(id, returnTo){
   const p = id ? S.projects.find(x=>x.id===id) : null;
   openModal(`<h3>${id?'Modifier le projet':'Un nouveau rêve 🌟'}</h3><p class="small muted" style="margin-bottom:14px">${id?'Ajustez les détails de ce projet.':'Donnez-lui un nom, un montant, une échéance.'}</p>
     <div class="field"><label>Nom du projet</label><input class="input" id="npName" value="${p?escapeHtml(p.name):''}" placeholder="Ex : Cabane en bord de mer"></div>
-    <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="number" id="npTarget" value="${p?p.target:''}" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="number" id="npSaved" value="${p?p.saved:0}"></div></div>
+    <div class="grid2"><div class="field"><label>Objectif</label><input class="input" type="text" inputmode="decimal" id="npTarget" value="${p?p.target:''}" placeholder="5000"></div><div class="field"><label>Déjà épargné</label><input class="input" type="text" inputmode="decimal" id="npSaved" value="${p?p.saved:0}"></div></div>
     <div class="grid2"><div class="field"><label>Nombre de mois pour atteindre l'objectif</label><input class="input" type="number" id="npMonths" value="${p?p.months:''}" placeholder="12"></div><div class="field"><label>Jour de virement</label><input class="input" type="number" id="npDay" value="${p?p.day:5}" min="1" max="28"></div></div>
     <div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">Détails</span></label><select class="select" id="npCls">
       <option value="besoin" ${p&&p.cls==='besoin'?'selected':''}>Besoin</option>
@@ -3598,20 +3632,20 @@ function openEditProject(id, returnTo){
     <div class="card-soft" style="margin-bottom:12px; text-align:center"><span class="small muted">Épargne mensuelle nécessaire</span><div id="npCalc" style="font-family:var(--serif); font-size:22px; color:var(--terra)">— €</div></div>
     <div class="row" style="gap:10px"><button class="btn btn-primary" id="npSave" style="flex:1">${id?'Enregistrer':'Créer ce projet'}</button>
     ${id?`<button class="btn btn-ghost btn-sm" id="npDel" style="color:var(--danger)">🗑</button>`:''}</div>`, true);
-  const calc=()=>{ const t=+$('#npTarget').value||0, s=+$('#npSaved').value||0, m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
+  const calc=()=>{ const t=parseAmt($('#npTarget').value), s=parseAmt($('#npSaved').value), m=+$('#npMonths').value||1; $('#npCalc').textContent=fmt(Math.max(0,(t-s)/m)); };
   ['npTarget','npSaved','npMonths'].forEach(fid=>$('#'+fid).oninput=calc);
   calc();
   document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
-  $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=+$('#npTarget').value; if(!nm||!t){toast("Nom et montant requis","🌟");return;}
+  $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=parseAmt($('#npTarget').value); if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
-    const sv=+$('#npSaved').value||0, mo=+$('#npMonths').value||12;
+    const sv=parseAmt($('#npSaved').value), mo=+$('#npMonths').value||12;
     const willBeActive = id ? p.status==='actif' : true;
     const mens=Math.round(Math.max(0,(t-sv)/mo));
     if(willBeActive){
       const otherTotal=epargneProjetsMensuelle(id);
       const dispo=disponiblePourProjets();
-      if(otherTotal+mens>dispo+0.5){ toast(`Budget dépassé : ${fmt0(otherTotal+mens)} / ${fmt0(dispo)} disponibles pour vos projets`,"⚠️"); return; }
+      if(otherTotal+mens>dispo+0.5){ toast(`Budget dépassé : ${fmt(otherTotal+mens)} / ${fmt(dispo)} disponibles pour vos projets`,"⚠️"); return; }
     }
     if(id){ p.name=nm; p.target=t; p.saved=sv; p.months=mo; p.mensuel=mens; p.day=+$('#npDay').value||5; p.split={lui:sp,elle:100-sp}; p.cls=$('#npCls').value; delete pilotSim[id]; }
     else { S.projects.push({id:e(),name:nm,emoji:'🌟',target:t,saved:sv,months:mo,mensuel:mens,day:+$('#npDay').value||5,split:{lui:sp,elle:100-sp},cls:$('#npCls').value,status:'actif',history:[]}); }
@@ -3621,11 +3655,11 @@ function openEditProject(id, returnTo){
 function openRealloc(p, returnTo){
   returnTo = returnTo || 'projets';
   const others=S.projects.filter(x=>x.id!==p.id);
-  openModal(`<h3>↪ Réaffecter l'épargne</h3><p class="small muted" style="margin-bottom:14px">Déplacez l'épargne de « ${p.name} » (${fmt0(p.saved)}) vers une autre destination.</p>
+  openModal(`<h3>↪ Réaffecter l'épargne</h3><p class="small muted" style="margin-bottom:14px">Déplacez l'épargne de « ${p.name} » (${fmt(p.saved)}) vers une autre destination.</p>
     <div class="field"><label>Destination</label><select class="select" id="raDest"><option value="cagnotte">👛 Cagnotte commune</option>${others.map(o=>`<option value="${o.id}">${o.emoji} ${o.name}</option>`).join('')}${S.categories.map(c=>`<option value="cat:${c.id}">${c.emoji} Catégorie ${c.name}</option>`).join('')}</select></div>
-    <div class="field"><label>Montant à transférer</label><input class="input" type="number" id="raAmt" value="${Math.round(p.saved)}"></div>
+    <div class="field"><label>Montant à transférer</label><input class="input" type="text" inputmode="decimal" id="raAmt" value="${inputAmt(p.saved)}"></div>
     <button class="btn btn-primary" id="raSave">Transférer</button>`);
-  $('#raSave').onclick=()=>{ const amt=Math.min(p.saved,+$('#raAmt').value||0); const dest=$('#raDest').value;
+  $('#raSave').onclick=()=>{ const amt=Math.min(p.saved,parseAmt($('#raAmt').value)); const dest=$('#raDest').value;
     p.saved-=amt;
     if(!p.history) p.history=[];
     if(dest==='cagnotte'){
@@ -3641,7 +3675,7 @@ function openRealloc(p, returnTo){
 }
 function openAbandon(p, returnTo){
   returnTo = returnTo || 'projets';
-  openModal(`<h3>Abandonner « ${p.name} » ?</h3><p class="small muted" style="margin-bottom:14px">Vous avez épargné ${fmt0(p.saved)}. Que souhaitez-vous en faire ?</p>
+  openModal(`<h3>Abandonner « ${p.name} » ?</h3><p class="small muted" style="margin-bottom:14px">Vous avez épargné ${fmt(p.saved)}. Que souhaitez-vous en faire ?</p>
     <button class="btn btn-soft" id="abKeep" style="margin-bottom:10px">💛 Récupérer l'argent vers la cagnotte</button>
     <button class="btn btn-ghost" id="abDrop" style="margin-bottom:10px">Abandonner sans récupérer</button>
     <button class="btn btn-ghost btn-sm" id="abCancel" style="width:100%">Annuler</button>`);
@@ -3652,12 +3686,12 @@ function openAbandon(p, returnTo){
 function openSurplusTransfer(catId, remaining){
   const c=catById(catId);
   const dests=S.projects.filter(p=>p.status==='actif');
-  openModal(`<h3>💸 Transférer le surplus</h3><p class="small muted" style="margin-bottom:14px">Montant restant à décider pour « ${c.name} » : ${fmt0(remaining)}</p>
+  openModal(`<h3>💸 Transférer le surplus</h3><p class="small muted" style="margin-bottom:14px">Montant restant à décider pour « ${c.name} » : ${fmt(remaining)}</p>
     <div class="field"><label>Destination</label><select class="select" id="stDest"><option value="cagnotte">👛 Cagnotte commune</option>${dests.map(p=>`<option value="${p.id}">${p.emoji} ${p.name}</option>`).join('')}</select></div>
-    <div class="field"><label>Montant à transférer</label><input class="input" type="number" id="stAmt" value="${Math.round(remaining)}"></div>
+    <div class="field"><label>Montant à transférer</label><input class="input" type="text" inputmode="decimal" id="stAmt" value="${inputAmt(remaining)}"></div>
     <button class="btn btn-primary" id="stSave">Transférer</button>`, true);
   $('#stSave').onclick=()=>{
-    const amt=Math.min(remaining,Math.max(0,+$('#stAmt').value||0));
+    const amt=Math.min(remaining,Math.max(0,parseAmt($('#stAmt').value)));
     if(amt<=0){ toast("Indiquez un montant","💶"); return; }
     const dest=$('#stDest').value;
     const destLabel = dest==='cagnotte' ? 'Cagnotte commune' : (S.projects.find(x=>x.id===dest)?.name || 'Projet');
@@ -3674,7 +3708,7 @@ function openSurplusTransfer(catId, remaining){
 }
 function openSurplusRemainderChoice(catId, remaining){
   const c=catById(catId);
-  openModal(`<h3>Et le reste ?</h3><p class="small muted" style="margin-bottom:14px">Il reste ${fmt0(remaining)} à décider pour « ${c.name} ».</p>
+  openModal(`<h3>Et le reste ?</h3><p class="small muted" style="margin-bottom:14px">Il reste ${fmt(remaining)} à décider pour « ${c.name} ».</p>
     <button class="btn btn-soft" id="srKeep" style="margin-bottom:10px">Garder pour le mois prochain</button>
     <button class="btn btn-ghost" id="srTransfer">Transférer ailleurs aussi</button>`, true);
   $('#srKeep').onclick=()=>{
@@ -3702,10 +3736,10 @@ function undoSurplusDecision(offset, catId, idx){
 const MD_MODE_LABELS={fixe:'Contribution fixe', salaire:'Proportionnel aux revenus bruts', custom:'Personnalisé', net:'Proportionnel aux revenus nets'};
 function mdRepartitionSummary(){
   const mode=S.settings.mode, rep=repartition();
-  if(mode==='fixe') return `<p class="small">${escapeHtml(nameOf('lui'))} : ${fmt0(S.settings.fixed.lui||0)} · ${escapeHtml(nameOf('elle'))} : ${fmt0(S.settings.fixed.elle||0)}</p>`;
+  if(mode==='fixe') return `<p class="small">${escapeHtml(nameOf('lui'))} : ${fmt(S.settings.fixed.lui||0)} · ${escapeHtml(nameOf('elle'))} : ${fmt(S.settings.fixed.elle||0)}</p>`;
   if(mode==='custom') return `<p class="small">${escapeHtml(nameOf('lui'))} : ${rep.lui}% · ${escapeHtml(nameOf('elle'))} : ${rep.elle}%</p>`;
   return `<p class="small">${escapeHtml(nameOf('lui'))} : ${rep.lui}% · ${escapeHtml(nameOf('elle'))} : ${rep.elle}%</p>
-    <p class="small muted">Salaires : ${escapeHtml(nameOf('lui'))} ${fmt0(S.settings.salaries.lui)} · ${escapeHtml(nameOf('elle'))} ${fmt0(S.settings.salaries.elle)}</p>`;
+    <p class="small muted">Salaires : ${escapeHtml(nameOf('lui'))} ${fmt(S.settings.salaries.lui)} · ${escapeHtml(nameOf('elle'))} ${fmt(S.settings.salaries.elle)}</p>`;
 }
 function openMdRepartition(){
   openModal(`<h3>⚖️ Revenus & répartition</h3>
@@ -3718,8 +3752,8 @@ function openMdRepartition(){
 }
 function openMdCharges(){
   const communes=S.charges.filter(c=>c.scope==='commune');
-  openModal(`<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt0(chargesCommunes())}</p>
-    ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt0(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
+  openModal(`<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt(chargesCommunes())}</p>
+    ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       <span class="link" id="mdGoPilotageCharges">Modifier dans Simulation et validation budgétaire →</span>
     </div>`, true);
@@ -3755,7 +3789,7 @@ function mdCategoriesDetailHtml(offset){
       <div class="big">${fmt(remaining)}</div>
       <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${Math.min(100,usedPct)}%; background:#fff"></i></div>
       <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
-        <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetTotal)} prévu</span>
+        <span>${usedPct}% du budget utilisé</span><span>${fmt(budgetTotal)} prévu</span>
       </div>
     </div>`;
   } else {
@@ -3770,7 +3804,7 @@ function mdCategoriesDetailHtml(offset){
       <div class="big">${fmt(remaining)}</div>
       <div class="bar" style="background:rgba(255,255,255,.25); margin-top:10px"><i style="width:${Math.min(100,usedPct)}%; background:#fff"></i></div>
       <div class="between" style="margin-top:8px; font-size:12px; opacity:.92; font-weight:700">
-        <span>${usedPct}% du budget utilisé</span><span>${fmt0(budgetTotal)} prévu</span>
+        <span>${usedPct}% du budget utilisé</span><span>${fmt(budgetTotal)} prévu</span>
       </div>
     </div>
     <div class="card" style="margin-bottom:14px">
@@ -3787,7 +3821,7 @@ function mdCategoriesDetailHtml(offset){
         </div>
         <div style="width:1px; align-self:stretch; background:var(--line)"></div>
         <div style="text-align:center; width:100px">
-          <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmt0(Math.abs(diffAmount))}</div>
+          <div style="font-family:var(--serif); font-size:20px; font-weight:600; color:${onTrack?'var(--ok)':'var(--terra-d)'}">${diffAmount>=0?'+':'−'}${fmtEst(Math.abs(diffAmount))}</div>
           <div class="small muted" style="line-height:1.3; margin-top:4px">À ce rythme, projection fin de mois <span class="link" data-projinfo style="font-weight:800">*</span></div>
         </div>
       </div>
@@ -3806,7 +3840,7 @@ function mdCategoriesDetailHtml(offset){
     return `<div style="padding:11px 0; border-top:1px solid var(--line)">
       <div class="between" style="margin-bottom:8px">
         <div class="row" style="gap:9px"><span style="font-size:18px">${c.emoji}</span><b style="font-size:14px">${c.name}</b> ${alert}</div>
-        <span class="small mono-num" style="font-weight:700">${fmt0(sp)} <span class="muted">/ ${fmt0(avail)}</span></span>
+        <span class="small mono-num" style="font-weight:700">${fmt(sp)} <span class="muted">/ ${fmt(avail)}</span></span>
       </div>
       <div class="bar thin ${cls}"><i style="width:${Math.max(0,Math.min(100,pct))}%"></i></div>
       ${rollLine}
@@ -3874,14 +3908,14 @@ function openAnnualMonthDetail(offset){
   const total=cls.besoin+cls.envie+cls.invest+cls.protection;
   const over=budget>0 && total>budget, diff=total-budget;
   const row=(k,color,label)=>{ const v=cls[k]||0; const pct=total>0?Math.round(v/total*100):0;
-    return `<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><div class="row" style="gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:var(${color})"></span><b class="small">${label}</b><span class="small muted">${pct}%</span></div><b class="small mono-num">${fmt0(v)}</b></div>`;
+    return `<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><div class="row" style="gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:var(${color})"></span><b class="small">${label}</b><span class="small muted">${pct}%</span></div><b class="small mono-num">${fmt(v)}</b></div>`;
   };
   openModal(`<h3>${monthLabel(offset)}</h3>
     <div class="card-soft" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px">
       <div><div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px">${withExtra?'Total engagé':'Total dépensé'}</div>
-      <div style="font-family:var(--serif); font-size:26px; color:${over?'var(--danger)':'var(--terra)'}">${fmt0(total)}</div></div>
-      ${budget>0?`<div style="text-align:right"><div class="small muted">budget ${fmt0(budget)}</div>
-      <span class="tag" style="margin-top:4px; color:${over?'var(--danger)':'var(--ok)'}; background:color-mix(in srgb,${over?'var(--danger)':'var(--ok)'} 14%,transparent)">${over?`+${fmt0(diff)}`:`${fmt0(Math.abs(diff))} sous le budget`}</span></div>`:''}
+      <div style="font-family:var(--serif); font-size:26px; color:${over?'var(--danger)':'var(--terra)'}">${fmt(total)}</div></div>
+      ${budget>0?`<div style="text-align:right"><div class="small muted">budget ${fmt(budget)}</div>
+      <span class="tag" style="margin-top:4px; color:${over?'var(--danger)':'var(--ok)'}; background:color-mix(in srgb,${over?'var(--danger)':'var(--ok)'} 14%,transparent)">${over?`+${fmt(diff)}`:`${fmt(Math.abs(diff))} sous le budget`}</span></div>`:''}
     </div>
     ${total>0?`${row('besoin','--besoin','Besoins')}${row('envie','--envie','Envies')}${row('invest','--invest','Investissement')}${row('protection','--protection','Protection')}`:`<p class="small muted" style="padding:14px 0; text-align:center">Aucune dépense enregistrée ce mois-ci.</p>`}`, true);
 }
@@ -4007,7 +4041,7 @@ function bindMoneyDate(){
 
   // Étape 5 : prévisions pour le mois prochain
   const ps=$('#mdPrevSave'); if(ps) ps.onclick=()=>{
-    const desc=$('#mdPrevDesc').value.trim(); const amt=+$('#mdPrevAmount').value||0; const cat=$('#mdPrevCat').value; const date=$('#mdPrevDate').value;
+    const desc=$('#mdPrevDesc').value.trim(); const amt=parseAmt($('#mdPrevAmount').value); const cat=$('#mdPrevCat').value; const date=$('#mdPrevDate').value;
     if(!desc||!amt){ toast("Description et montant requis","🔮"); return; }
     S.expenses.push({id:e(), type:'depense', prevision:true, amount:amt, cat, who:me(), desc, date, note:""});
     save(); go('moneydate'); toast("Prévision ajoutée 🔮","✓");
@@ -4053,10 +4087,10 @@ function recalcPilotage(){
   const fixedTotal=S.settings.fixed.lui+S.settings.fixed.elle;
   const fixedShortfall=S.settings.mode==='fixe' ? Math.max(0, totVerser-fixedTotal) : 0;
 
-  const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=fmt0(chargesCommunes());
-  const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=fmt0(totalBudget());
+  const chgTot=$('#chgTotalLbl'); if(chgTot) chgTot.textContent=fmt(chargesCommunes());
+  const catTot=$('#catTotalLbl'); if(catTot) catTot.textContent=fmt(totalBudget());
 
-  const pr=$('#pilReste'); if(pr){ pr.textContent=fmt0(reste); pr.style.color=reste<0?'#FFD6C9':'#fff'; }
+  const pr=$('#pilReste'); if(pr){ pr.textContent=fmt(reste); pr.style.color=reste<0?'#FFD6C9':'#fff'; }
   const pd=$('#pilDeficit'); if(pd) pd.style.display=reste<0?'block':'none';
   const pb=$('#pilBar'); if(pb){
     pb.style.width=(reste>0?Math.min(100,allocProjets/reste*100):(allocProjets>0?100:0))+'%';
@@ -4077,11 +4111,11 @@ function recalcPilotage(){
   const rce=$('#recapElleCommun'); if(rce) rce.textContent=fmt(elleCommun);
   const rpl=$('#recapLuiProjet'); if(rpl) rpl.textContent=fmt(luiProjet);
   const rpe=$('#recapElleProjet'); if(rpe) rpe.textContent=fmt(elleProjet);
-  const rlt=$('#recapLuiTotal'); if(rlt) rlt.textContent=`(${fmt0(luiCommun+luiProjet)})`;
-  const ret=$('#recapElleTotal'); if(ret) ret.textContent=`(${fmt0(elleCommun+elleProjet)})`;
+  const rlt=$('#recapLuiTotal'); if(rlt) rlt.textContent=`(${fmt(luiCommun+luiProjet)})`;
+  const ret=$('#recapElleTotal'); if(ret) ret.textContent=`(${fmt(elleCommun+elleProjet)})`;
   const fw=$('#fixedWarn'); if(fw){
     fw.style.display=fixedShortfall>0?'block':'none';
-    fw.textContent=`⚠️ Vos contributions fixes (${fmt0(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt0(fixedShortfall)} ou réduisez vos charges/catégories.`;
+    fw.textContent=`⚠️ Vos contributions fixes (${fmt(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt(fixedShortfall)} ou réduisez vos charges/catégories.`;
   }
   const cb=$('#cancelBudget'); if(cb) cb.style.display=pilotHasChanges()?'':'none';
 
@@ -4089,10 +4123,10 @@ function recalcPilotage(){
   const totalMensuel=totalRevenuFoyer(), chgRecap=chargesCommunes(), catRecap=totalBudget();
   const solde=totalMensuel-chgRecap-catRecap-allocProjets;
   const info=budgetSoldeInfo(solde);
-  const rm=$('#recapMontant'); if(rm) rm.textContent=fmt0(totalMensuel);
-  const rc=$('#recapChg'); if(rc) rc.textContent=fmt0(chgRecap);
-  const rcat=$('#recapCat'); if(rcat) rcat.textContent=fmt0(catRecap);
-  const rp=$('#recapProj'); if(rp) rp.textContent=fmt0(allocProjets);
+  const rm=$('#recapMontant'); if(rm) rm.textContent=fmt(totalMensuel);
+  const rc=$('#recapChg'); if(rc) rc.textContent=fmt(chgRecap);
+  const rcat=$('#recapCat'); if(rcat) rcat.textContent=fmt(catRecap);
+  const rp=$('#recapProj'); if(rp) rp.textContent=fmt(allocProjets);
   const rRow=$('#recapRow'); if(rRow){
     rRow.classList.toggle('blink-danger', info.blink);
     rRow.style.background=info.bg;
@@ -4100,46 +4134,50 @@ function recalcPilotage(){
     else { rRow.style.borderTop='none'; rRow.style.paddingLeft='14px'; rRow.style.paddingRight='14px'; }
   }
   const rLabel=$('#recapLabel'); if(rLabel){ rLabel.textContent=info.label; rLabel.style.color=info.color; }
-  const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${solde>0?'+':''}${fmt0(solde)}`; rSolde.style.color=info.color; }
+  const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${solde>0?'+':''}${fmt(solde)}`; rSolde.style.color=info.color; }
   const rTip=$('#recapTip'); if(rTip){ rTip.style.display=info.tip?'block':'none'; rTip.textContent=info.tip; }
 
   // Cartes personne (salaire + charges perso + contribution)
   ['lui','elle'].forEach(who=>{
     const pt=$('#persTot_'+who);
-    if(pt) pt.textContent = S.settings.mode==='net' ? fmt0(S.settings.salaries[who]-chargesPerso(who)) : fmt0(S.settings.salaries[who]);
-    const pot=$('#persoTot_'+who); if(pot) pot.textContent=fmt0(chargesPerso(who));
+    if(pt) pt.textContent = S.settings.mode==='net' ? fmt(S.settings.salaries[who]-chargesPerso(who)) : fmt(S.settings.salaries[who]);
+    const pot=$('#persoTot_'+who); if(pot) pot.textContent=fmt(chargesPerso(who));
     const pp=$('#persPct_'+who); if(pp) pp.textContent=`${rep[who]}%`;
   });
-  const ptf=$('#persTot_fixed'); if(ptf) ptf.textContent=fmt0(totalRevenuFoyer());
+  const ptf=$('#persTot_fixed'); if(ptf) ptf.textContent=fmt(totalRevenuFoyer());
 }
+// Lit le montant d'une ligne de pilotage en conservant les centimes (voir parseAmt pour la
+// virgule). Le slider, lui, reste au pas de 1 € : c'est un réglage grossier, et il écrase
+// donc volontairement les centimes quand on le fait glisser.
+function readAmt(el){ return Math.max(0, parseAmt(el.value)); }
 // Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
 // Important : on ne réajuste le max du slider QUE si c'est le champ € qui a changé
 // (on tape une valeur). Si c'est le slider lui-même qu'on glisse, on ne touche pas à
 // son échelle — sinon le curseur reste "collé" au milieu pendant tout le glissement.
 function onChargeInput(el){
-  const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
+  const id=el.dataset.id, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
   if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; } }
-  else if(numEl) numEl.value=val;
+  else if(numEl) numEl.value=inputAmt(val);
   const c=S.charges.find(x=>x.id===id); if(c){ c.amount=val; save(); }
   recalcPilotage();
 }
 function onCatInput(el){
-  const id=el.dataset.id, val=Math.max(0, Math.round(+el.value)||0);
+  const id=el.dataset.id, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
   if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,500); slEl.value=val; } }
-  else if(numEl) numEl.value=val;
+  else if(numEl) numEl.value=inputAmt(val);
   const c=S.categories.find(x=>x.id===id); if(c){ c.budget=val; save(); }
   recalcPilotage();
 }
 function onProjectInput(el){
-  const id=el.dataset.project, val=Math.max(0, Math.round(+el.value)||0);
+  const id=el.dataset.project, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
   if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,Math.max(disponiblePourProjets(),100)); slEl.value=val; } }
-  else if(numEl) numEl.value=val;
+  else if(numEl) numEl.value=inputAmt(val);
   pilotSim[id]=val;
   // Comme les charges/catégories/salaires, la mensualité choisie s'enregistre immédiatement
   // (au lieu d'être une simulation en mémoire seulement validée plus tard). C'est la mensualité
@@ -4153,22 +4191,22 @@ function onProjectInput(el){
 // même mensualité fixe partagée (p.mensuel / pilotSim), mise à jour en direct de la carte et
 // de l'entête "Montant mensuel" sans recharger tout l'écran (pour ne pas couper le glisser du slider).
 function onProjectMensInput(el){
-  const id=el.dataset.projectmens, val=Math.max(0, Math.round(+el.value)||0);
+  const id=el.dataset.projectmens, val=readAmt(el);
   const card=el.closest('[data-proj]');
   const numEl=card.querySelector('.pamt-input'), slEl=card.querySelector('.mini-slider');
   if(el===numEl){ if(slEl){ slEl.max=sliderMax(val,Math.max(disponiblePourProjets(),100)); slEl.value=val; } }
-  else if(numEl) numEl.value=val;
+  else if(numEl) numEl.value=inputAmt(val);
   const p=S.projects.find(x=>x.id===id); if(!p) return;
   p.mensuel=val; pilotSim[id]=val;
   const remaining=Math.max(0,p.target-p.saved);
   if(remaining>0 && val>0) p.months=Math.max(1,Math.ceil(remaining/val));
-  const amtLbl=card.querySelector(`[data-menslabel="${id}"]`); if(amtLbl) amtLbl.textContent=`${fmt0(val)} / mois`;
+  const amtLbl=card.querySelector(`[data-menslabel="${id}"]`); if(amtLbl) amtLbl.textContent=`${fmt(val)} / mois`;
   const etaLbl=card.querySelector(`[data-etalabel="${id}"]`); if(etaLbl) etaLbl.textContent = remaining>0?`Objectif atteint en ${projectEtaLabel(p)}`:'';
   const used=epargneProjetsMensuelle(), dispo=disponiblePourProjets();
-  const usedLbl=$('#vpUsedLbl'); if(usedLbl){ usedLbl.textContent=fmt0(used); usedLbl.style.color=used>dispo?'var(--danger)':'var(--terra)'; }
+  const usedLbl=$('#vpUsedLbl'); if(usedLbl){ usedLbl.textContent=fmt(used); usedLbl.style.color=used>dispo?'var(--danger)':'var(--terra)'; }
   const utilPct=$('#vpUtilPct'); if(utilPct) utilPct.textContent=`(utilisation ${dispo>0?Math.round(used/dispo*100):(used>0?100:0)}%)`;
   const defRow=$('#vpDeficit'); if(defRow) defRow.style.display = used>dispo?'block':'none';
-  const defAmt=$('#vpDeficitAmt'); if(defAmt) defAmt.textContent=fmt0(Math.max(0,used-dispo));
+  const defAmt=$('#vpDeficitAmt'); if(defAmt) defAmt.textContent=fmt(Math.max(0,used-dispo));
   save();
 }
 function bindPilotage(){
@@ -4176,9 +4214,9 @@ function bindPilotage(){
 
   // Le salaire est une donnée connue (pas un curseur à explorer) : simple champ €, sans slider.
   const sl=$('#salLui'), se=$('#salElle');
-  const syncSalary=(who,val)=>{ S.settings.salaries[who]=Math.max(0, Math.round(val)||0); save(); recalcPilotage(); };
-  if(sl) sl.oninput=()=>syncSalary('lui',+sl.value);
-  if(se) se.oninput=()=>syncSalary('elle',+se.value);
+  const syncSalary=(who,val)=>{ S.settings.salaries[who]=Math.max(0, parseAmt(val)); save(); recalcPilotage(); };
+  if(sl) sl.oninput=()=>syncSalary('lui',sl.value);
+  if(se) se.oninput=()=>syncSalary('elle',se.value);
 
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
     if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; }
@@ -4196,8 +4234,8 @@ function bindPilotage(){
   if(ph) ph.oninput=()=>syncCustomPct('lui',+ph.value);
   if(pr) pr.oninput=()=>syncCustomPct('elle',+pr.value);
   const fl=$('#fixLui'), fe=$('#fixElle');
-  if(fl) fl.oninput=()=>{S.settings.fixed.lui=Math.max(0,+fl.value||0); save(); recalcPilotage();};
-  if(fe) fe.oninput=()=>{S.settings.fixed.elle=Math.max(0,+fe.value||0); save(); recalcPilotage();};
+  if(fl) fl.oninput=()=>{S.settings.fixed.lui=Math.max(0,parseAmt(fl.value)); save(); recalcPilotage();};
+  if(fe) fe.oninput=()=>{S.settings.fixed.elle=Math.max(0,parseAmt(fe.value)); save(); recalcPilotage();};
 
   const chgHdr=$('#chgHdr'); if(chgHdr) chgHdr.onclick=()=>{
     pilotOpen.charges=!pilotOpen.charges;
@@ -4242,7 +4280,7 @@ function bindPilotage(){
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
     // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
     snapshotBudgets(eff==='futur'?1:0);
-    if(!S.moneyDate.nextDate){ const nd=new Date(); nd.setMonth(nd.getMonth()+1); S.moneyDate.nextDate=nd.toISOString().slice(0,10); }
+    if(!S.moneyDate.nextDate){ S.moneyDate.nextDate=addMonths(new Date(),1).toISOString().slice(0,10); }
     S.pilotSnapshot={
       salaries:{...S.settings.salaries}, mode:S.settings.mode, custom:{...S.settings.custom}, fixed:{...S.settings.fixed},
       charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
@@ -4280,7 +4318,7 @@ function openAddCharge(defaultScope){
   const isCommune=scope==='commune';
   openModal(`<h3>${isCommune?'Nouvelle charge fixe commune':'Nouvelle charge perso'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="chN" placeholder="Ex : Netflix"></div>
-    <div class="field"><label>Montant /mois</label><input class="input" type="number" id="chA" placeholder="15"></div>
+    <div class="field"><label>Montant /mois</label><input class="input" type="text" inputmode="decimal" id="chA" placeholder="15"></div>
     ${isCommune?`<div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">Détails</span></label>
       <div class="grid2" style="gap:8px">
         ${["besoin","envie","invest","protection"].map(cl=>`<button class="cat-opt clsPick" data-cls="${cl}"><span class="tag ${cl}">${clsLabel(cl)}</span></button>`).join('')}
@@ -4293,7 +4331,7 @@ function openAddCharge(defaultScope){
   $('#chSave').onclick=()=>{
     const n=$('#chN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
     if(isCommune && !cls){ toast("Choisissez une classification","🏷️"); return; }
-    S.charges.push({id:e(),emoji:'📄',name:n,amount:+$('#chA').value||0,scope,locked:false,cls:isCommune?cls:undefined});
+    S.charges.push({id:e(),emoji:'📄',name:n,amount:parseAmt($('#chA').value),scope,locked:false,cls:isCommune?cls:undefined});
     save(); closeModal(); go('pilotage'); toast("Charge ajoutée");
   };
 }
@@ -4302,8 +4340,8 @@ function openEditCat(id, returnTo){
   const c=id?catById(id):{emoji:"📦",name:"",budget:0,cls:null};
   openModal(`<h3>${id?'Modifier la catégorie':'Nouvelle catégorie'}</h3>
     <div class="field"><label>Nom</label><input class="input" id="ceN" value="${escapeHtml(c.name)}" placeholder="Ex : Animaux"></div>
-    <div class="field"><label>Budget mensuel</label><input class="input" type="number" id="ceB" value="${c.budget}"></div>
-    <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmt0((c.budget||0)/4)} / semaine</b></p>
+    <div class="field"><label>Budget mensuel</label><input class="input" type="text" inputmode="decimal" id="ceB" value="${inputAmt(c.budget)}"></div>
+    <p class="small muted" style="margin:-6px 2px 12px">L'hebdomadaire est calculé automatiquement : <b>${fmtEst((c.budget||0)/4)} / semaine</b></p>
     <div class="field"><label>Report du solde</label>
       <button class="cat-opt" id="ceRoll" style="width:100%">
         <span class="e">↩</span>
@@ -4312,7 +4350,7 @@ function openEditCat(id, returnTo){
       </button>
     </div>
     <div class="field" id="ceRollStartWrap" style="display:none"><label>Solde de départ</label>
-      <input class="input" type="number" id="ceRollStart" value="${c.rolloverStart||0}">
+      <input class="input" type="text" inputmode="decimal" id="ceRollStart" value="${inputAmt(c.rolloverStart||0)}">
       <p class="small muted" style="margin:6px 2px 0">L'avance déjà accumulée sur cette enveloppe — ou son retard, en négatif. Laissez 0 pour démarrer à plat.</p>
     </div>
     <div class="field"><label>Classification <span class="link" data-natureshelp style="font-size:11px; font-weight:400">Détails</span></label>
@@ -4331,10 +4369,10 @@ function openEditCat(id, returnTo){
   $('#ceRoll').onclick=()=>{ roll=!roll; syncRoll(); };
   $('#ceSave').onclick=()=>{ const n=$('#ceN').value.trim(); if(!n){toast("Nom requis","✏️");return;}
     if(!cls){ toast("Choisissez une classification","🏷️"); return; }
-    const rollStart = roll ? (parseFloat(($('#ceRollStart').value+'').replace(',','.'))||0) : 0;
+    const rollStart = roll ? parseAmt($('#ceRollStart').value) : 0; // peut être négatif (enveloppe en retard)
     let target;
     if(id){
-      c.name=n; c.budget=+$('#ceB').value||0; c.cls=cls;
+      c.name=n; c.budget=parseAmt($('#ceB').value); c.cls=cls;
       // On ne fige le mois de départ qu'à l'activation : le cumul ne remonte jamais avant,
       // donc activer le report n'invente pas un historique qu'on n'a pas.
       if(roll && !c.rollover) c.rolloverFrom=annualMonthKey(0);
@@ -4343,7 +4381,7 @@ function openEditCat(id, returnTo){
       target=c;
     }
     else {
-      target={id:e(),emoji:'📦',name:n,budget:+$('#ceB').value||0,cls:cls,rollover:roll,rolloverStart:rollStart,rolloverFrom:roll?annualMonthKey(0):null};
+      target={id:e(),emoji:'📦',name:n,budget:parseAmt($('#ceB').value),cls:cls,rollover:roll,rolloverStart:rollStart,rolloverFrom:roll?annualMonthKey(0):null};
       S.categories.push(target);
     }
     // Sur une catégorie à report, on épingle la dotation du mois courant. Sans ça,
@@ -4373,13 +4411,13 @@ function openDeleteCat(id, returnTo){
   const others=S.categories.filter(x=>x.id!==id && x.rollover);
   const cagAfter=S.cagnotte.balance+bal;
   openModal(`<h3>Supprimer « ${escapeHtml(c.name)} » ?</h3>
-    <p class="small muted" style="margin-bottom:14px">Cette enveloppe ${pos?`a encore <b style="color:var(--terra)">${fmt0(bal)}</b> d'avance. Cet argent existe sur votre compte commun :`:`accuse <b style="color:var(--danger)">${fmt0(Math.abs(bal))}</b> de retard. Ce retard doit être absorbé quelque part, sinon il disparaît de vos comptes :`} que voulez-vous en faire ?</p>
+    <p class="small muted" style="margin-bottom:14px">Cette enveloppe ${pos?`a encore <b style="color:var(--terra)">${fmt(bal)}</b> d'avance. Cet argent existe sur votre compte commun :`:`accuse <b style="color:var(--danger)">${fmt(Math.abs(bal))}</b> de retard. Ce retard doit être absorbé quelque part, sinon il disparaît de vos comptes :`} que voulez-vous en faire ?</p>
     <button class="btn btn-soft" id="dcCag" style="margin-bottom:${cagAfter<0?'4':'10'}px">👛 ${pos?'Verser dans la cagnotte commune':'Absorber par la cagnotte commune'}</button>
-    ${cagAfter<0?`<p class="small muted" style="margin:0 2px 10px">La cagnotte passerait à ${fmt0(cagAfter)}.</p>`:''}
+    ${cagAfter<0?`<p class="small muted" style="margin:0 2px 10px">La cagnotte passerait à ${fmt(cagAfter)}.</p>`:''}
     ${others.length?`<div class="field"><label>Ou reporter ${pos?'ce solde':'ce retard'} sur une autre enveloppe</label>
       <select class="select" id="dcDest">${others.map(o=>`<option value="${o.id}">${o.emoji} ${escapeHtml(o.name)}</option>`).join('')}</select></div>
     <button class="btn btn-soft" id="dcMove" style="margin-bottom:10px">↩ Reporter sur cette enveloppe</button>`:''}
-    <button class="btn btn-ghost" id="dcDrop" style="margin-bottom:10px; color:var(--danger)">${pos?`Supprimer sans conserver les ${fmt0(bal)}`:'Supprimer et effacer le retard'}</button>
+    <button class="btn btn-ghost" id="dcDrop" style="margin-bottom:10px; color:var(--danger)">${pos?`Supprimer sans conserver les ${fmt(bal)}`:'Supprimer et effacer le retard'}</button>
     <button class="btn btn-ghost btn-sm" id="dcCancel" style="width:100%">Annuler</button>`, true);
 
   $('#dcCag').onclick=()=>{
