@@ -117,6 +117,72 @@ test.describe('Arithmétique des mois (bug des 29/30/31)', () => {
     expect(new Set(mois).size).toBe(12); // 12 mois distincts : aucun compté deux fois
   });
 
+  test('le calendrier reste juste sur 5 ans, jour par jour', async ({ page }) => {
+    await openApp(page);
+    // On simule CHAQUE jour de 2026 à 2030 (bissextile 2028 comprise) et on vérifie que les
+    // 12 derniers mois restent 12 mois distincts, que le nombre de jours colle au vrai
+    // calendrier, et que les semaines couvrent le mois sans trou ni chevauchement.
+    const rapport = await page.evaluate(() => {
+      const Real = Date;
+      const mock = (y, m, d) => {
+        const f = new Real(y, m, d, 12);
+        class M extends Real {
+          constructor(...a) { a.length === 0 ? super(f.getTime()) : super(...a); }
+          static now() { return f.getTime(); }
+        }
+        window.Date = M;
+      };
+      const JOURS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      const bissextile = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+      const erreurs = []; let jours = 0;
+      for (let y = 2026; y <= 2030 && erreurs.length < 5; y++) {
+        for (let m = 0; m < 12 && erreurs.length < 5; m++) {
+          const dim = m === 1 && bissextile(y) ? 29 : JOURS[m];
+          for (let d = 1; d <= dim && erreurs.length < 5; d++) {
+            mock(y, m, d); jours++;
+            const cles = []; for (let o = 0; o > -12; o--) cles.push(annualMonthKey(o));
+            if (new Set(cles).size !== 12) erreurs.push(`${y}-${m + 1}-${d}: mois non distincts`);
+            const w = weekOfMonthInfo();
+            if (w.daysInMonth !== dim) erreurs.push(`${y}-${m + 1}: ${w.daysInMonth} jours ≠ ${dim}`);
+            let somme = 0;
+            for (let i = 1; i <= w.totalWeeks; i++) somme += weekDaysInMonthAt(i, w.dow1, w.daysInMonth);
+            if (somme !== dim) erreurs.push(`${y}-${m + 1}: semaines ${somme} ≠ ${dim}`);
+            if (!monthLabel(0).endsWith(String(y))) erreurs.push(`${y}-${m + 1}-${d}: ${monthLabel(0)}`);
+          }
+        }
+      }
+      window.Date = Real;
+      return { jours, erreurs };
+    });
+    expect(rapport.erreurs).toEqual([]);
+    expect(rapport.jours).toBe(1826); // 5 ans dont une bissextile
+  });
+
+  test('l\'axe des 12 mois indique l\'année quand elle change', async ({ page }) => {
+    await openApp(page);
+    const axes = await page.evaluate(() => {
+      const Real = Date;
+      const mock = (y, m, d) => {
+        const f = new Real(y, m, d, 12);
+        class M extends Real {
+          constructor(...a) { a.length === 0 ? super(f.getTime()) : super(...a); }
+          static now() { return f.getTime(); }
+        }
+        window.Date = M;
+      };
+      const lire = () => annualAxisMonths().map(m => m.ini + (m.yearMark ? "'" + m.yearMark : '')).join(' ');
+      const out = {};
+      mock(2026, 7, 30); out.aout2026 = lire();   // à cheval : sept. 2025 → août 2026
+      mock(2027, 0, 15); out.janv2027 = lire();   // à cheval : fév. 2026 → janv. 2027
+      mock(2026, 11, 15); out.dec2026 = lire();   // une seule année civile
+      window.Date = Real;
+      return out;
+    });
+    expect(axes.aout2026).toBe("S'25 O N D J'26 F M A M J J A");
+    expect(axes.janv2027).toBe("F'26 M A M J J A S O N D J'27");
+    expect(axes.dec2026).toBe("J'26 F M A M J J A S O N D");
+  });
+
   test('« dans un mois » ne saute pas un mois entier depuis un 31', async ({ page }) => {
     await openApp(page);
     // 31 janvier + 1 mois doit donner le 28 février, pas le 3 mars.

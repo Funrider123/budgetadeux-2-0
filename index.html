@@ -2308,17 +2308,31 @@ function posteMeta(sel){
 }
 function posteActualAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? spentByCat(sel.slice(4), offset) : (spentByClsMonth(offset)[sel]||0); }
 function posteBudgetAt(sel, offset){ return (sel && sel.startsWith('cat:')) ? catBudgetAt(sel.slice(4), offset) : clsBudgetAt(sel, offset); }
+// Axe des 12 derniers mois. L'année n'est répétée que là où elle change (mois le plus ancien,
+// puis chaque janvier) : une bande de 12 mois est presque toujours à cheval sur deux années,
+// et l'initiale seule ne dit pas laquelle — d'autant que J/J (juin, juillet), M/M (mars, mai)
+// et A/A (avril, août) partagent déjà la même lettre.
+function annualAxisMonths(){
+  const out=[];
+  for(let off=-11; off<=0; off++){
+    const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+off);
+    out.push({
+      off, ini:MOIS[d.getMonth()][0], name:MOIS[d.getMonth()], year:d.getFullYear(),
+      yearMark:(off===-11 || d.getMonth()===0) ? String(d.getFullYear()).slice(2) : '',
+      cur:off===0,
+    });
+  }
+  return out;
+}
 // VUE D'ENSEMBLE : barres empilées par nature (12 mois). Détail d'un mois au clic (modale).
 function annualOverviewHtml(){
   const chargesTotal=S.charges.reduce((s,c)=>s+c.amount,0), projectsTotal=epargneProjetsMensuelle();
   const budget = totalBudget() + (annualIncludeCharges?chargesTotal:0) + (annualIncludeProjects?projectsTotal:0);
-  const months = [];
-  for(let off=-11; off<=0; off++){
-    const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+off);
-    const cls=clsMonthTotal(off);
+  const months = annualAxisMonths().map(m=>{
+    const cls=clsMonthTotal(m.off);
     const total=cls.besoin+cls.envie+cls.invest+cls.protection;
-    months.push({off, ini:MOIS[d.getMonth()][0], cls, total, cur:off===0, over:budget>0 && total>budget});
-  }
+    return {...m, cls, total, over:budget>0 && total>budget};
+  });
   const withData = months.filter(m=>m.total>0);
   const avg = withData.length ? withData.reduce((s,m)=>s+m.total,0)/withData.length : 0;
   const max = Math.max(...months.map(m=>m.total), budget, 1);
@@ -2344,6 +2358,7 @@ function annualOverviewHtml(){
     </div>`;
   }).join('');
   const labels = months.map(m=>`<div style="flex:1; text-align:center; font-size:9px; font-weight:800; color:${m.cur?'var(--terra)':'var(--muted)'}">${m.ini}</div>`).join('');
+  const yearLabels = months.map(m=>`<div style="flex:1; text-align:center; font-size:8.5px; font-weight:800; color:var(--muted-2)">${m.yearMark?'&#39;'+m.yearMark:''}</div>`).join('');
   const budgetY = budget>0 ? budget/max*H : 0;
   const leg = (color,label)=>`<div style="display:flex; align-items:center; gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(${color})"></span><span class="small" style="color:var(--ink-2)">${label}</span></div>`;
   const nOver = months.filter(m=>m.over).length;
@@ -2361,6 +2376,7 @@ function annualOverviewHtml(){
       <div style="position:absolute; right:0; bottom:${(budgetY+2).toFixed(1)}px; font-size:9px; font-weight:800; color:var(--ink-2); background:var(--card); padding:0 4px; pointer-events:none">budget</div>`:''}
     </div>
     <div style="display:flex; gap:5px; margin-top:5px; padding-left:32px">${labels}</div>
+    <div style="display:flex; gap:5px; margin-top:1px; padding-left:32px">${yearLabels}</div>
     <div class="row" style="gap:14px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
       ${leg('--besoin','Besoins')}${leg('--envie','Envies')}${leg('--invest','Investissement')}${leg('--protection','Protection')}
     </div>
@@ -2382,7 +2398,7 @@ function annualSuiviHtml(){
   const curBudget = budg[11];
   const nOver = actual.filter((v,k)=>budg[k]>0 && v>budg[k]).length;
   const tightened = budg[11]>0 && budg[0]>0 && budg[11] < budg[0]*0.98;
-  const Mi=[]; for(let off=-11;off<=0;off++){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+off); Mi.push(MOIS[d.getMonth()][0]); }
+  const Mi=annualAxisMonths();
   const chartCard = (()=>{
     if(maxV<=1){
       return `<div class="card"><div class="row" style="gap:6px; margin-bottom:2px"><span style="width:11px;height:11px;border-radius:3px;background:var(--${meta.color})"></span><b>${escapeHtml(meta.name)}</b></div>
@@ -2396,13 +2412,14 @@ function annualSuiviHtml(){
     const hasBudget = budg.some(v=>v>0);
     const lineB = budg.map((v,k)=>`${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const overDots = actual.map((v,k)=> (budg[k]>0 && v>budg[k]) ? `<circle cx="${x(k).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="var(--danger)" stroke="var(--card)" stroke-width="1.5"/>`:'').join('');
-    const labels = Mi.map((m,k)=>`<text x="${x(k).toFixed(1)}" y="${H+14}" font-size="9" font-weight="800" fill="var(--muted)" text-anchor="middle">${m}</text>`).join('');
+    const labels = Mi.map((m,k)=>`<text x="${x(k).toFixed(1)}" y="${H+14}" font-size="9" font-weight="800" fill="var(--muted)" text-anchor="middle">${m.ini}</text>`).join('')
+      + Mi.map((m,k)=>m.yearMark?`<text x="${x(k).toFixed(1)}" y="${H+24}" font-size="8.5" font-weight="800" fill="var(--muted-2)" text-anchor="middle">&#39;${m.yearMark}</text>`:'').join('');
     const scaleMarks = [0,.25,.5,.75,1].map(f=>`<text x="0" y="${(y(max*f)-3).toFixed(1)}" font-size="9" font-weight="800" fill="var(--muted)">${fmt(max*f)}</text>`).join('');
     return `<div class="card">
       <div class="between" style="margin-bottom:2px"><div class="row" style="gap:6px"><span style="font-size:16px">${meta.emoji}</span><b>${escapeHtml(meta.name)}</b></div>
       ${nOver>0?`<span class="tag" style="color:var(--danger); background:color-mix(in srgb,var(--danger) 14%,transparent)">${nOver} mois dépassés</span>`:`<span class="muted small">moy. ${fmtEst(avgA)}/mois</span>`}</div>
       <p class="small muted" style="margin:0 0 10px">Dépensé (trait plein)${hasBudget?' vs budget (pointillé)':''} sur 12 mois.</p>
-      <svg viewBox="0 0 ${W} ${H+20}" style="width:100%; height:auto; overflow:visible">
+      <svg viewBox="0 0 ${W} ${H+30}" style="width:100%; height:auto; overflow:visible">
         ${hasBudget?`<polyline points="${lineB}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 4" opacity="0.55"/>`:''}
         <polyline points="${lineA}" fill="none" stroke="var(--${meta.color})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
         ${overDots}${labels}${scaleMarks}
