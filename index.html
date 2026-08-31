@@ -3017,7 +3017,21 @@ function renderReglages(){
 
   <div class="section-title">Historique des budgets</div>
   <div class="card">
-    ${S.budgetHistory.map(h=>`<div class="lrow"><div class="emoji-badge">🕗</div><div class="grow"><div class="name" style="font-size:13.5px">${h.label}</div><div class="sub">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.effect==='immediate'?'Effet immédiat':'Au mois prochain'}</div></div>${h.effect==='futur'?'<span class="tag invest">À venir</span>':''}</div>`).join('')}
+    ${S.budgetHistory.length?S.budgetHistory.map(h=>{
+      // Les entrées d'avant n'ont pas de détail : elles restent affichées telles quelles.
+      const ch=Array.isArray(h.changes)?h.changes:null;
+      const nb=h.count||1;
+      return `<div class="lrow" style="align-items:flex-start"><div class="emoji-badge">🕗</div>
+        <div class="grow">
+          <div class="name" style="font-size:13.5px">${h.label}</div>
+          <div class="sub">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.effect==='immediate'?'Effet immédiat':'Au mois prochain'}${nb>1?` · ${nb} validations`:''}</div>
+          ${ch&&ch.length?`<div style="margin-top:6px; display:flex; flex-direction:column; gap:3px">
+            ${ch.slice(0,4).map(c=>`<div class="small" style="color:var(--ink-2); line-height:1.45">• ${c}</div>`).join('')}
+            ${ch.length>4?`<div class="small muted">+ ${ch.length-4} autre${ch.length-4>1?'s':''}</div>`:''}
+          </div>`:(ch?`<div class="small muted" style="margin-top:4px">Aucun chiffre modifié</div>`:'')}
+        </div>
+        ${h.effect==='futur'?'<span class="tag invest">À venir</span>':''}</div>`;
+    }).join(''):`<p class="small muted" style="text-align:center; padding:14px 0">Aucun budget validé pour l'instant.</p>`}
   </div>
 
   <div class="section-title">Données</div>
@@ -4459,8 +4473,75 @@ function bindPilotage(){
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
   const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>cancelBudgetChanges();
 }
+/* ---- Historique des budgets : ce qui a changé, pas le fait d'avoir cliqué ----
+   Une ligne « Budget validé pour Août » n'apprend rien, et quatre validations d'affilée en
+   produisaient quatre identiques. On enregistre donc l'écart avec le dernier budget validé,
+   on ne garde qu'une ligne par mois visé, et on n'écrit rien quand rien n'a bougé. */
+function budgetChangeSummary(){
+  const snap=S.pilotSnapshot; if(!snap) return [];
+  const out=[];
+  const flux=(a,b)=>`${fmt(a)} → ${fmt(b)}`;
+  if(S.settings.mode!==snap.mode)
+    out.push(`Répartition : ${MD_MODE_LABELS[snap.mode]||snap.mode} → ${MD_MODE_LABELS[S.settings.mode]||S.settings.mode}`);
+  // Chaque mode n'utilise qu'une partie des réglages ; le reste est un brouillon que la
+  // validation remet à zéro. Le signaler comme un changement serait trompeur.
+  const mode=S.settings.mode;
+  ['lui','elle'].forEach(w=>{
+    if(mode==='fixe' && round2(S.settings.fixed[w])!==round2(snap.fixed[w]))
+      out.push(`Contribution ${escapeHtml(nameOf(w))} : ${flux(snap.fixed[w],S.settings.fixed[w])}`);
+    if((mode==='salaire'||mode==='net') && round2(S.settings.salaries[w])!==round2(snap.salaries[w]))
+      out.push(`Revenu ${escapeHtml(nameOf(w))} : ${flux(snap.salaries[w],S.settings.salaries[w])}`);
+    if(mode==='custom' && S.settings.custom[w]!==snap.custom[w])
+      out.push(`Part ${escapeHtml(nameOf(w))} : ${snap.custom[w]} % → ${S.settings.custom[w]} %`);
+  });
+  // Charges et catégories : modifiées, supprimées, ajoutées. Les charges perso n'existent
+  // qu'en mode « revenus nets » : ailleurs, leur disparition est un nettoyage, pas une décision.
+  // « commune » par défaut : les instantanés enregistrés avant cette version n'ont pas de
+  // scope, et mieux vaut signaler un changement de trop que d'en escamoter un.
+  const pertinente=c=>mode==='net' || (c.scope||'commune')==='commune';
+  snap.charges.filter(pertinente).forEach(sc=>{
+    const c=S.charges.find(x=>x.id===sc.id);
+    if(!c) out.push(`${escapeHtml(sc.name||'Charge')} supprimée`);
+    else if(round2(c.amount)!==round2(sc.amount)) out.push(`${escapeHtml(c.name)} : ${flux(sc.amount,c.amount)}`);
+  });
+  S.charges.filter(pertinente).forEach(c=>{ if(!snap.charges.some(sc=>sc.id===c.id)) out.push(`${escapeHtml(c.name)} ajoutée (${fmt(c.amount)})`); });
+  snap.categories.forEach(sc=>{
+    const c=S.categories.find(x=>x.id===sc.id);
+    if(!c) out.push(`${escapeHtml(sc.name||'Catégorie')} supprimée`);
+    else if(round2(c.budget)!==round2(sc.budget)) out.push(`${escapeHtml(c.name)} : ${flux(sc.budget,c.budget)}`);
+  });
+  S.categories.forEach(c=>{ if(!snap.categories.some(sc=>sc.id===c.id)) out.push(`${escapeHtml(c.name)} ajoutée (${fmt(c.budget)})`); });
+  // Les mensualités de projets sont figées par la même validation : elles y ont leur place.
+  const psnap=S.projectsSnapshot||{};
+  S.projects.forEach(p=>{
+    const s=psnap[p.id]; if(!s) return;
+    if(round2(p.mensuel||0)!==round2(s.mensuel||0))
+      out.push(`${escapeHtml(p.name)} : ${flux(s.mensuel||0, p.mensuel||0)} / mois`);
+  });
+  return out;
+}
+// Enregistre la validation dans l'historique — ou pas, si elle n'apporte rien.
+function recordBudgetValidation(offset, changes){
+  const key=annualMonthKey(offset);
+  const idx=S.budgetHistory.findIndex(h=>h.monthKey===key);
+  // Rien n'a bougé et ce mois est déjà consigné : on garde la ligne d'origine, avec sa vraie
+  // date, plutôt que d'en empiler une identique ou d'en rajeunir une sans raison.
+  if(!changes.length && idx>-1) return;
+  const entree={
+    date:iso(0), monthKey:key,
+    label:`Budget validé pour ${monthLabel(offset)}`,
+    effect:offset===0?'immediate':'futur',
+    changes,
+    count:(idx>-1 ? (S.budgetHistory[idx].count||1)+1 : 1),
+  };
+  if(idx>-1) S.budgetHistory.splice(idx,1); // une seule ligne par mois visé
+  S.budgetHistory.unshift(entree);
+}
 // Applique réellement le budget, pour le mois d'effet choisi dans la confirmation.
 function applyBudgetValidation(offset){
+  // Enregistré AVANT toute autre chose : le nettoyage des brouillons ci-dessous et le
+  // remplacement de pilotSnapshot plus bas effaceraient tous deux la référence de comparaison.
+  recordBudgetValidation(offset, budgetChangeSummary());
   // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
   // pour permettre de comparer librement. À la validation finale, on ne garde que ce qui
   // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
@@ -4470,14 +4551,15 @@ function applyBudgetValidation(offset){
   // Le démarrage n'est fixé qu'à la PREMIÈRE validation : sinon, chaque ajustement ultérieur
   // appliqué à un mois futur repousserait le début de tout le budget.
   if(!S.budgetStart) S.budgetStart=annualMonthKey(offset);
-  S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(offset)}`,effect:offset===0?'immediate':'futur'});
   // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
   snapshotBudgets(offset);
   if(!S.moneyDate.nextDate){ S.moneyDate.nextDate=addMonths(new Date(),1).toISOString().slice(0,10); }
   S.pilotSnapshot={
     salaries:{...S.settings.salaries}, mode:S.settings.mode, custom:{...S.settings.custom}, fixed:{...S.settings.fixed},
-    charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
-    categories:S.categories.map(c=>({id:c.id, budget:c.budget}))
+    // Le nom est mémorisé en plus du montant : sans lui, un élément supprimé depuis ne
+    // pourrait plus être nommé dans l'historique des changements.
+    charges:S.charges.map(c=>({id:c.id, amount:c.amount, name:c.name, scope:c.scope})),
+    categories:S.categories.map(c=>({id:c.id, budget:c.budget, name:c.name}))
   };
   // Un seul "Modifier" pour toute la page : valider le budget verrouille aussi les
   // mensualités de projets, plutôt que de laisser un deuxième cadenas indépendant.
