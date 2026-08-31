@@ -586,7 +586,10 @@ const DEFAULT = {
   moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
   budgetHistory:[],
   budgetTimeline:{}, // instantané du budget de chaque catégorie par mois (clé "YYYY-M"), pour la vue annuelle
-  deleted:{} // ids supprimés (id -> date ISO), synchronisés pour qu'une suppression tienne des deux côtés
+  deleted:{}, // ids supprimés (id -> date ISO), synchronisés pour qu'une suppression tienne des deux côtés
+  // Mois où le budget commence à compter ("YYYY-M"). null = jamais défini : l'app se comporte
+  // alors comme avant. Fixé à la première validation, puis modifiable dans les Réglages.
+  budgetStart:null
 };
 
 function e(){ return 'x'+Math.random().toString(36).slice(2,9); }
@@ -622,6 +625,9 @@ function migrate(s){
   }
   const needsProjectsSnapshot = (s.projectsSnapshot===undefined || s.projectsSnapshot===null);
   if(!s.deleted || typeof s.deleted!=='object') s.deleted = {}; // ardoises de suppression (cf. markDeleted)
+  // Comptes existants : null = pas de date de démarrage, donc aucun changement de comportement
+  // tant qu'ils n'en fixent pas une (à leur prochaine validation, ou dans les Réglages).
+  if(s.budgetStart===undefined) s.budgetStart = null;
   if(!s.moneyDate.notes) s.moneyDate.notes = [];
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
@@ -672,7 +678,7 @@ function save(){ if(!demoMode){ try{ localStorage.setItem("bad2", JSON.stringify
    couple dans la table `couple_state`, avec mise à jour temps réel.
    ============================================================ */
 // Champs partagés entre partenaires ; le reste (auth/partner/ui) reste local à l'appareil.
-const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot','deleted'];
+const SYNC_KEYS = ['settings','categories','charges','merchants','expenses','cagnotte','projects','moneyDate','budgetHistory','budgetTimeline','pilotFrozen','projectsFrozen','pilotSnapshot','projectsSnapshot','deleted','budgetStart'];
 let deviceId = (()=>{ try{ let d=localStorage.getItem('bad2_device'); if(!d){ d='d'+Math.random().toString(36).slice(2,10); localStorage.setItem('bad2_device',d); } return d; }catch(_){ return 'd'+Math.random().toString(36).slice(2,10); } })();
 let pushTimer=null, pollTimer=null, applyingRemote=false, syncChan=null, lastAppliedStamp=null, syncErrShown=false, visBound=false;
 // État affiché par la pastille de connexion/synchro (voir renderAppbar + openConnStatusHelp).
@@ -1481,6 +1487,17 @@ function renderSetupBanner(){
     $('#cancelDeletionBtn').onclick=()=>cancelPendingDeletion();
     return;
   }
+  // Budget pas encore démarré : on le rappelle partout, car tous les écrans afficheront des
+  // chiffres à 0 qui n'ont pas le sens qu'on leur prête spontanément. Sur Pilotage, non : c'est
+  // justement là qu'on prépare le budget en attendant.
+  if(!budgetStarted(0) && current!=='pilotage'){
+    el.innerHTML=`<div class="setup-banner" style="background:var(--ink-2)">
+      <span>🚦 Budget à partir du ${budgetStartDateLabel()}</span>
+      <span class="cta" id="startBannerBtn">Modifier →</span>
+    </div>`;
+    $('#startBannerBtn').onclick=()=>openBudgetStartEditor();
+    return;
+  }
   if(current==='pilotage'){ el.innerHTML=''; return; }
   if(needsSetup()){
     // Le tout premier réglage d'un compte neuf : on le fait clignoter, c'est la base sans
@@ -1825,6 +1842,24 @@ function renderVue(){
     else if(days===1){ mdTitle = "Votre Money Date, c'est demain !"; mdSub = "Préparez-vous à deux"; }
     else if(days===0){ mdTitle = "C'est aujourd'hui votre Money Date !"; mdSub = "Votre rendez-vous financier à deux, en 6 étapes"; }
     else { mdTitle = "C'est l'heure de votre Money Date"; mdSub = "Votre rendez-vous financier à deux, en 6 étapes"; }
+  }
+  // Budget pas encore démarré : afficher des compteurs à 0 laisserait croire à un mois sans
+  // dépense, alors que le mois ne compte tout simplement pas encore. On le dit franchement.
+  if(!budgetStarted(0)){
+    return `
+    <div style="padding-top:6px">
+      <span class="pill">Vos dépenses courantes</span>
+      <h1 class="hero-title" style="font-size:27px; margin-top:10px">${monthLabel()}</h1>
+    </div>
+    <div class="card" style="margin-top:16px; text-align:center; background:linear-gradient(135deg,var(--blush),var(--card))">
+      <div style="font-size:34px; line-height:1">🚦</div>
+      <div style="font-family:var(--serif); font-size:19px; font-weight:600; margin:10px 0 6px">Votre budget démarre le ${budgetStartDateLabel()}</div>
+      <p class="small" style="color:var(--ink-2); line-height:1.6; margin:0 auto; max-width:340px">D'ici là, rien n'est compté : ni dépense, ni report d'enveloppe, ni projet. Vous pouvez continuer à préparer votre budget tranquillement.</p>
+      <div class="row" style="gap:8px; margin-top:16px">
+        <button class="btn btn-soft btn-sm" data-go="pilotage" style="flex:1">Ajuster notre budget</button>
+        <button class="btn btn-ghost btn-sm" id="vueGoStart" style="flex:1">Changer la date</button>
+      </div>
+    </div>`;
   }
   return `
   <div style="padding-top:6px">
@@ -2324,11 +2359,34 @@ function monthKeyToOffset(key){
   const n=new Date();
   return (y-n.getFullYear())*12 + (m-n.getMonth());
 }
+/* ---- Date de démarrage du budget ----
+   Un seul repère, partagé par le couple : rien ne compte avant. Sans lui, chaque élément se
+   mettait à compter au moment où il était créé — une enveloppe activée le 30 du mois se voyait
+   créditer une dotation mensuelle entière, et reportait cet argent fantôme au mois suivant.
+   null = jamais défini : l'app se comporte alors exactement comme avant. */
+function budgetStartOffset(){ return S.budgetStart ? monthKeyToOffset(S.budgetStart) : null; }
+// Le budget est-il en vigueur sur ce mois ? Toujours vrai tant qu'aucune date n'est fixée.
+function budgetStarted(offset=0){ const s=budgetStartOffset(); return s===null || offset>=s; }
+function monthKeyOfDate(dateStr){ const d=new Date(dateStr); return `${d.getFullYear()}-${d.getMonth()}`; }
+function dateBeforeBudgetStart(dateStr){
+  const s=budgetStartOffset(); if(s===null || !dateStr) return false;
+  return monthKeyToOffset(monthKeyOfDate(dateStr)) < s;
+}
+// « 1ᵉʳ septembre 2026 » : le jour est toujours le 1er, un budget démarrant en cours de mois
+// étant précisément ce qu'on cherche à éviter.
+function budgetStartDateLabel(){
+  const s=budgetStartOffset(); if(s===null) return '';
+  const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+s);
+  return `1ᵉʳ ${MOIS[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
+}
 // Solde cumulé à la FIN du mois `offset`. null si la catégorie n'est pas en report.
 function catRolloverBalance(catId, offset=0){
   const c=S.categories.find(x=>x.id===catId);
   if(!c || !c.rollover) return null;
-  const start=monthKeyToOffset(c.rolloverFrom);
+  // La date de démarrage globale est un plancher : une enveloppe ne peut jamais compter avant,
+  // mais une enveloppe créée plus tard garde bien son propre mois de départ.
+  const floor=budgetStartOffset();
+  const start=floor===null ? monthKeyToOffset(c.rolloverFrom) : Math.max(monthKeyToOffset(c.rolloverFrom), floor);
   const open=c.rolloverStart||0;
   if(offset<start) return open;
   // Garde-fou : un mois d'activation aberrant (données corrompues, import) ne doit pas
@@ -2894,6 +2952,16 @@ function renderReglages(){
     <p class="hero-sub">Tout ce qui se règle une fois, pour avancer l'esprit léger.</p>
   </div>
 
+  <div class="section-title">Votre budget</div>
+  <div class="card">
+    <button class="menu-row" id="editBudgetStart" style="border:none; width:100%; text-align:left; background:none">
+      <div class="row" style="gap:12px"><div class="mi">🚦</div>
+        <div><div class="nm">Notre budget démarre</div>
+        <div class="sub">${S.budgetStart?`${monthLabel(budgetStartOffset())} — rien n'est compté avant`:'Pas encore défini — sera fixé à votre première validation'}</div></div>
+      </div><span class="chev">→</span>
+    </button>
+  </div>
+
   <div class="section-title">Votre couple</div>
   <div class="card">
     <div class="between" style="padding-bottom:14px; border-bottom:1px solid var(--line)">
@@ -3242,6 +3310,9 @@ function renderPilotage(){
   <div class="card-soft" style="margin-top:14px">
     <b class="small">📅 Date d'effet des changements</b>
     <div class="seg" style="display:flex; width:100%; margin-top:8px"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
+    ${!S.budgetStart?`<div id="effStartNote" style="margin-top:9px; background:color-mix(in srgb,var(--ok) 11%, var(--card)); border:1px solid color-mix(in srgb,var(--ok) 34%, transparent); border-radius:11px; padding:9px 11px">
+      <p class="small" style="margin:0; line-height:1.5">Cette première validation fixe le <b>démarrage de votre budget</b> : <b id="effStartMonth">${monthLabel(0)}</b>. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique.</p>
+    </div>`:''}
   </div>
 
   <div class="row" style="gap:10px; margin-top:16px">
@@ -3430,6 +3501,7 @@ function bindScreen(screen){
   document.querySelectorAll('[data-projinfo]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openProjectionInfo(); }));
 
   if(screen==="vue"){
+    const vgs=$('#vueGoStart'); if(vgs) vgs.onclick=()=>openBudgetStartEditor();
     document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{S.ui.period=b.dataset.period; save(); go('vue');}));
     const md=$('#mdCard'); if(md) md.onclick=()=>{
       if(S.moneyDate.doneSteps.length===0 && !S.moneyDate.nextDate){ openMoneyDateSchedule(); return; }
@@ -3493,6 +3565,9 @@ function saveExpense(){
   if(!draft.cat){ toast("Choisissez une catégorie","🏷️"); return; }
   if(!draft.merchant && !draft.desc.trim()){ toast("Ajoutez un commerce ou une description","✏️"); return; }
   if(draft.cat==='__cagnotte__' && amt>S.cagnotte.balance){ toast("Le montant dépasse le solde de la cagnotte commune","👛"); return; }
+  // Rien ne compte avant le démarrage : accepter une dépense antérieure la rendrait invisible
+  // dans tous les calculs, ce qui serait pire que de la refuser franchement.
+  if(dateBeforeBudgetStart(draft.date)){ toast(`Votre budget démarre le ${budgetStartDateLabel()} — impossible d'enregistrer une dépense avant`,"🚦"); return; }
   const isTransfer=/transfert|virement/i.test(draft.desc);
   const isCagnotte=draft.cat==='__cagnotte__';
   const merchant = draft.merchant ? S.merchants.find(m=>m.id===draft.merchant) : null;
@@ -4127,7 +4202,40 @@ function bindMoneyDate(){
   }));
 }
 
+// Décale le mois de démarrage du budget. Tout en dépend (reports, disponible projets,
+// instantanés, graphiques) : il n'y a donc rien à recalculer à la main, seulement à
+// prévenir clairement de ce que le nouveau mois implique.
+function openBudgetStartEditor(){
+  const cur=budgetStartOffset();
+  const choix=[]; for(let o=-6;o<=6;o++) choix.push(o);
+  openModal(`<h3>🚦 Notre budget démarre</h3>
+    <p class="small muted" style="margin-bottom:14px">Rien n'est compté avant ce mois : ni dépense, ni report d'enveloppe, ni mensualité de projet. C'est le repère commun de votre couple.</p>
+    <div class="field"><label>Mois de démarrage</label>
+      <select class="select" id="bsMonth">${choix.map(o=>`<option value="${o}" ${cur===o?'selected':''}>${monthLabel(o)}${o===0?' (ce mois-ci)':''}</option>`).join('')}</select>
+    </div>
+    <p class="small muted" id="bsWarn" style="margin:-4px 2px 12px"></p>
+    <button class="btn btn-primary" id="bsSave">Enregistrer</button>`, true);
+  const sel=$('#bsMonth'), warn=$('#bsWarn');
+  const maj=()=>{
+    const o=+sel.value;
+    const perdues=S.expenses.filter(x=>dateBeforeStart(x.date,o)).length;
+    warn.innerHTML = perdues
+      ? `⚠️ ${perdues} dépense${perdues>1?'s':''} déjà enregistrée${perdues>1?'s':''} avant ${monthLabel(o)} ne compteront plus dans vos budgets. Elles restent visibles dans l'Historique.`
+      : `Aucune dépense enregistrée avant ${monthLabel(o)} : rien ne sera affecté.`;
+  };
+  sel.onchange=maj; maj();
+  $('#bsSave').onclick=()=>{
+    S.budgetStart=annualMonthKey(+sel.value);
+    save(); closeModal(); go(current); toast(`Budget démarré au ${budgetStartDateLabel()} 🚦`,"✓");
+  };
+}
+// Variante de dateBeforeBudgetStart pour un mois candidat (avant de l'enregistrer).
+function dateBeforeStart(dateStr, offset){
+  if(!dateStr) return false;
+  return monthKeyToOffset(monthKeyOfDate(dateStr)) < offset;
+}
 function bindReglages(){
+  const bs=$('#editBudgetStart'); if(bs) bs.onclick=()=>openBudgetStartEditor();
   const cp=$('#copyC2'); if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code couple copié 📋");};
   const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`,'_blank'); toast("WhatsApp ouvert 💬"); };
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`); toast("SMS prêt ✉️"); };
@@ -4343,8 +4451,11 @@ function bindPilotage(){
   document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
 
   const en=$('#effNow'), enx=$('#effNext');
-  if(en) en.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } en.classList.add('on'); enx.classList.remove('on');};
-  if(enx) enx.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } enx.classList.add('on'); en.classList.remove('on');};
+  // Tant que le démarrage n'est pas fixé, le sélecteur annonce en direct le mois concerné :
+  // c'est au moment de ce choix que se joue l'erreur qu'on cherche à éviter.
+  const majStartNote=(futur)=>{ const el=$('#effStartMonth'); if(el) el.textContent=monthLabel(futur?1:0); };
+  if(en) en.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } en.classList.add('on'); enx.classList.remove('on'); majStartNote(false);};
+  if(enx) enx.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } enx.classList.add('on'); en.classList.remove('on'); majStartNote(true);};
 
   const vb=$('#validBudget'); if(vb) vb.onclick=()=>{
     // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
@@ -4354,6 +4465,9 @@ function bindPilotage(){
     if(S.settings.mode!=='fixe') S.settings.fixed={lui:0, elle:0};
     if(S.settings.mode!=='net'){ markDeleted(S.charges.filter(c=>c.scope==='lui'||c.scope==='elle').map(c=>c.id)); S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle'); }
     const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
+    // Le démarrage n'est fixé qu'à la PREMIÈRE validation : sinon, chaque ajustement futur
+    // choisi en « Mois prochain » repousserait le début de tout le budget d'un mois.
+    if(!S.budgetStart) S.budgetStart=annualMonthKey(eff==='futur'?1:0);
     S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
     // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
     snapshotBudgets(eff==='futur'?1:0);
