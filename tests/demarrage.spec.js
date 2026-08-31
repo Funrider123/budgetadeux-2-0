@@ -69,14 +69,17 @@ test.describe('Le mois de démarrage commande le report', () => {
 });
 
 test.describe('La première validation fixe le démarrage', () => {
-  /** Valide via la double confirmation. offset 0 = ce mois-ci, sinon on choisit le mois. */
+  /** Valide depuis les deux boutons de l'écran. La confirmation n'apparaît qu'à la première fois. */
   async function valider(page, offset) {
     await page.evaluate(() => go('pilotage'));
-    await page.click('#validBudget');
-    if (offset === 0) { await page.click('#vbNow'); return; }
-    await page.click('#vbLater');
-    await page.selectOption('#vbMonth', String(offset));
-    await page.click('#vbSave');
+    const premiere = await page.evaluate(() => !S.budgetStart);
+    if (offset === 0) await page.click('#validBudgetNow');
+    else {
+      await page.click('#validBudgetLater');
+      await page.selectOption('#vbMonth', String(offset));
+      await page.click('#vbSave');
+    }
+    if (premiere) await page.click('#vbGo');
   }
 
   test('valider pour un mois futur démarre le budget à ce mois-là', async ({ page }) => {
@@ -113,23 +116,45 @@ test.describe('La première validation fixe le démarrage', () => {
     expect(await page.evaluate(() => S.budgetStart)).toBe(premier);
   });
 
-  test('la confirmation annonce le mois en cours et prévient que c\'est le démarrage', async ({ page }) => {
+  test('les deux options sont visibles AVANT de s\'engager, à même l\'écran', async ({ page }) => {
     await installer(page);
     await page.evaluate(() => go('pilotage'));
-    await page.click('#validBudget');
+    // Le choix ne doit plus être caché derrière un clic sur « Valider ».
+    await expect(page.locator('#validBudgetNow')).toBeVisible();
+    await expect(page.locator('#validBudgetLater')).toBeVisible();
+    expect(await page.innerText('#validBudgetNow')).toContain(await page.evaluate(() => monthLabel(0)));
+    // L'avertissement sur la première validation est lui aussi lisible d'emblée.
+    expect(await page.innerText('#screen')).toContain('première validation');
+  });
+
+  test('la première validation demande confirmation', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('pilotage'));
+    await page.click('#validBudgetNow');
     const txt = await page.innerText('#mb');
-    expect(txt).toContain(await page.evaluate(() => monthLabel(0)));
-    expect(txt).toContain('première validation');
+    expect(txt).toContain('Démarrer votre budget');
+    // Tant qu'on n'a pas confirmé, rien n'est validé.
+    expect(await page.evaluate(() => S.budgetStart)).toBeNull();
   });
 
   test('annuler la confirmation ne valide rien', async ({ page }) => {
     await installer(page);
     await page.evaluate(() => go('pilotage'));
-    await page.click('#validBudget');
+    await page.click('#validBudgetNow');
     await page.click('#vbCancel');
     const r = await page.evaluate(() => ({ start: S.budgetStart, gele: S.pilotFrozen }));
     expect(r.start).toBeNull();
     expect(r.gele).toBe(false);
+  });
+
+  test('une fois le démarrage fixé, valider ne demande plus de confirmation', async ({ page }) => {
+    await installer(page);
+    await valider(page, 0);
+    await page.evaluate(() => { S.pilotFrozen = false; save(); go('pilotage'); });
+    await page.click('#validBudgetNow');
+    // Aucune fenêtre : la validation s'applique directement.
+    await expect(page.locator('#mb')).toHaveCount(0);
+    expect(await page.evaluate(() => S.pilotFrozen)).toBe(true);
   });
 });
 

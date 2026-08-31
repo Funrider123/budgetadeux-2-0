@@ -16,6 +16,7 @@ async function budgetValide(page) {
   });
   await page.evaluate(() => {
     S.pilotFrozen = true; S.projectsFrozen = true;
+    S.budgetStart = annualMonthKey(0); // un budget déjà validé a forcément un mois de démarrage
     S.pilotSnapshot = {
       salaries: { ...S.settings.salaries }, mode: S.settings.mode,
       custom: { ...S.settings.custom }, fixed: { ...S.settings.fixed },
@@ -48,8 +49,7 @@ test.describe('Un seul verrou pour tout l\'écran', () => {
       S.categories.find(c => c.id === 'courses').budget = 480;
       S.projects[0].mensuel = 350;
     });
-    await page.click('#validBudget');
-    await page.click('#vbNow'); // double confirmation : « pour ce mois-ci »
+    await page.click('#validBudgetNow');
 
     const apres = await page.evaluate(() => ({
       budget: S.pilotFrozen, projets: S.projectsFrozen,

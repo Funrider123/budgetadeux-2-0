@@ -3315,9 +3315,13 @@ function renderPilotage(){
   <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt(fixedShortfall)} ou réduisez vos charges/catégories.</p>
 
   ${!S.pilotFrozen?`
-  <div class="row" style="gap:10px; margin-top:16px">
-    <button class="btn btn-soft" id="validBudget" style="flex:1; width:auto">Valider le budget du mois ✓</button>
-    <button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto; display:${pilotHasChanges()?'':'none'}">Annuler nos changements</button>
+  <div style="margin-top:16px">
+    ${!S.budgetStart?`<div style="background:color-mix(in srgb,var(--ok) 11%, var(--card)); border:1px solid color-mix(in srgb,var(--ok) 34%, transparent); border-radius:12px; padding:11px 13px; margin-bottom:12px">
+      <p class="small" style="margin:0; line-height:1.55">🚦 Votre <b>première validation</b> fixe le démarrage de votre budget. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique.</p>
+    </div>`:''}
+    <button class="btn btn-primary" id="validBudgetNow" style="margin-bottom:9px">Valider pour ce mois-ci <span style="font-weight:600; opacity:.85; font-size:12.5px">${monthLabel(0)}</span></button>
+    <button class="btn btn-soft" id="validBudgetLater" style="margin-bottom:9px">Valider à partir d'un autre mois →</button>
+    <button class="btn btn-ghost btn-sm" id="cancelBudget" style="width:100%; display:${pilotHasChanges()?'':'none'}">Annuler nos changements</button>
   </div>`:''}
   </div>
   `;
@@ -4450,7 +4454,8 @@ function bindPilotage(){
   }));
   document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
 
-  const vb=$('#validBudget'); if(vb) vb.onclick=()=>openValidateBudget();
+  const vbn=$('#validBudgetNow'); if(vbn) vbn.onclick=()=>validateBudgetFor(0);
+  const vbl=$('#validBudgetLater'); if(vbl) vbl.onclick=()=>openValidateMonthPicker();
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
   const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>cancelBudgetChanges();
 }
@@ -4483,33 +4488,31 @@ function applyBudgetValidation(offset){
   toast(offset===0?"Budget validé ✓ — vous êtes prêts !":`Budget validé pour ${monthLabel(offset)} ✓`,"❤️");
   go('pilotage');
 }
-// Double confirmation à la validation. Le mois d'effet se choisit ICI plutôt qu'en amont :
-// c'est au moment de s'engager qu'on se pose la question, et ça évite d'avoir deux endroits
-// qui décident de la même chose.
-function openValidateBudget(){
-  const premiere=!S.budgetStart;
-  openModal(`<h3>Valider votre budget</h3>
-    <p class="small muted" style="margin:6px 0 16px">À partir de quand ces changements doivent-ils s'appliquer ?</p>
-    ${premiere?`<div style="background:color-mix(in srgb,var(--ok) 11%, var(--card)); border:1px solid color-mix(in srgb,var(--ok) 34%, transparent); border-radius:11px; padding:10px 12px; margin-bottom:14px">
-      <p class="small" style="margin:0; line-height:1.5">C'est votre <b>première validation</b> : elle fixe le démarrage de votre budget. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique.</p>
-    </div>`:''}
-    <button class="btn btn-primary" id="vbNow" style="margin-bottom:10px">Oui, pour ce mois-ci<br><span style="font-weight:600; opacity:.85; font-size:12px">${monthLabel(0)}</span></button>
-    <button class="btn btn-soft" id="vbLater" style="margin-bottom:10px">À partir d'un autre mois →</button>
+// Le choix du mois se fait directement sur l'écran (deux boutons), pas dans une fenêtre qui
+// n'apparaîtrait qu'après avoir cliqué « Valider » — trop tard pour éclairer la décision.
+// Ne reste ici que ce qui mérite une fenêtre : le choix d'un mois précis, et la confirmation
+// de la PREMIÈRE validation, seule vraiment lourde de conséquences (elle fixe le démarrage).
+function validateBudgetFor(offset){
+  if(S.budgetStart){ applyBudgetValidation(offset); return; } // simple ajustement : rien à confirmer
+  openModal(`<h3>🚦 Démarrer votre budget en ${monthLabel(offset)} ?</h3>
+    <p class="small muted" style="margin:6px 0 16px">C'est votre première validation : elle fixe le démarrage de votre budget. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique. Vous pourrez toujours changer cette date dans les Réglages.</p>
+    <button class="btn btn-primary" id="vbGo" style="margin-bottom:10px">Démarrer en ${monthLabel(offset)}</button>
     <button class="btn btn-ghost btn-sm" id="vbCancel" style="width:100%">Annuler</button>`, true);
-  $('#vbNow').onclick=()=>{ closeModal(); applyBudgetValidation(0); };
+  $('#vbGo').onclick=()=>{ closeModal(); applyBudgetValidation(offset); };
   $('#vbCancel').onclick=closeModal;
-  $('#vbLater').onclick=()=>{
-    const choix=[]; for(let o=1;o<=12;o++) choix.push(o);
-    openModal(`<h3>À partir de quel mois ?</h3>
-      <p class="small muted" style="margin:6px 0 16px">Votre budget actuel reste en vigueur jusque-là. ${premiere?'Ce mois deviendra le démarrage de votre budget.':''}</p>
-      <div class="field"><label>Mois d'effet</label>
-        <select class="select" id="vbMonth">${choix.map(o=>`<option value="${o}">${monthLabel(o)}</option>`).join('')}</select>
-      </div>
-      <button class="btn btn-primary" id="vbSave" style="margin-bottom:10px">Valider pour ce mois</button>
-      <button class="btn btn-ghost btn-sm" id="vbBack" style="width:100%">← Retour</button>`, true);
-    $('#vbSave').onclick=()=>{ const o=+$('#vbMonth').value; closeModal(); applyBudgetValidation(o); };
-    $('#vbBack').onclick=()=>{ closeModal(); setTimeout(openValidateBudget, 120); };
-  };
+}
+// Sélecteur de mois, pour valider à partir d'un mois autre que celui en cours.
+function openValidateMonthPicker(){
+  const choix=[]; for(let o=1;o<=12;o++) choix.push(o);
+  openModal(`<h3>À partir de quel mois ?</h3>
+    <p class="small muted" style="margin:6px 0 16px">Votre budget actuel reste en vigueur jusque-là.</p>
+    <div class="field"><label>Mois d'effet</label>
+      <select class="select" id="vbMonth">${choix.map(o=>`<option value="${o}">${monthLabel(o)}</option>`).join('')}</select>
+    </div>
+    <button class="btn btn-primary" id="vbSave" style="margin-bottom:10px">Valider pour ce mois</button>
+    <button class="btn btn-ghost btn-sm" id="vbBack" style="width:100%">Annuler</button>`, true);
+  $('#vbSave').onclick=()=>{ const o=+$('#vbMonth').value; closeModal(); setTimeout(()=>validateBudgetFor(o), 120); };
+  $('#vbBack').onclick=closeModal;
 }
 // Restaure revenus/charges/catégories/mensualités au dernier budget validé (S.pilotSnapshot
 // + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Simulation budgétaire
