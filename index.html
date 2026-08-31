@@ -874,7 +874,12 @@ function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} 
    ============================================================ */
 const $ = (s,el=document)=>el.querySelector(s);
 // Arrondi au centime : évite les 29.989999999 des additions en virgule flottante.
-const round2 = n => Math.round((+n||0)*100)/100;
+// Le « +0 » final neutralise le zéro négatif : Math.round(-1e-13*100)/100 vaut -0 en JS, et
+// (-0).toLocaleString('fr-FR') affiche « -0 » — un montant nul apparaissait donc en « -0 € ».
+const round2 = n => { const v=Math.round((+n||0)*100)/100; return v===0 ? 0 : v; };
+// En dessous d'un demi-centime, un écart n'est plus affichable : c'est un résidu de calcul en
+// virgule flottante, pas un vrai déséquilibre. Sert à comparer des montants à zéro.
+const SOLDE_EPSILON = 0.005;
 // Un montant affiche ses centimes UNIQUEMENT s'il en a : 170 € reste « 170 € »,
 // 29,99 € s'affiche « 29,99 € ». Une seule règle sur tous les écrans, pour que ce qui
 // est affiché soit toujours exactement ce qui est compté — sur une app d'argent, lire
@@ -888,7 +893,7 @@ const fmt = n => {
 // Estimations (moyennes mensuelles, projections « à ce rythme », budget hebdomadaire) :
 // toujours arrondi. Ce ne sont pas des montants constatés mais des extrapolations ;
 // y afficher des centimes donnerait une précision que le chiffre n'a pas.
-const fmtEst = n => Math.round(+n||0).toLocaleString('fr-FR')+" €";
+const fmtEst = n => { const v=Math.round(+n||0); return (v===0?0:v).toLocaleString('fr-FR')+" €"; };
 // Valeur pré-remplie d'un champ montant : virgule française, sans « ,00 » inutile.
 // Sans risque puisque parseAmt relit indifféremment la virgule ou le point.
 const inputAmt = n => String(round2(n)).replace('.', ',');
@@ -3136,12 +3141,15 @@ function disponibleProjetsCard(reste){
 // catégories − épargne projets) : à 0 budget équilibré, négatif déficit (clignote),
 // positif excédent.
 function budgetSoldeInfo(solde){
-  if(solde===0) return {label:'⚖️ Budget équilibré', color:'#fff', bg:'var(--ok)', blink:false,
-    tip:''};
+  // Tolérance obligatoire : un budget pile à l'équilibre ne tombe presque jamais sur un zéro
+  // exact en virgule flottante (1541 − 339,90 − 901,10 − 300 donne −1,1e-13). Sans elle, le
+  // meilleur des cas s'affichait « ⚠️ Budget en déficit −0 € », en clignotant.
+  if(Math.abs(solde)<SOLDE_EPSILON) return {label:'⚖️ Budget équilibré', color:'#fff', bg:'var(--ok)', blink:false,
+    tip:'🎯 Tout est réparti au centime près : rien ne dort, rien ne manque.', sign:''};
   if(solde<0) return {label:'⚠️ Budget en déficit', color:'var(--danger)', bg:'#fff', blink:true,
-    tip:''};
+    tip:'', sign:''};
   return {label:'✅ Budget en excédent', color:'#fff', bg:'transparent', blink:false,
-    tip:'💡 Vous pouvez augmenter une catégorie, ajouter à un projet, ou verser moins pour revenir à l\'équilibre.'};
+    tip:'💡 Vous pouvez augmenter une catégorie, ajouter à un projet, ou verser moins pour revenir à l\'équilibre.', sign:'+'};
 }
 // Récapitulatif des grosses rubriques du mois, pour rendre immédiatement visible
 // un déséquilibre (notamment quand l'épargne allouée aux projets dépasse le disponible,
@@ -3159,7 +3167,7 @@ function budgetRecapCard(){
     <div class="between small" style="padding:8px 0; opacity:.92; border-top:1px solid rgba(255,255,255,.2)"><span>− Projets (alloué)</span><span style="font-weight:700" id="recapProj">${fmt(proj)}</span></div>
     <div class="between ${info.blink?'blink-danger':''}" style="padding:12px 14px; margin-top:10px; border-radius:12px; background:${info.bg}; ${info.bg==='transparent'?'border-top:2px solid rgba(255,255,255,.35); padding-left:0; padding-right:0':''}" id="recapRow">
       <b class="small" id="recapLabel" style="color:${info.color}">${info.label}</b>
-      <b id="recapSolde" style="font-family:var(--serif); font-size:22px; color:${info.color}">${solde>0?'+':''}${fmt(solde)}</b>
+      <b id="recapSolde" style="font-family:var(--serif); font-size:22px; color:${info.color}">${info.sign}${fmt(solde)}</b>
     </div>
     <p class="small" style="opacity:.85; text-align:center; margin-top:10px; display:${info.tip?'block':'none'}" id="recapTip">${info.tip}</p>
   </div>`;
@@ -4310,7 +4318,7 @@ function recalcPilotage(){
     else { rRow.style.borderTop='none'; rRow.style.paddingLeft='14px'; rRow.style.paddingRight='14px'; }
   }
   const rLabel=$('#recapLabel'); if(rLabel){ rLabel.textContent=info.label; rLabel.style.color=info.color; }
-  const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${solde>0?'+':''}${fmt(solde)}`; rSolde.style.color=info.color; }
+  const rSolde=$('#recapSolde'); if(rSolde){ rSolde.textContent=`${info.sign}${fmt(solde)}`; rSolde.style.color=info.color; }
   const rTip=$('#recapTip'); if(rTip){ rTip.style.display=info.tip?'block':'none'; rTip.textContent=info.tip; }
 
   // Cartes personne (salaire + charges perso + contribution)
