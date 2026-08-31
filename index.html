@@ -3307,14 +3307,6 @@ function renderPilotage(){
   <p class="small" style="color:var(--danger); margin-top:10px; text-align:center; display:${fixedShortfall>0?'block':'none'}" id="fixedWarn">⚠️ Vos contributions fixes (${fmt(fixedTotal)}) ne couvrent pas ce total — augmentez-les de ${fmt(fixedShortfall)} ou réduisez vos charges/catégories.</p>
 
   ${!S.pilotFrozen?`
-  <div class="card-soft" style="margin-top:14px">
-    <b class="small">📅 Date d'effet des changements</b>
-    <div class="seg" style="display:flex; width:100%; margin-top:8px"><button class="on" style="flex:1" id="effNow">Immédiat</button><button style="flex:1" id="effNext">Mois prochain</button></div>
-    ${!S.budgetStart?`<div id="effStartNote" style="margin-top:9px; background:color-mix(in srgb,var(--ok) 11%, var(--card)); border:1px solid color-mix(in srgb,var(--ok) 34%, transparent); border-radius:11px; padding:9px 11px">
-      <p class="small" style="margin:0; line-height:1.5">Cette première validation fixe le <b>démarrage de votre budget</b> : <b id="effStartMonth">${monthLabel(0)}</b>. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique.</p>
-    </div>`:''}
-  </div>
-
   <div class="row" style="gap:10px; margin-top:16px">
     <button class="btn btn-soft" id="validBudget" style="flex:1; width:auto">Valider le budget du mois ✓</button>
     <button class="btn btn-soft" id="cancelBudget" style="flex:1; width:auto; display:${pilotHasChanges()?'':'none'}">Annuler nos changements</button>
@@ -4450,43 +4442,66 @@ function bindPilotage(){
   }));
   document.querySelectorAll('[data-editproject]').forEach(b=>b.addEventListener('click',ev=>{ ev.stopPropagation(); openEditProject(b.dataset.editproject,'pilotage'); }));
 
-  const en=$('#effNow'), enx=$('#effNext');
-  // Tant que le démarrage n'est pas fixé, le sélecteur annonce en direct le mois concerné :
-  // c'est au moment de ce choix que se joue l'erreur qu'on cherche à éviter.
-  const majStartNote=(futur)=>{ const el=$('#effStartMonth'); if(el) el.textContent=monthLabel(futur?1:0); };
-  if(en) en.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } en.classList.add('on'); enx.classList.remove('on'); majStartNote(false);};
-  if(enx) enx.onclick=()=>{ if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; } enx.classList.add('on'); en.classList.remove('on'); majStartNote(true);};
-
-  const vb=$('#validBudget'); if(vb) vb.onclick=()=>{
-    // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
-    // pour permettre de comparer librement. À la validation finale, on ne garde que ce qui
-    // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
-    if(S.settings.mode!=='custom') S.settings.custom={lui:50, elle:50};
-    if(S.settings.mode!=='fixe') S.settings.fixed={lui:0, elle:0};
-    if(S.settings.mode!=='net'){ markDeleted(S.charges.filter(c=>c.scope==='lui'||c.scope==='elle').map(c=>c.id)); S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle'); }
-    const eff=$('#effNext').classList.contains('on')?'futur':'immediate';
-    // Le démarrage n'est fixé qu'à la PREMIÈRE validation : sinon, chaque ajustement futur
-    // choisi en « Mois prochain » repousserait le début de tout le budget d'un mois.
-    if(!S.budgetStart) S.budgetStart=annualMonthKey(eff==='futur'?1:0);
-    S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(eff==='futur'?1:0)}`,effect:eff});
-    // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
-    snapshotBudgets(eff==='futur'?1:0);
-    if(!S.moneyDate.nextDate){ S.moneyDate.nextDate=addMonths(new Date(),1).toISOString().slice(0,10); }
-    S.pilotSnapshot={
-      salaries:{...S.settings.salaries}, mode:S.settings.mode, custom:{...S.settings.custom}, fixed:{...S.settings.fixed},
-      charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
-      categories:S.categories.map(c=>({id:c.id, budget:c.budget}))
-    };
-    // Un seul "Modifier" pour toute la page : valider le budget verrouille aussi les
-    // mensualités de projets, plutôt que de laisser un deuxième cadenas indépendant.
-    S.projectsSnapshot={};
-    S.projects.forEach(p=>{ S.projectsSnapshot[p.id]={mensuel:p.mensuel||0, months:p.months||0}; });
-    S.pilotFrozen=true; S.projectsFrozen=true;
-    save(); toast("Budget validé ✓ — vous êtes prêts !","❤️");
-    go('pilotage');
-  };
+  const vb=$('#validBudget'); if(vb) vb.onclick=()=>openValidateBudget();
   const uf=$('#unfreezeBudget'); if(uf) uf.onclick=()=>{ S.pilotFrozen=false; S.projectsFrozen=false; save(); go('pilotage'); };
   const cb=$('#cancelBudget'); if(cb) cb.onclick=()=>cancelBudgetChanges();
+}
+// Applique réellement le budget, pour le mois d'effet choisi dans la confirmation.
+function applyBudgetValidation(offset){
+  // Pendant la simulation, tous les chiffres saisis (dans chaque mode) restent en mémoire
+  // pour permettre de comparer librement. À la validation finale, on ne garde que ce qui
+  // sert réellement au mode choisi : le reste est du "brouillon" qu'on peut nettoyer.
+  if(S.settings.mode!=='custom') S.settings.custom={lui:50, elle:50};
+  if(S.settings.mode!=='fixe') S.settings.fixed={lui:0, elle:0};
+  if(S.settings.mode!=='net'){ markDeleted(S.charges.filter(c=>c.scope==='lui'||c.scope==='elle').map(c=>c.id)); S.charges=S.charges.filter(c=>c.scope!=='lui' && c.scope!=='elle'); }
+  // Le démarrage n'est fixé qu'à la PREMIÈRE validation : sinon, chaque ajustement ultérieur
+  // appliqué à un mois futur repousserait le début de tout le budget.
+  if(!S.budgetStart) S.budgetStart=annualMonthKey(offset);
+  S.budgetHistory.unshift({date:iso(0),label:`Budget validé pour ${monthLabel(offset)}`,effect:offset===0?'immediate':'futur'});
+  // Mémorise le budget de chaque catégorie pour le mois d'effet (historique de la vue annuelle).
+  snapshotBudgets(offset);
+  if(!S.moneyDate.nextDate){ S.moneyDate.nextDate=addMonths(new Date(),1).toISOString().slice(0,10); }
+  S.pilotSnapshot={
+    salaries:{...S.settings.salaries}, mode:S.settings.mode, custom:{...S.settings.custom}, fixed:{...S.settings.fixed},
+    charges:S.charges.map(c=>({id:c.id, amount:c.amount})),
+    categories:S.categories.map(c=>({id:c.id, budget:c.budget}))
+  };
+  // Un seul "Modifier" pour toute la page : valider le budget verrouille aussi les
+  // mensualités de projets, plutôt que de laisser un deuxième cadenas indépendant.
+  S.projectsSnapshot={};
+  S.projects.forEach(p=>{ S.projectsSnapshot[p.id]={mensuel:p.mensuel||0, months:p.months||0}; });
+  S.pilotFrozen=true; S.projectsFrozen=true;
+  save();
+  toast(offset===0?"Budget validé ✓ — vous êtes prêts !":`Budget validé pour ${monthLabel(offset)} ✓`,"❤️");
+  go('pilotage');
+}
+// Double confirmation à la validation. Le mois d'effet se choisit ICI plutôt qu'en amont :
+// c'est au moment de s'engager qu'on se pose la question, et ça évite d'avoir deux endroits
+// qui décident de la même chose.
+function openValidateBudget(){
+  const premiere=!S.budgetStart;
+  openModal(`<h3>Valider votre budget</h3>
+    <p class="small muted" style="margin:6px 0 16px">À partir de quand ces changements doivent-ils s'appliquer ?</p>
+    ${premiere?`<div style="background:color-mix(in srgb,var(--ok) 11%, var(--card)); border:1px solid color-mix(in srgb,var(--ok) 34%, transparent); border-radius:11px; padding:10px 12px; margin-bottom:14px">
+      <p class="small" style="margin:0; line-height:1.5">C'est votre <b>première validation</b> : elle fixe le démarrage de votre budget. Rien ne sera compté avant — ni report d'enveloppe, ni projets, ni historique.</p>
+    </div>`:''}
+    <button class="btn btn-primary" id="vbNow" style="margin-bottom:10px">Oui, pour ce mois-ci<br><span style="font-weight:600; opacity:.85; font-size:12px">${monthLabel(0)}</span></button>
+    <button class="btn btn-soft" id="vbLater" style="margin-bottom:10px">À partir d'un autre mois →</button>
+    <button class="btn btn-ghost btn-sm" id="vbCancel" style="width:100%">Annuler</button>`, true);
+  $('#vbNow').onclick=()=>{ closeModal(); applyBudgetValidation(0); };
+  $('#vbCancel').onclick=closeModal;
+  $('#vbLater').onclick=()=>{
+    const choix=[]; for(let o=1;o<=12;o++) choix.push(o);
+    openModal(`<h3>À partir de quel mois ?</h3>
+      <p class="small muted" style="margin:6px 0 16px">Votre budget actuel reste en vigueur jusque-là. ${premiere?'Ce mois deviendra le démarrage de votre budget.':''}</p>
+      <div class="field"><label>Mois d'effet</label>
+        <select class="select" id="vbMonth">${choix.map(o=>`<option value="${o}">${monthLabel(o)}</option>`).join('')}</select>
+      </div>
+      <button class="btn btn-primary" id="vbSave" style="margin-bottom:10px">Valider pour ce mois</button>
+      <button class="btn btn-ghost btn-sm" id="vbBack" style="width:100%">← Retour</button>`, true);
+    $('#vbSave').onclick=()=>{ const o=+$('#vbMonth').value; closeModal(); applyBudgetValidation(o); };
+    $('#vbBack').onclick=()=>{ closeModal(); setTimeout(openValidateBudget, 120); };
+  };
 }
 // Restaure revenus/charges/catégories/mensualités au dernier budget validé (S.pilotSnapshot
 // + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Simulation budgétaire

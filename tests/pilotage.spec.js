@@ -49,6 +49,7 @@ test.describe('Un seul verrou pour tout l\'écran', () => {
       S.projects[0].mensuel = 350;
     });
     await page.click('#validBudget');
+    await page.click('#vbNow'); // double confirmation : « pour ce mois-ci »
 
     const apres = await page.evaluate(() => ({
       budget: S.pilotFrozen, projets: S.projectsFrozen,

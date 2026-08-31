@@ -69,46 +69,67 @@ test.describe('Le mois de démarrage commande le report', () => {
 });
 
 test.describe('La première validation fixe le démarrage', () => {
-  test('valider « Mois prochain » démarre le budget le mois prochain', async ({ page }) => {
-    await installer(page);
+  /** Valide via la double confirmation. offset 0 = ce mois-ci, sinon on choisit le mois. */
+  async function valider(page, offset) {
     await page.evaluate(() => go('pilotage'));
-    await page.click('#effNext');
     await page.click('#validBudget');
+    if (offset === 0) { await page.click('#vbNow'); return; }
+    await page.click('#vbLater');
+    await page.selectOption('#vbMonth', String(offset));
+    await page.click('#vbSave');
+  }
+
+  test('valider pour un mois futur démarre le budget à ce mois-là', async ({ page }) => {
+    await installer(page);
+    await valider(page, 1);
     const r = await page.evaluate(() => ({ start: S.budgetStart, attendu: annualMonthKey(1), report: catCarryIn('courses', 1) }));
     expect(r.start).toBe(r.attendu);
     expect(r.report).toBe(0);
   });
 
-  test('valider « Immédiat » démarre le budget ce mois-ci', async ({ page }) => {
+  test('valider pour ce mois-ci démarre le budget ce mois-ci', async ({ page }) => {
     await installer(page);
-    await page.evaluate(() => go('pilotage'));
-    await page.click('#validBudget'); // « Immédiat » est actif par défaut
+    await valider(page, 0);
     const r = await page.evaluate(() => ({ start: S.budgetStart, attendu: annualMonthKey(0) }));
+    expect(r.start).toBe(r.attendu);
+  });
+
+  test('on peut viser n\'importe quel mois, pas seulement le suivant', async ({ page }) => {
+    await installer(page);
+    await valider(page, 4);
+    const r = await page.evaluate(() => ({ start: S.budgetStart, attendu: annualMonthKey(4) }));
     expect(r.start).toBe(r.attendu);
   });
 
   test('une validation suivante ne repousse plus le démarrage', async ({ page }) => {
     await installer(page);
-    await page.evaluate(() => go('pilotage'));
-    await page.click('#validBudget');
+    await valider(page, 0);
     const premier = await page.evaluate(() => S.budgetStart);
 
-    // On rouvre, on ajuste, et on revalide en « Mois prochain ».
-    await page.evaluate(() => { S.pilotFrozen = false; save(); go('pilotage'); });
-    await page.click('#effNext');
-    await page.click('#validBudget');
+    // On rouvre, on ajuste, et on revalide pour un mois futur.
+    await page.evaluate(() => { S.pilotFrozen = false; save(); });
+    await valider(page, 2);
 
     expect(await page.evaluate(() => S.budgetStart)).toBe(premier);
   });
 
-  test('le mois annoncé suit le sélecteur, avant même de valider', async ({ page }) => {
+  test('la confirmation annonce le mois en cours et prévient que c\'est le démarrage', async ({ page }) => {
     await installer(page);
     await page.evaluate(() => go('pilotage'));
-    const moisImmediat = await page.textContent('#effStartMonth');
-    await page.click('#effNext');
-    const moisProchain = await page.textContent('#effStartMonth');
-    expect(moisImmediat).not.toBe(moisProchain);
-    expect(moisProchain).toBe(await page.evaluate(() => monthLabel(1)));
+    await page.click('#validBudget');
+    const txt = await page.innerText('#mb');
+    expect(txt).toContain(await page.evaluate(() => monthLabel(0)));
+    expect(txt).toContain('première validation');
+  });
+
+  test('annuler la confirmation ne valide rien', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('pilotage'));
+    await page.click('#validBudget');
+    await page.click('#vbCancel');
+    const r = await page.evaluate(() => ({ start: S.budgetStart, gele: S.pilotFrozen }));
+    expect(r.start).toBeNull();
+    expect(r.gele).toBe(false);
   });
 });
 
