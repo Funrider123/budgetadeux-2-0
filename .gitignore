@@ -7,3 +7,6 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Cache local du CLI Supabase
+supabase/.temp/
