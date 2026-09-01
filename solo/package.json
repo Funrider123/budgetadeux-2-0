@@ -1,0 +1,14 @@
+{
+  "name": "budget-a-soi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Budget à Soi — application de budget personnel (fichier unique index.html)",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}
