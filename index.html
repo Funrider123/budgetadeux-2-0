@@ -3709,6 +3709,7 @@ function bindProjets(){
   }));
   document.querySelectorAll('[data-projaddsave]').forEach(b=>b.addEventListener('click',()=>{
     const id=b.dataset.projaddsave; const ui=projUIState(id); const p=S.projects.find(x=>x.id===id); if(!p) return;
+    if(amtHasSpace(ui.amt)){ toast(AMT_SPACE_MSG,"💶"); return; }
     const amt=parseAmt(ui.amt);
     if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
     p.saved+=amt; if(!p.history) p.history=[];
@@ -3757,6 +3758,7 @@ function openCagnotteAddLine(){
     <div class="field"><label>Date</label><input class="input" type="date" id="cagAddDate" value="${iso(0)}"></div>
     <button class="btn btn-primary" id="cagAddSave">Ajouter</button>`, true);
   $('#cagAddSave').onclick=()=>{
+    if(amtHasSpace($('#cagAddAmt').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
     const amt=parseAmt($('#cagAddAmt').value);
     const desc=$('#cagAddDesc').value.trim();
     const date=$('#cagAddDate').value||iso(0);
@@ -3779,6 +3781,7 @@ function openEditCagnotteEntry(idx){
       <button class="btn btn-ghost btn-sm" id="cagEditDel" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">🗑 Supprimer</button>
     </div>`, true);
   $('#cagEditSave').onclick=()=>{
+    if(amtHasSpace($('#cagEditAmt').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
     const newAmt=parseAmt($('#cagEditAmt').value);
     const newDesc=$('#cagEditDesc').value.trim();
     const newDate=$('#cagEditDate').value||h.date;
@@ -3817,7 +3820,9 @@ function openEditProject(id, returnTo){
   calc();
   document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
-  $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim(); const t=parseAmt($('#npTarget').value); if(!nm||!t){toast("Nom et montant requis","🌟");return;}
+  $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim();
+    if(amtHasSpace($('#npTarget').value)||amtHasSpace($('#npSaved').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
+    const t=parseAmt($('#npTarget').value); if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
     const sv=parseAmt($('#npSaved').value), mo=+$('#npMonths').value||12;
     const willBeActive = id ? p.status==='actif' : true;
@@ -4364,11 +4369,27 @@ function recalcPilotage(){
 // virgule). Le slider, lui, reste au pas de 1 € : c'est un réglage grossier, et il écrase
 // donc volontairement les centimes quand on le fait glisser.
 function readAmt(el){ return Math.max(0, parseAmt(el.value)); }
+// Même règle qu'à la saisie d'une dépense (voir amtHasSpace) : sans elle, un loyer tapé
+// « 1 250 » s'enregistre à 1 €. Ces champs-ci écrivent à chaque frappe, il n'y a donc pas de
+// bouton où bloquer : on refuse d'enregistrer, on marque le champ en rouge, et on n'avertit
+// qu'au basculement vers l'invalide — un toast à chaque touche serait insupportable.
+// Le curseur (input range) traverse aussi ces gestionnaires, mais sa valeur n'a jamais
+// d'espace : il n'est donc jamais concerné.
+function amtFieldRejected(el){
+  if(!el) return false;
+  if(!amtHasSpace(el.value)){
+    if(el.dataset.amtBad){ delete el.dataset.amtBad; el.style.borderColor=''; }
+    return false;
+  }
+  if(!el.dataset.amtBad){ el.dataset.amtBad='1'; el.style.borderColor='var(--danger)'; toast(AMT_SPACE_MSG,"💶"); }
+  return true;
+}
 // Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
 // Important : on ne réajuste le max du slider QUE si c'est le champ € qui a changé
 // (on tape une valeur). Si c'est le slider lui-même qu'on glisse, on ne touche pas à
 // son échelle — sinon le curseur reste "collé" au milieu pendant tout le glissement.
 function onChargeInput(el){
+  if(amtFieldRejected(el)) return;
   const id=el.dataset.id, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
@@ -4378,6 +4399,7 @@ function onChargeInput(el){
   recalcPilotage();
 }
 function onCatInput(el){
+  if(amtFieldRejected(el)) return;
   const id=el.dataset.id, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
@@ -4387,6 +4409,7 @@ function onCatInput(el){
   recalcPilotage();
 }
 function onProjectInput(el){
+  if(amtFieldRejected(el)) return;
   const id=el.dataset.project, val=readAmt(el);
   const row=el.closest('.pilot-row');
   const numEl=row.querySelector('.pamt-input'), slEl=row.querySelector('.mini-slider');
@@ -4405,6 +4428,7 @@ function onProjectInput(el){
 // même mensualité fixe partagée (p.mensuel / pilotSim), mise à jour en direct de la carte et
 // de l'entête "Montant mensuel" sans recharger tout l'écran (pour ne pas couper le glisser du slider).
 function onProjectMensInput(el){
+  if(amtFieldRejected(el)) return;
   const id=el.dataset.projectmens, val=readAmt(el);
   const card=el.closest('[data-proj]');
   const numEl=card.querySelector('.pamt-input'), slEl=card.querySelector('.mini-slider');
@@ -4429,8 +4453,8 @@ function bindPilotage(){
   // Le salaire est une donnée connue (pas un curseur à explorer) : simple champ €, sans slider.
   const sl=$('#salLui'), se=$('#salElle');
   const syncSalary=(who,val)=>{ S.settings.salaries[who]=Math.max(0, parseAmt(val)); save(); recalcPilotage(); };
-  if(sl) sl.oninput=()=>syncSalary('lui',sl.value);
-  if(se) se.oninput=()=>syncSalary('elle',se.value);
+  if(sl) sl.oninput=()=>{ if(amtFieldRejected(sl)) return; syncSalary('lui',sl.value); };
+  if(se) se.oninput=()=>{ if(amtFieldRejected(se)) return; syncSalary('elle',se.value); };
 
   document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
     if(S.pilotFrozen){ toast("Budget validé — touchez Modifier pour l'ajuster","🔒"); return; }
@@ -4448,8 +4472,8 @@ function bindPilotage(){
   if(ph) ph.oninput=()=>syncCustomPct('lui',+ph.value);
   if(pr) pr.oninput=()=>syncCustomPct('elle',+pr.value);
   const fl=$('#fixLui'), fe=$('#fixElle');
-  if(fl) fl.oninput=()=>{S.settings.fixed.lui=Math.max(0,parseAmt(fl.value)); save(); recalcPilotage();};
-  if(fe) fe.oninput=()=>{S.settings.fixed.elle=Math.max(0,parseAmt(fe.value)); save(); recalcPilotage();};
+  if(fl) fl.oninput=()=>{ if(amtFieldRejected(fl)) return; S.settings.fixed.lui=Math.max(0,parseAmt(fl.value)); save(); recalcPilotage();};
+  if(fe) fe.oninput=()=>{ if(amtFieldRejected(fe)) return; S.settings.fixed.elle=Math.max(0,parseAmt(fe.value)); save(); recalcPilotage();};
 
   const chgHdr=$('#chgHdr'); if(chgHdr) chgHdr.onclick=()=>{
     pilotOpen.charges=!pilotOpen.charges;

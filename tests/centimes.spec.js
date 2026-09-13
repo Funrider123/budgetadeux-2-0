@@ -138,6 +138,68 @@ test.describe('Un espace dans un montant est refusé, jamais rogné', () => {
   test('les espaces autour du montant ne gênent pas', async ({ page }) => {
     expect((await ajouter(page, '  13,13  ')).montant).toBe(13.13);
   });
+
+  // Le Pilotage enregistre à chaque frappe : il n'y a pas de bouton où bloquer, donc un
+  // loyer tapé « 1 250 » s'y écrivait à 1 € encore plus discrètement qu'ailleurs.
+  test.describe('Pilotage : la saisie fautive n\'écrase pas la valeur en place', () => {
+    async function pilotage(page) {
+      await openApp(page);
+      await loginAs(page, {
+        charges: [{ id: 'c1', name: 'Loyer', amount: 950, cls: 'besoin', scope: 'commune' }],
+        pilotFrozen: false,
+      });
+      await page.evaluate(() => go('pilotage'));
+      await page.waitForSelector('.pamt-input', { state: 'attached' });
+    }
+    const taper = (page, v) => page.evaluate(val => {
+      const el = document.querySelector('[data-charge].pamt-input');
+      el.value = val; onChargeInput(el);
+      return { montant: S.charges[0].amount, signale: !!el.dataset.amtBad };
+    }, v);
+
+    test('« 1 250 » laisse le loyer à 950 € au lieu de l\'écraser à 1 €', async ({ page }) => {
+      await pilotage(page);
+      const r = await taper(page, '1 250');
+      expect(r.montant).toBe(950);
+      expect(r.signale).toBe(true);
+    });
+
+    test('corriger la saisie débloque et enregistre', async ({ page }) => {
+      await pilotage(page);
+      await taper(page, '1 250');
+      const r = await taper(page, '1250');
+      expect(r.montant).toBe(1250);
+      expect(r.signale).toBe(false);
+    });
+
+    test('le curseur reste utilisable : sa valeur n\'a jamais d\'espace', async ({ page }) => {
+      await pilotage(page);
+      const montant = await page.evaluate(() => {
+        const sl = document.querySelector('.mini-slider');
+        sl.value = '700'; onChargeInput(sl);
+        return S.charges[0].amount;
+      });
+      expect(montant).toBe(700);
+    });
+
+    test('une contribution fixe fautive ne s\'enregistre pas non plus', async ({ page }) => {
+      await openApp(page);
+      await loginAs(page, { pilotFrozen: false,
+        settings: { salaries: { lui: 0, elle: 0 }, mode: 'fixe', custom: { lui: 50, elle: 50 },
+                    fixed: { lui: 1000, elle: 1000 },
+                    idealSplit: { besoin: 50, envie: 30, protection: 0, invest: 20 } } });
+      await page.evaluate(() => go('pilotage'));
+      const r = await page.evaluate(() => {
+        const el = document.querySelector('#fixLui');
+        el.value = '1 500'; el.oninput();
+        const avecEspace = S.settings.fixed.lui;
+        el.value = '1500'; el.oninput();
+        return { avecEspace, corrige: S.settings.fixed.lui };
+      });
+      expect(r.avecEspace).toBe(1000);
+      expect(r.corrige).toBe(1500);
+    });
+  });
 });
 
 test.describe('Arithmétique des mois (bug des 29/30/31)', () => {
