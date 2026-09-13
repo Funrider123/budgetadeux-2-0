@@ -89,6 +89,57 @@ test.describe('Saisie : les centimes survivent', () => {
   });
 });
 
+test.describe('Un espace dans un montant est refusé, jamais rogné', () => {
+  // Signalé par un utilisateur : « 13, 13 » enregistrait 13 €. parseFloat s'arrête au premier
+  // espace, donc « 1 250,50 » enregistrait 1 € — une perte de 1 249,50 € sans le moindre signal.
+  // La règle retenue : un espace à l'intérieur d'un montant bloque l'enregistrement.
+  async function ajouter(page, montant) {
+    await openApp(page);
+    await loginAs(page, { expenses: [], pilotFrozen: false });
+    await page.evaluate(m => {
+      draft = { amount: m, date: iso(0), desc: 'Test', cat: S.categories[0].id,
+                merchant: '', prevision: false, cagnotte: false, who: '' };
+      go('ajouter');
+    }, montant);
+    await page.click('#dSave');
+    return page.evaluate(() => ({ nb: S.expenses.length, montant: (S.expenses[0] || {}).amount }));
+  }
+
+  test('« 13, 13 » est refusé au lieu d\'enregistrer 13 €', async ({ page }) => {
+    expect((await ajouter(page, '13, 13')).nb).toBe(0);
+  });
+
+  test('« 1 250,50 » est refusé au lieu d\'enregistrer 1 €', async ({ page }) => {
+    expect((await ajouter(page, '1 250,50')).nb).toBe(0);
+  });
+
+  test('le message dit quoi corriger, avant même de cliquer', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, { expenses: [], pilotFrozen: false });
+    await page.evaluate(() => {
+      draft = { amount: '13, 13', date: iso(0), desc: 'Test', cat: S.categories[0].id,
+                merchant: '', prevision: false, cagnotte: false, who: '' };
+      go('ajouter');
+    });
+    await expect(page.locator('#dMissingHint')).toBeVisible();
+    expect(await page.textContent('#dMissingHint')).toContain("Retirez l'espace");
+  });
+
+  test('les saisies correctes passent toujours, centimes compris', async ({ page }) => {
+    expect((await ajouter(page, '13,13')).montant).toBe(13.13);
+    expect((await ajouter(page, '1250,50')).montant).toBe(1250.5);
+    expect((await ajouter(page, '13.13')).montant).toBe(13.13);
+  });
+
+  test('« 13 € » reste accepté : le symbole final n\'est pas un espace de trop', async ({ page }) => {
+    expect((await ajouter(page, '13 €')).montant).toBe(13);
+  });
+
+  test('les espaces autour du montant ne gênent pas', async ({ page }) => {
+    expect((await ajouter(page, '  13,13  ')).montant).toBe(13.13);
+  });
+});
+
 test.describe('Arithmétique des mois (bug des 29/30/31)', () => {
   // setMonth() sans remettre le jour à 1 déborde quand le mois visé est plus court :
   // le 30 août, « il y a 6 mois » donnait le 2 mars au lieu de février — l'app lisait

@@ -902,6 +902,16 @@ const inputAmt = n => String(round2(n)).replace('.', ',');
 // parce qu'un type="number" REJETTE la virgule — le navigateur vide alors .value et la saisie
 // est irrécupérable. Champ vide ou illisible : 0.
 const parseAmt = v => { const n=parseFloat(String(v==null?'':v).replace(',','.')); return Number.isFinite(n)?round2(n):0; };
+// Un espace À L'INTÉRIEUR d'un montant est toujours une faute de frappe (« 13, 13 », « 1 250 »),
+// et parseFloat s'arrête au premier espace : sans ce garde-fou, « 13, 13 » enregistre 13 € et
+// « 1 250 » enregistre 1 €, sans que personne ne s'en aperçoive. On refuse la saisie.
+// On ne teste pas « espace entre deux chiffres » : dans « 13, 13 » l'espace suit la virgule,
+// et le cas le plus courant passerait à travers.
+// Le symbole € final est retiré avant le test — « 13 € » reste une saisie légitime.
+//   et   : espaces insécables produits par l'affichage français, donc récupérés
+// à l'identique par un copier-coller depuis l'app.
+const amtHasSpace = v => /[\s  ]/.test(String(v==null?'':v).replace(/[€\s  ]+$/,'').trim());
+const AMT_SPACE_MSG = "Retirez l'espace du montant : écrivez 1250,50 et non 1 250,50";
 const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const catById = id => id==='__cagnotte__' ? {emoji:"👛",name:"Cagnotte commune",cls:"cagnotte",budget:0} : (S.categories.find(c=>c.id===id) || {emoji:"📦",name:"Autre",cls:"besoin",budget:0});
 const me = ()=> S.auth.profile, partnerOf = w => w==="lui"?"elle":"lui";
@@ -2000,6 +2010,7 @@ function ajouterCagnotteExceeded(){
   return draft.cat==='__cagnotte__' && amt>S.cagnotte.balance;
 }
 function ajouterHint(){
+  if(amtHasSpace(draft.amount)) return AMT_SPACE_MSG;
   if(ajouterCagnotteExceeded()) return "Le montant dépasse le solde de la cagnotte commune";
   const missing=ajouterMissing();
   return missing.length ? `Ajoutez ${missing.join(', ')}` : '';
@@ -3578,6 +3589,7 @@ function openAddMerchant(){
   $('#meSave').onclick=()=>{ const em=$('#meEmoji').value||'🏪', nm=$('#meName').value.trim(); if(!nm){toast("Donnez un nom","✏️");return;} S.merchants.push({id:e(),emoji:em,name:nm,cat:$('#meCat').value}); save(); closeModal(); go('ajouter'); toast("Enseigne ajoutée 🛍️"); };
 }
 function saveExpense(){
+  if(amtHasSpace(draft.amount)){ toast(AMT_SPACE_MSG,"💶"); return; }
   const amt=parseFloat((draft.amount+"").replace(',','.'));
   if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
   if(!draft.cat){ toast("Choisissez une catégorie","🏷️"); return; }
