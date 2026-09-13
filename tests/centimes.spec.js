@@ -139,6 +139,35 @@ test.describe('Un espace dans un montant est refusé, jamais rogné', () => {
     expect((await ajouter(page, '  13,13  ')).montant).toBe(13.13);
   });
 
+  // Deuxième faute de la même famille : .replace(',','.') ne convertissait que la PREMIÈRE
+  // virgule, donc « 1,300,50 » — un séparateur de milliers, réflexe courant — s'enregistrait
+  // à 1,30 € sans le moindre signal.
+  test('deux virgules sont refusées au lieu d\'enregistrer 1,30 €', async ({ page }) => {
+    expect((await ajouter(page, '1,300,50')).nb).toBe(0);
+  });
+
+  test('une virgule mélangée à un point est refusée', async ({ page }) => {
+    expect((await ajouter(page, '1.300,50')).nb).toBe(0);
+    expect((await ajouter(page, '1.300.50')).nb).toBe(0);
+  });
+
+  test('un seul séparateur reste accepté, virgule comme point', async ({ page }) => {
+    expect((await ajouter(page, '1250,50')).montant).toBe(1250.5);
+    expect((await ajouter(page, '1250.50')).montant).toBe(1250.5);
+  });
+
+  test('le message distingue les deux fautes', async ({ page }) => {
+    await openApp(page);
+    const msgs = await page.evaluate(() => ({
+      espace: amtError('13, 13'),
+      separateur: amtError('1,300,50'),
+      bon: amtError('1250,50'),
+    }));
+    expect(msgs.espace).toContain("Retirez l'espace");
+    expect(msgs.separateur).toContain('Un seul séparateur');
+    expect(msgs.bon).toBe('');
+  });
+
   // Le Pilotage enregistre à chaque frappe : il n'y a pas de bouton où bloquer, donc un
   // loyer tapé « 1 250 » s'y écrivait à 1 € encore plus discrètement qu'ailleurs.
   test.describe('Pilotage : la saisie fautive n\'écrase pas la valeur en place', () => {
@@ -170,6 +199,13 @@ test.describe('Un espace dans un montant est refusé, jamais rogné', () => {
       const r = await taper(page, '1250');
       expect(r.montant).toBe(1250);
       expect(r.signale).toBe(false);
+    });
+
+    test('« 1,300,50 » n\'écrase pas non plus le loyer en place', async ({ page }) => {
+      await pilotage(page);
+      const r = await taper(page, '1,300,50');
+      expect(r.montant).toBe(950);
+      expect(r.signale).toBe(true);
     });
 
     test('le curseur reste utilisable : sa valeur n\'a jamais d\'espace', async ({ page }) => {

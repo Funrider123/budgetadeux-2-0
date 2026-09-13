@@ -902,16 +902,25 @@ const inputAmt = n => String(round2(n)).replace('.', ',');
 // parce qu'un type="number" REJETTE la virgule — le navigateur vide alors .value et la saisie
 // est irrécupérable. Champ vide ou illisible : 0.
 const parseAmt = v => { const n=parseFloat(String(v==null?'':v).replace(',','.')); return Number.isFinite(n)?round2(n):0; };
-// Un espace À L'INTÉRIEUR d'un montant est toujours une faute de frappe (« 13, 13 », « 1 250 »),
-// et parseFloat s'arrête au premier espace : sans ce garde-fou, « 13, 13 » enregistre 13 € et
-// « 1 250 » enregistre 1 €, sans que personne ne s'en aperçoive. On refuse la saisie.
+// Renvoie le message à afficher quand un montant saisi est inexploitable, "" quand il est bon.
+// Deux fautes différentes, un même symptôme : parseFloat s'arrête net et enregistre un montant
+// sans rapport, sans que personne ne s'en aperçoive.
+//   « 13, 13 » et « 1 250 »     : parseFloat s'arrête au premier espace        -> 13 € et 1 €
+//   « 1,300,50 » et « 1.300,50 » : .replace(',','.') ne convertit que la PREMIÈRE virgule, donc
+//                                  parseFloat s'arrête au séparateur suivant   -> 1,30 €
 // On ne teste pas « espace entre deux chiffres » : dans « 13, 13 » l'espace suit la virgule,
 // et le cas le plus courant passerait à travers.
-// Le symbole € final est retiré avant le test — « 13 € » reste une saisie légitime.
+// Le symbole € final est retiré avant l'examen — « 13 € » reste une saisie légitime.
 //   et   : espaces insécables produits par l'affichage français, donc récupérés
 // à l'identique par un copier-coller depuis l'app.
-const amtHasSpace = v => /[\s  ]/.test(String(v==null?'':v).replace(/[€\s  ]+$/,'').trim());
 const AMT_SPACE_MSG = "Retirez l'espace du montant : écrivez 1250,50 et non 1 250,50";
+const AMT_SEP_MSG   = "Un seul séparateur décimal : écrivez 1250,50 et non 1,250,50";
+function amtError(v){
+  const s = String(v==null?'':v).replace(/[€\s  ]+$/,'').trim();
+  if(/[\s  ]/.test(s)) return AMT_SPACE_MSG;
+  if((s.match(/[.,]/g)||[]).length > 1) return AMT_SEP_MSG;
+  return "";
+}
 const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const catById = id => id==='__cagnotte__' ? {emoji:"👛",name:"Cagnotte commune",cls:"cagnotte",budget:0} : (S.categories.find(c=>c.id===id) || {emoji:"📦",name:"Autre",cls:"besoin",budget:0});
 const me = ()=> S.auth.profile, partnerOf = w => w==="lui"?"elle":"lui";
@@ -2010,7 +2019,7 @@ function ajouterCagnotteExceeded(){
   return draft.cat==='__cagnotte__' && amt>S.cagnotte.balance;
 }
 function ajouterHint(){
-  if(amtHasSpace(draft.amount)) return AMT_SPACE_MSG;
+  const amtErr=amtError(draft.amount); if(amtErr) return amtErr;
   if(ajouterCagnotteExceeded()) return "Le montant dépasse le solde de la cagnotte commune";
   const missing=ajouterMissing();
   return missing.length ? `Ajoutez ${missing.join(', ')}` : '';
@@ -3589,7 +3598,7 @@ function openAddMerchant(){
   $('#meSave').onclick=()=>{ const em=$('#meEmoji').value||'🏪', nm=$('#meName').value.trim(); if(!nm){toast("Donnez un nom","✏️");return;} S.merchants.push({id:e(),emoji:em,name:nm,cat:$('#meCat').value}); save(); closeModal(); go('ajouter'); toast("Enseigne ajoutée 🛍️"); };
 }
 function saveExpense(){
-  if(amtHasSpace(draft.amount)){ toast(AMT_SPACE_MSG,"💶"); return; }
+  const amtErr=amtError(draft.amount); if(amtErr){ toast(amtErr,"💶"); return; }
   const amt=parseFloat((draft.amount+"").replace(',','.'));
   if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
   if(!draft.cat){ toast("Choisissez une catégorie","🏷️"); return; }
@@ -3709,7 +3718,7 @@ function bindProjets(){
   }));
   document.querySelectorAll('[data-projaddsave]').forEach(b=>b.addEventListener('click',()=>{
     const id=b.dataset.projaddsave; const ui=projUIState(id); const p=S.projects.find(x=>x.id===id); if(!p) return;
-    if(amtHasSpace(ui.amt)){ toast(AMT_SPACE_MSG,"💶"); return; }
+    const amtErr=amtError(ui.amt); if(amtErr){ toast(amtErr,"💶"); return; }
     const amt=parseAmt(ui.amt);
     if(!amt||amt<=0){ toast("Indiquez un montant valide","💶"); return; }
     p.saved+=amt; if(!p.history) p.history=[];
@@ -3758,7 +3767,7 @@ function openCagnotteAddLine(){
     <div class="field"><label>Date</label><input class="input" type="date" id="cagAddDate" value="${iso(0)}"></div>
     <button class="btn btn-primary" id="cagAddSave">Ajouter</button>`, true);
   $('#cagAddSave').onclick=()=>{
-    if(amtHasSpace($('#cagAddAmt').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
+    const amtErr=amtError($('#cagAddAmt').value); if(amtErr){ toast(amtErr,"💶"); return; }
     const amt=parseAmt($('#cagAddAmt').value);
     const desc=$('#cagAddDesc').value.trim();
     const date=$('#cagAddDate').value||iso(0);
@@ -3781,7 +3790,7 @@ function openEditCagnotteEntry(idx){
       <button class="btn btn-ghost btn-sm" id="cagEditDel" style="color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent)">🗑 Supprimer</button>
     </div>`, true);
   $('#cagEditSave').onclick=()=>{
-    if(amtHasSpace($('#cagEditAmt').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
+    const amtErr=amtError($('#cagEditAmt').value); if(amtErr){ toast(amtErr,"💶"); return; }
     const newAmt=parseAmt($('#cagEditAmt').value);
     const newDesc=$('#cagEditDesc').value.trim();
     const newDate=$('#cagEditDate').value||h.date;
@@ -3821,7 +3830,7 @@ function openEditProject(id, returnTo){
   document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
   $('#npSplit').oninput=ev=>{$('#npSL').textContent=`${nameOf('lui')} ${ev.target.value}%`; $('#npSE').textContent=`${nameOf('elle')} ${100-ev.target.value}%`;};
   $('#npSave').onclick=()=>{ const nm=$('#npName').value.trim();
-    if(amtHasSpace($('#npTarget').value)||amtHasSpace($('#npSaved').value)){ toast(AMT_SPACE_MSG,"💶"); return; }
+    const amtErr=amtError($('#npTarget').value)||amtError($('#npSaved').value); if(amtErr){ toast(amtErr,"💶"); return; }
     const t=parseAmt($('#npTarget').value); if(!nm||!t){toast("Nom et montant requis","🌟");return;}
     const sp=+$('#npSplit').value;
     const sv=parseAmt($('#npSaved').value), mo=+$('#npMonths').value||12;
@@ -4369,7 +4378,7 @@ function recalcPilotage(){
 // virgule). Le slider, lui, reste au pas de 1 € : c'est un réglage grossier, et il écrase
 // donc volontairement les centimes quand on le fait glisser.
 function readAmt(el){ return Math.max(0, parseAmt(el.value)); }
-// Même règle qu'à la saisie d'une dépense (voir amtHasSpace) : sans elle, un loyer tapé
+// Même règle qu'à la saisie d'une dépense (voir amtError) : sans elle, un loyer tapé
 // « 1 250 » s'enregistre à 1 €. Ces champs-ci écrivent à chaque frappe, il n'y a donc pas de
 // bouton où bloquer : on refuse d'enregistrer, on marque le champ en rouge, et on n'avertit
 // qu'au basculement vers l'invalide — un toast à chaque touche serait insupportable.
@@ -4377,11 +4386,12 @@ function readAmt(el){ return Math.max(0, parseAmt(el.value)); }
 // d'espace : il n'est donc jamais concerné.
 function amtFieldRejected(el){
   if(!el) return false;
-  if(!amtHasSpace(el.value)){
+  const err=amtError(el.value);
+  if(!err){
     if(el.dataset.amtBad){ delete el.dataset.amtBad; el.style.borderColor=''; }
     return false;
   }
-  if(!el.dataset.amtBad){ el.dataset.amtBad='1'; el.style.borderColor='var(--danger)'; toast(AMT_SPACE_MSG,"💶"); }
+  if(el.dataset.amtBad!==err){ el.dataset.amtBad=err; el.style.borderColor='var(--danger)'; toast(err,"💶"); }
   return true;
 }
 // Synchronise l'input€ et le slider d'une même ligne (charge ou catégorie), sauvegarde, recalcule.
