@@ -656,6 +656,16 @@ function migrate(s){
     if(c.rolloverStart===undefined) c.rolloverStart=0;
     if(c.rolloverFrom===undefined) c.rolloverFrom=null;
   });
+  // Lignes de cagnotte créées avant l'ajout d'un id stable (voir mergeCagnotteWithRemote) :
+  // sans id, une fusion ne peut ni les reconnaître ni les protéger d'un écrasement distant.
+  // On en profite pour recaler le solde sur la somme réelle de l'historique — s'il avait déjà
+  // divergé (des lignes perdues par le bug corrigé ici), ce compte se corrige tout seul.
+  if(s.cagnotte && Array.isArray(s.cagnotte.history)){
+    let idAjoute=false;
+    s.cagnotte.history.forEach(h=>{ if(!h.id){ h.id=e(); idAjoute=true; } });
+    const solde=Math.round(s.cagnotte.history.reduce((sum,h)=>sum+(+h.amount||0),0)*100)/100;
+    if(idAjoute || solde!==s.cagnotte.balance) s.cagnotte.balance = solde===0?0:solde;
+  }
   return s;
 }
 // Mode demonstration : tout vit en memoire uniquement. Rien n'est ecrit dans le stockage
@@ -762,7 +772,19 @@ function applyTombstones(){
     S[k]=S[k].filter(x=>!(x && x.id && S.deleted[x.id]));
     if(S[k].length!==avant) changed=true;
   });
+  // La cagnotte n'est pas dans MERGE_ARRAY_KEYS (ce n'est pas elle-même un tableau, voir
+  // mergeCagnotteWithRemote), mais son historique a besoin des mêmes ardoises.
+  if(S.cagnotte && Array.isArray(S.cagnotte.history)){
+    const avant=S.cagnotte.history.length;
+    S.cagnotte.history=S.cagnotte.history.filter(h=>!(h && h.id && S.deleted[h.id]));
+    if(S.cagnotte.history.length!==avant){ changed=true; recalcCagnotteBalance(); }
+  }
   return changed;
+}
+// Le solde n'est jamais recopié depuis le distant : il est toujours recalculé à partir de
+// l'historique fusionné, pour qu'il ne puisse pas diverger de ce qu'il additionne.
+function recalcCagnotteBalance(){
+  S.cagnotte.balance = round2(S.cagnotte.history.reduce((s,h)=>s+(+h.amount||0),0));
 }
 function mergeArraysWithRemote(remoteData){
   if(!remoteData) return false;
@@ -783,6 +805,23 @@ function mergeArraysWithRemote(remoteData){
     if(onlyRemote.length){ S[k]=S[k].concat(onlyRemote); changed=true; }
   });
   return changed;
+}
+// Même principe que mergeArraysWithRemote, pour la cagnotte : elle n'y figure pas parce que ce
+// n'est pas elle-même un tableau ({balance, history}), et jusqu'ici elle était donc écrasée en
+// bloc au lieu d'être fusionnée. Deux dépenses payées depuis la cagnotte sur un téléphone
+// pouvaient ainsi disparaître de son historique — et son solde avec, puisqu'il n'était jamais
+// recalculé — si l'autre téléphone poussait entre-temps son propre état, plus ancien.
+function mergeCagnotteWithRemote(remoteCagnotte){
+  if(!remoteCagnotte || !Array.isArray(remoteCagnotte.history)) return false;
+  const localIds=new Set(S.cagnotte.history.map(h=>h.id).filter(Boolean));
+  const onlyRemote=remoteCagnotte.history.filter(h=>h && h.id && !localIds.has(h.id) && !isDeleted(h.id));
+  if(onlyRemote.length) S.cagnotte.history=S.cagnotte.history.concat(onlyRemote);
+  // Recalculé à chaque appel, pas seulement quand le distant apportait du nouveau : un solde
+  // déjà faux (par exemple laissé par ce bug avant ce correctif) se corrige ainsi de lui-même
+  // au prochain envoi, sans attendre un ajout distant qui n'arrivera peut-être jamais.
+  const soldeAvant=S.cagnotte.balance;
+  recalcCagnotteBalance();
+  return onlyRemote.length>0 || S.cagnotte.balance!==soldeAvant;
 }
 // On ne signale une erreur de synchro qu'une fois par session, pour ne pas spammer.
 // Le détail (code + message) est exposé pour diagnostiquer (cache de schéma, droits…).
@@ -813,7 +852,10 @@ async function pushState(){
     // On relit l'état distant juste avant d'écraser, pour y fusionner tout ajout du
     // partenaire qu'on n'aurait pas encore reçu localement (voir mergeArraysWithRemote).
     const {data:remoteRow}=await sb.from('couple_state').select('data').eq('couple_code',S.auth.coupleCode).maybeSingle();
-    if(mergeArraysWithRemote(remoteRow && remoteRow.data)){
+    const remoteData=remoteRow && remoteRow.data;
+    const arraysChanged=mergeArraysWithRemote(remoteData);
+    const cagnotteChanged=mergeCagnotteWithRemote(remoteData && remoteData.cagnotte);
+    if(arraysChanged || cagnotteChanged){
       applyingRemote=true; save(); applyingRemote=false;
       if(!$('#main').classList.contains('hidden')){ renderAppbar(); renderSetupBanner(); go(current); }
     }
@@ -3614,8 +3656,8 @@ function saveExpense(){
   const finalDesc = merchant && descText ? `${merchant.name} — ${descText}` : (merchant ? merchant.name : (descText || catById(draft.cat).name));
   const exp={id:e(), amount:amt, date:draft.date, desc:finalDesc, cat:draft.cat, who:draft.who||me(), type:isTransfer?'transfert':'depense', prevision:draft.prevision, cagnotte:isCagnotte, note:""};
   S.expenses.push(exp);
-  if(isCagnotte && !isTransfer){ S.cagnotte.balance-=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:-amt,expId:exp.id}); }
-  if(isTransfer){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:draft.date,label:exp.desc,amount:+amt,expId:exp.id}); }
+  if(isCagnotte && !isTransfer){ S.cagnotte.balance-=amt; S.cagnotte.history.unshift({id:e(),date:draft.date,label:exp.desc,amount:-amt,expId:exp.id}); }
+  if(isTransfer){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({id:e(),date:draft.date,label:exp.desc,amount:+amt,expId:exp.id}); }
   const wasPrevision=draft.prevision;
   save();
   draft={amount:"", date:iso(0), desc:"", cat:"", merchant:"", prevision:false, cagnotte:false, who:""};
@@ -3649,7 +3691,7 @@ function openExpenseSheet(id){
   $('#exSave').onclick=()=>{ if(transfer){x.note=$('#exNote').value;} else {x.cat=$('#exCat').value;} save(); closeModal(); go(current); toast(transfer?"Note enregistrée":"Catégorie mise à jour","✓"); };
   $('#exDel').onclick=()=>{
     const hidx=S.cagnotte.history.findIndex(h=>h.expId===id);
-    if(hidx>-1){ S.cagnotte.balance-=S.cagnotte.history[hidx].amount; S.cagnotte.history.splice(hidx,1); }
+    if(hidx>-1){ S.cagnotte.balance-=S.cagnotte.history[hidx].amount; markDeleted(S.cagnotte.history[hidx].id); S.cagnotte.history.splice(hidx,1); }
     markDeleted(id);
     S.expenses=S.expenses.filter(e=>e.id!==id); save(); closeModal(); go(current); toast("Dépense supprimée","🗑");
   };
@@ -3773,7 +3815,7 @@ function openCagnotteAddLine(){
     const date=$('#cagAddDate').value||iso(0);
     if(!amt||amt<=0||!desc){ toast("Montant et description requis","✏️"); return; }
     S.cagnotte.balance+=amt;
-    S.cagnotte.history.unshift({date, label:desc, amount:amt});
+    S.cagnotte.history.unshift({id:e(), date, label:desc, amount:amt});
     cagUI.histOpen=true;
     save(); closeModal(); go('projets'); toast("Ligne ajoutée ✓");
   };
@@ -3803,6 +3845,7 @@ function openEditCagnotteEntry(idx){
   $('#cagEditDel').onclick=()=>{
     S.cagnotte.balance -= h.amount;
     if(h.expId) S.expenses = S.expenses.filter(x=>x.id!==h.expId);
+    if(h.id) markDeleted(h.id);
     S.cagnotte.history.splice(idx,1);
     save(); closeModal(); go('projets'); toast("Ligne supprimée 🗑");
   };
@@ -3857,7 +3900,7 @@ function openRealloc(p, returnTo){
     p.saved-=amt;
     if(!p.history) p.history=[];
     if(dest==='cagnotte'){
-      S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt});
+      S.cagnotte.balance+=amt; S.cagnotte.history.unshift({id:e(),date:iso(0),label:`Réaffectation depuis ${p.name}`,amount:+amt});
       p.history.unshift({date:iso(0),label:`Réaffecté vers la cagnotte commune`,amount:-amt});
     }
     else if(!dest.startsWith('cat:')){
@@ -3873,7 +3916,7 @@ function openAbandon(p, returnTo){
     <button class="btn btn-soft" id="abKeep" style="margin-bottom:10px">💛 Récupérer l'argent vers la cagnotte</button>
     <button class="btn btn-ghost" id="abDrop" style="margin-bottom:10px">Abandonner sans récupérer</button>
     <button class="btn btn-ghost btn-sm" id="abCancel" style="width:100%">Annuler</button>`);
-  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); if(!p.history) p.history=[]; p.history.unshift({date:iso(0),label:`Récupéré vers la cagnotte commune`,amount:-p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Argent récupéré dans la cagnotte 💛"); };
+  $('#abKeep').onclick=()=>{ S.cagnotte.balance+=p.saved; S.cagnotte.history.unshift({id:e(),date:iso(0),label:`Récupération projet ${p.name}`,amount:+p.saved}); if(!p.history) p.history=[]; p.history.unshift({date:iso(0),label:`Récupéré vers la cagnotte commune`,amount:-p.saved}); p.saved=0; p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Argent récupéré dans la cagnotte 💛"); };
   $('#abDrop').onclick=()=>{ p.status='abandonne'; save(); closeModal(); go(returnTo); toast("Projet abandonné"); };
   $('#abCancel').onclick=closeModal;
 }
@@ -3891,7 +3934,7 @@ function openSurplusTransfer(catId, remaining){
     const destLabel = dest==='cagnotte' ? 'Cagnotte commune' : (S.projects.find(x=>x.id===dest)?.name || 'Projet');
     const expId=e();
     S.expenses.push({id:expId, type:'transfert', prevision:false, amount:amt, cat:catId, who:me(), desc:`Surplus ${c.name} → ${destLabel}`, date:iso(0), note:""});
-    if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt,expId}); }
+    if(dest==='cagnotte'){ S.cagnotte.balance+=amt; S.cagnotte.history.unshift({id:e(),date:iso(0),label:`Surplus ${c.name}`,amount:+amt,expId}); }
     else { const p=S.projects.find(x=>x.id===dest); if(p){ p.saved+=amt; if(!p.history) p.history=[]; p.history.unshift({date:iso(0),label:`Surplus ${c.name}`,amount:+amt}); } }
     mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
     save(); closeModal();
@@ -4767,7 +4810,7 @@ function openDeleteCat(id, returnTo){
 
   $('#dcCag').onclick=()=>{
     S.cagnotte.balance+=bal;
-    S.cagnotte.history.unshift({date:iso(0), label:`${pos?'Solde':'Retard'} de l'enveloppe ${c.name}`, amount:bal});
+    S.cagnotte.history.unshift({id:e(), date:iso(0), label:`${pos?'Solde':'Retard'} de l'enveloppe ${c.name}`, amount:bal});
     wipe(pos?"Solde versé dans la cagnotte 👛":"Retard absorbé par la cagnotte 👛");
   };
   const mv=$('#dcMove'); if(mv) mv.onclick=()=>{

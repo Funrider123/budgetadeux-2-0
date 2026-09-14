@@ -101,6 +101,139 @@ test.describe('Fusion des ajouts concurrents', () => {
   });
 });
 
+test.describe('La cagnotte survit à la fusion, comme le reste', () => {
+  // Bug remonté par un utilisateur : deux dépenses payées depuis la cagnotte commune
+  // apparaissaient bien dans l'Historique (protégé par MERGE_ARRAY_KEYS) mais avaient disparu
+  // de l'historique de LA CAGNOTTE elle-même — et le solde affiché était donc faux (trop élevé
+  // du montant des dépenses disparues). Cause : `cagnotte` n'était pas dans MERGE_ARRAY_KEYS
+  // (ce n'est pas elle-même un tableau), donc un push écrasait la cagnotte du partenaire en bloc
+  // au lieu de fusionner son historique.
+  test('une ligne de cagnotte ajoutée ici n\'est pas perdue par le push du partenaire', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {
+      categories: [{ id: 'courses', emoji: '🛒', name: 'Courses', budget: 300, cls: 'besoin' }],
+      cagnotte: { balance: 720.23, history: [{ id: 'h_ancien', date: '2026-08-30', label: 'Reste Août 2026', amount: 720.23 }] },
+    });
+    // Sur ce téléphone : une dépense de 60€ payée depuis la cagnotte, pas encore synchronisée.
+    await page.evaluate(() => {
+      S.expenses.push({ id: 'ex_therapie', type: 'depense', amount: 60, cat: 'courses', who: 'lui', desc: 'Thérapie couple', date: '2026-09-10', prevision: false, cagnotte: true });
+      S.cagnotte.balance -= 60;
+      S.cagnotte.history.unshift({ id: 'h_therapie', date: '2026-09-10', label: 'Thérapie couple', amount: -60 });
+      save();
+    });
+    // Le distant est resté sur l'état d'avant : le partenaire n'a pas encore reçu cette dépense.
+    await seedRemote(page, {
+      cagnotte: { balance: 720.23, history: [{ id: 'h_ancien', date: '2026-08-30', label: 'Reste Août 2026', amount: 720.23 }] },
+    });
+
+    await page.evaluate(() => pushState());
+
+    const r = await page.evaluate(() => ({
+      ids: S.cagnotte.history.map(h => h.id).sort(),
+      balance: S.cagnotte.balance,
+    }));
+    expect(r.ids).toEqual(['h_ancien', 'h_therapie']);
+    expect(r.balance).toBe(660.23);
+  });
+
+  test('une ligne ajoutée par le partenaire pendant qu\'on pousse n\'est pas écrasée', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {
+      cagnotte: { balance: 100, history: [{ id: 'h_ancien', date: '2026-08-30', label: 'Départ', amount: 100 }] },
+    });
+    // Le partenaire a déjà poussé sa propre dépense cagnotte, qu'on n'a pas encore reçue.
+    await seedRemote(page, {
+      cagnotte: { balance: 40, history: [
+        { id: 'h_ancien', date: '2026-08-30', label: 'Départ', amount: 100 },
+        { id: 'h_partenaire', date: '2026-09-12', label: 'Courses partenaire', amount: -60 },
+      ] },
+    });
+
+    await page.evaluate(() => pushState());
+
+    const r = await page.evaluate(() => ({
+      ids: S.cagnotte.history.map(h => h.id).sort(),
+      balance: S.cagnotte.balance,
+    }));
+    expect(r.ids).toEqual(['h_ancien', 'h_partenaire']);
+    expect(r.balance).toBe(40);
+  });
+
+  test('le solde est toujours recalculé depuis l\'historique, jamais recopié tel quel', async ({ page }) => {
+    await openApp(page);
+    // Solde local volontairement faux (simule une divergence déjà survenue) : la fusion doit
+    // le corriger d'elle-même plutôt que de le préserver.
+    await loginAs(page, {
+      cagnotte: { balance: 999, history: [{ id: 'h1', date: '2026-08-30', label: 'Ligne', amount: 50 }] },
+    });
+    await seedRemote(page, {
+      cagnotte: { balance: 999, history: [{ id: 'h1', date: '2026-08-30', label: 'Ligne', amount: 50 }] },
+    });
+
+    await page.evaluate(() => {
+      S.cagnotte.history.push({ id: 'h2', date: '2026-09-01', label: 'Autre', amount: -20 });
+      save();
+    });
+    await page.evaluate(() => pushState());
+
+    expect(await page.evaluate(() => S.cagnotte.balance)).toBe(30);
+  });
+
+  test('supprimer une ligne de cagnotte l\'empêche de revenir via une fusion suivante', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {
+      cagnotte: { balance: 100, history: [
+        { id: 'h_garde', date: '2026-08-30', label: 'Garde', amount: 100 },
+        { id: 'h_efface', date: '2026-09-01', label: 'À effacer', amount: -30 },
+      ] },
+    });
+    await page.evaluate(() => {
+      S.cagnotte.balance += 30; // on annule la ligne avant de la retirer, comme le fait l'UI
+      markDeleted('h_efface');
+      S.cagnotte.history = S.cagnotte.history.filter(h => h.id !== 'h_efface');
+      save();
+    });
+    // Le distant, lui, ignore encore la suppression.
+    await seedRemote(page, {
+      cagnotte: { balance: 70, history: [
+        { id: 'h_garde', date: '2026-08-30', label: 'Garde', amount: 100 },
+        { id: 'h_efface', date: '2026-09-01', label: 'À effacer', amount: -30 },
+      ] },
+    });
+
+    await page.evaluate(() => pushState());
+
+    const r = await page.evaluate(() => ({
+      ids: S.cagnotte.history.map(h => h.id),
+      balance: S.cagnotte.balance,
+    }));
+    expect(r.ids).toEqual(['h_garde']);
+    expect(r.balance).toBe(100);
+  });
+
+  test('migration : les anciennes lignes sans id en reçoivent un, et le solde se recale', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {}); // pour disposer d'un état S complet (auth, ui…) à réutiliser
+    await page.evaluate(() => {
+      const s = JSON.parse(JSON.stringify(S));
+      // Comme « Reste Août 2026 » chez l'utilisateur qui a remonté le bug : pas d'id, et un
+      // solde qui ne correspond plus à la somme (une ligne a été perdue avant ce correctif).
+      s.cagnotte = { balance: 720.23, history: [{ date: '2026-08-30', label: 'Reste Août 2026', amount: 720.23 }] };
+      localStorage.setItem('bad2', JSON.stringify(s));
+    });
+
+    await page.reload();
+    await page.waitForFunction(() => typeof S === 'object' && S !== null);
+
+    const r = await page.evaluate(() => ({
+      aUnId: !!S.cagnotte.history[0].id,
+      balance: S.cagnotte.balance,
+    }));
+    expect(r.aUnId).toBe(true);
+    expect(r.balance).toBe(720.23); // ici la somme était déjà juste : la migration ne doit rien casser
+  });
+});
+
 test.describe('Réception des changements du partenaire', () => {
   test('les données distantes sont appliquées localement', async ({ page }) => {
     await openApp(page);
