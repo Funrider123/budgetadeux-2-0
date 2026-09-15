@@ -201,3 +201,36 @@ test.describe('Invitation par lien (?code=...)', () => {
     expect(await page.evaluate(() => inviteCode)).toBeNull();
   });
 });
+
+test.describe('Ouverture directe sur un écran (?ecran=...)', () => {
+  // Le mail de rappel du jour J invite à commencer le Money Date : il doit ouvrir cet écran-là,
+  // pas la Vue avec le Money Date à retrouver dans le menu.
+  const entrer = async (page, chemin, etat = {}) => {
+    await openApp(page, chemin);
+    await loginAs(page, Object.assign({
+      moneyDate: { doneSteps: [0, 1], nextDate: '2026-09-17', notes: [], surplusDecisions: {}, checklist: {} },
+    }, etat));
+    return page.evaluate(() => ({ ecran: current, etape: mdStep }));
+  };
+
+  test('le lien du mail ouvre le Money Date, en reprenant là où on s\'était arrêté', async ({ page }) => {
+    const r = await entrer(page, '/index.html?ecran=moneydate');
+    expect(r.ecran).toBe('moneydate');
+    expect(r.etape).toBe(2); // deux étapes déjà faites
+  });
+
+  test('sans paramètre, on arrive sur la Vue comme avant', async ({ page }) => {
+    expect((await entrer(page, '/index.html')).ecran).toBe('vue');
+  });
+
+  test('une valeur inconnue est ignorée plutôt que suivie', async ({ page }) => {
+    expect((await entrer(page, '/index.html?ecran=nimportequoi')).ecran).toBe('vue');
+  });
+
+  test('le paramètre ne vaut que pour cette arrivée, pas pour la navigation suivante', async ({ page }) => {
+    await entrer(page, '/index.html?ecran=moneydate');
+    // Un second passage par enterApp (retour de démo, reconnexion…) ne doit plus y renvoyer.
+    const apres = await page.evaluate(() => { enterApp(); return current; });
+    expect(apres).toBe('vue');
+  });
+});

@@ -1484,7 +1484,16 @@ let prevScreen=null;
 function enterApp(){
   $('#auth').classList.add('hidden');
   $('#main').classList.remove('hidden');
-  renderAppbar(); renderSetupBanner(); renderInstallBanner(); renderTab(); go("vue");
+  renderAppbar(); renderSetupBanner(); renderInstallBanner(); renderTab();
+  // ?ecran=... (lien du mail de rappel) : on l'honore une seule fois, puis on repart de la Vue.
+  const ecran = (typeof requestedScreen!=='undefined' && requestedScreen) || null;
+  if(ecran){
+    requestedScreen=null;
+    // Sur le Money Date, on reprend là où le couple s'était arrêté, comme le fait le raccourci
+    // de la Vue — pas au début d'un parcours déjà entamé.
+    if(ecran==='moneydate') mdStep = S.moneyDate.doneSteps.length>=MD_STEPS.length ? 0 : S.moneyDate.doneSteps.length;
+    go(ecran);
+  } else go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
   initSync();
   // Deux pop-ups au premier arrivage, jamais empilés : bienvenue d'abord, puis (au tour
@@ -4830,6 +4839,15 @@ function openDeleteCat(id, returnTo){
    BOOT
    ============================================================ */
 save();
+
+// Écran demandé par l'URL (?ecran=moneydate) : utilisé par le lien du mail de rappel du jour J.
+// Atterrir sur la Vue puis devoir retrouver le Money Date dans le menu casse l'élan du
+// rendez-vous — le mail doit ouvrir directement là où il invite à aller. Consommé une seule
+// fois par enterApp(), pour qu'un retour ultérieur sur l'app reparte normalement de la Vue.
+let requestedScreen = (()=>{
+  const v=(new URLSearchParams(location.search).get('ecran')||'').trim().toLowerCase();
+  return ['vue','historique','ajouter','projets','analyse','moneydate','pilotage','reglages'].includes(v) ? v : null;
+})();
 
 // Lien de réinitialisation de mot de passe : Supabase ouvre l'app avec un événement de récupération
 let recovering = /type=recovery/.test(location.hash);

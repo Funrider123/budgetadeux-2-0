@@ -31,25 +31,30 @@ function parisDateStr(offsetDays: number): string {
 
 const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
 
+// La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
+// un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
+// Le jour J : le lien ouvre directement l'écran du Money Date (?ecran=moneydate), pour ne pas
+// retomber sur la Vue et devoir le retrouver dans le menu.
 function emailHtml(prenom: string, when: "demain" | "aujourdhui") {
-  const titre = when === "demain" ? "Votre Money Date, c'est demain !" : "C'est aujourd'hui votre Money Date !";
-  const sous = when === "demain"
-    ? "Prenez un moment ce soir pour vous organiser à deux."
-    : "Votre rendez-vous financier à deux, en 6 étapes.";
+  const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
+  const corps = when === "demain"
+    ? `<h2 style="margin:0 0 12px;font-size:21px">Votre Money Date, c'est demain</h2>
+       <p style="color:#ccc;margin:0">${bonjour} pensez à garder une demi-heure ensemble demain.</p>`
+    : `<h2 style="margin:0 0 12px;font-size:21px">C'est aujourd'hui votre Money Date</h2>
+       <p style="color:#ccc;margin:0 0 24px">${bonjour} une demi-heure à deux, et tout sera dit pour le mois.</p>
+       <a href="https://budgetadeux.fr/?ecran=moneydate" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">Commencer notre Money Date →</a>`;
   return `
   <div style="background:#141414;padding:32px 16px;font-family:Georgia,serif;color:#eee">
     <div style="max-width:480px;margin:0 auto;background:#1c1c1c;border-radius:12px;padding:32px;text-align:center">
-      <h1 style="color:#e07856;margin:0 0 4px">Budget à Deux</h1>
-      <p style="color:#999;font-style:italic;margin:0 0 24px">« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »</p>
-      <h2 style="margin:0 0 12px">${titre}</h2>
-      <p style="color:#ccc;margin:0 0 24px">Bonjour ${prenom ? prenom : ""} — ${sous}</p>
-      <a href="https://budgetadeux.fr" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">Ouvrir Budget à Deux →</a>
+      <h1 style="color:#e07856;margin:0 0 4px;font-size:24px">Budget à Deux</h1>
+      <p style="color:#999;font-style:italic;margin:0 0 24px;font-size:14px">« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »</p>
+      ${corps}
     </div>
   </div>`;
 }
 
 async function sendEmail(to: string, prenom: string, when: "demain" | "aujourdhui", apiKey: string) {
-  const subject = when === "demain" ? "💛 Votre Money Date, c'est demain" : "❤️ C'est aujourd'hui votre Money Date !";
+  const subject = when === "demain" ? "Rappel : votre Money Date, c'est demain" : "❤️ C'est aujourd'hui votre Money Date";
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
