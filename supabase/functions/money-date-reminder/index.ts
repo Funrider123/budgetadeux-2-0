@@ -63,6 +63,123 @@ async function sendEmail(to: string, prenom: string, when: "demain" | "aujourdhu
   if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
 }
 
+/* ============================================================
+   RELANCES D'ACTIVATION (48 h puis J+7)
+   Qui relancer et à quel stade est décidé par la vue SQL onboarding_candidates :
+   la règle y reste testable sans redéployer la fonction. Deux relances au maximum,
+   jamais plus — au-delà, chaque envoi coûte plus de confiance qu'il ne rapporte.
+   ============================================================ */
+type Candidat = {
+  couple_code: string; stage: "j2" | "j7"; email: string; name: string | null;
+  manque_partenaire: boolean; manque_moneydate: boolean; manque_budget: boolean;
+};
+
+// Adresse réellement relevée : la relance de J+7 invite à répondre, il serait absurde
+// d'inviter à écrire à une boîte no-reply.
+const REPLY_TO = "equipe.budgetadeux@gmail.com";
+
+function coquille(corps: string) {
+  return `
+  <div style="background:#141414;padding:32px 16px;font-family:Georgia,serif;color:#eee">
+    <div style="max-width:480px;margin:0 auto;background:#1c1c1c;border-radius:12px;padding:32px;text-align:center">
+      <h1 style="color:#e07856;margin:0 0 4px;font-size:24px">Budget à Deux</h1>
+      <p style="color:#999;font-style:italic;margin:0 0 24px;font-size:14px">« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »</p>
+      ${corps}
+    </div>
+  </div>`;
+}
+const bouton = (url: string, texte: string) =>
+  `<a href="${url}" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">${texte}</a>`;
+
+// Tant que le partenaire n'est pas là, rien d'autre n'a de sens : on ne liste pas trois
+// tâches à quelqu'un qui n'a pas franchi la première. Une seule action par email.
+function resteAFaire(c: Candidat): string[] {
+  if (c.manque_partenaire) return ["inviter votre partenaire"];
+  const l: string[] = [];
+  if (c.manque_moneydate) l.push("programmer votre premier Money Date");
+  if (c.manque_budget) l.push("valider votre budget du mois");
+  return l;
+}
+
+function onboardingEmail(c: Candidat) {
+  const prenom = c.name ? c.name : "";
+  const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
+  const lien = c.manque_partenaire
+    ? "https://budgetadeux.fr/?ecran=reglages"
+    : c.manque_moneydate ? "https://budgetadeux.fr/?ecran=moneydate" : "https://budgetadeux.fr/?ecran=pilotage";
+
+  if (c.stage === "j2") {
+    const corps = c.manque_partenaire
+      ? `<h2 style="margin:0 0 12px;font-size:21px">Votre partenaire vous attend</h2>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours — mais vous y êtes encore seul(e).</p>
+         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux ne sert à rien tout seul : c'est en le partageant que les comptes s'équilibrent et que le rendez-vous mensuel prend son sens.</p>
+         ${bouton(lien, "Inviter mon/ma partenaire →")}`
+      : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.</p>
+         ${bouton(lien, "Reprendre là où j'en étais →")}`;
+    return {
+      subject: c.manque_partenaire ? "Vous êtes encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
+      html: coquille(corps),
+      replyTo: null as string | null,
+    };
+  }
+
+  // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
+  // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
+  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de votre côté&nbsp;?</h2>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter — juste vérifier que rien ne vous a bloqué.</p>
+     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">répondez simplement à cet email</b>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
+     ${bouton(lien, "Reprendre l'application →")}
+     <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
+  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), replyTo: REPLY_TO };
+}
+
+async function envoiRelance(c: Candidat, apiKey: string) {
+  const { subject, html, replyTo } = onboardingEmail(c);
+  const body: Record<string, unknown> = { from: FROM, to: [c.email], subject, html };
+  if (replyTo) body.reply_to = replyTo;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
+}
+
+// deno-lint-ignore no-explicit-any
+async function relancesActivation(admin: any, resendKey: string) {
+  const { data, error } = await admin.from("onboarding_candidates").select("*");
+  if (error) throw error;
+  const candidats = (data ?? []) as Candidat[];
+
+  let sent = 0;
+  const errors: string[] = [];
+  const aMarquer = new Map<string, { couple_code: string; stage: string; recipients: number }>();
+
+  for (const c of candidats) {
+    try {
+      await envoiRelance(c, resendKey);
+      sent++;
+      const k = `${c.couple_code}|${c.stage}`;
+      const acc = aMarquer.get(k) ?? { couple_code: c.couple_code, stage: c.stage, recipients: 0 };
+      acc.recipients++;
+      aMarquer.set(k, acc);
+    } catch (e) {
+      errors.push(`relance ${c.stage} ${c.couple_code}/${c.email}: ${(e as Error).message}`);
+    }
+  }
+
+  // Marqué seulement après un envoi réussi : si Resend est en panne, le couple sera retenté
+  // demain plutôt que perdu en silence. La clé primaire (couple_code, stage) garantit de
+  // toute façon qu'une relance ne partira jamais deux fois.
+  for (const v of aMarquer.values()) {
+    const { error: upErr } = await admin.from("onboarding_reminders")
+      .upsert(v, { onConflict: "couple_code,stage" });
+    if (upErr) errors.push(`marquage ${v.couple_code}/${v.stage}: ${upErr.message}`);
+  }
+  return { sent, errors };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -104,7 +221,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, today, tomorrow, sent, errors });
+    // Relances d'activation, dans la même exécution quotidienne : un seul cron, un seul
+    // démarrage à froid (le coûteux, ~14 s) pour les deux usages.
+    let relances = { sent: 0, errors: [] as string[] };
+    try {
+      relances = await relancesActivation(admin, resendKey);
+    } catch (e) {
+      // Un échec ici ne doit pas masquer le résultat des rappels Money Date, qui sont
+      // la fonction principale et ont déjà été envoyés à ce stade.
+      relances.errors.push(`relances: ${(e as Error).message}`);
+    }
+
+    return json({
+      ok: true, today, tomorrow,
+      moneyDate: { sent, errors },
+      relances,
+    });
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
   }
