@@ -839,6 +839,15 @@ function syncError(phase,e){
 // Sans ça, save() étant appelé pour tout (y compris S.ui : thème, mois affiché…), chaque geste
 // purement local déclenchait quand même un envoi et le toast "Budget mis à jour" chez l'autre.
 let lastPushedSnapshot=null;
+// Vrai une fois que la toute première lecture distante de cette session a eu lieu (voir
+// pullState/initSync). Avant ça, lastPushedSnapshot est encore null : un push ne saurait pas
+// distinguer "rien n'a changé" de "je ne sais juste pas encore ce qui est déjà synchronisé", et
+// pousserait aveuglément ce que cet appareil a en mémoire — potentiellement une valeur restée
+// périmée depuis longtemps (un onglet resté ouvert en arrière-plan plusieurs jours, par exemple)
+// pour un champ non fusionnable comme moneyDate ou settings, écrasant silencieusement un
+// changement plus récent fait par le partenaire entre-temps. Un push est donc bloqué tant que
+// ce premier état des lieux n'a pas eu lieu.
+let initialPullDone=false;
 function applyRemote(data, stamp){
   applyingRemote=true; applyShared(data); save(); applyingRemote=false;
   lastAppliedStamp=stamp||null;
@@ -847,7 +856,7 @@ function applyRemote(data, stamp){
 }
 function schedulePush(){ if(!syncActive()||applyingRemote) return; clearTimeout(pushTimer); pushTimer=setTimeout(pushState,800); }
 async function pushState(){
-  if(!syncActive()||applyingRemote) return;
+  if(!syncActive()||applyingRemote||!initialPullDone) return;
   try{
     // On relit l'état distant juste avant d'écraser, pour y fusionner tout ajout du
     // partenaire qu'on n'aurait pas encore reçu localement (voir mergeArraysWithRemote).
@@ -876,6 +885,9 @@ async function pullState(){
   if(!syncActive()) return;
   try{
     const {data,error}=await sb.from('couple_state').select('data,updated_at,updated_by').eq('couple_code',S.auth.coupleCode).maybeSingle();
+    // On sait désormais ce que le serveur contient (ou, en cas d'erreur, on ne le saura pas
+    // mieux en réessayant sans relâche) : un push peut être autorisé à partir d'ici.
+    initialPullDone=true;
     if(error){ syncError('lecture', error); return; }
     syncErrShown=false;
     if(syncStatus!=='ok'){ syncStatus='ok'; refreshConnStatusUI(); }
@@ -908,8 +920,16 @@ function bindVisibility(){
   window.addEventListener('online',()=>{ netOnline=true; refreshConnStatusUI(); if(syncActive()) pullState(); });
   window.addEventListener('offline',()=>{ netOnline=false; refreshConnStatusUI(); });
 }
-async function initSync(){ bindVisibility(); if(!syncActive()) return; await pullState(); subscribeSync(); startPolling(); }
-function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} syncChan=null; } clearTimeout(pushTimer); stopPolling(); lastAppliedStamp=null; }
+async function initSync(){
+  bindVisibility(); if(!syncActive()) return;
+  await pullState();
+  // Un changement local fait pendant cette première lecture (donc bloqué par initialPullDone,
+  // voir pushState) n'a rescheduleé aucun nouvel essai tout seul : on en relance un maintenant,
+  // sans effet s'il n'y avait en réalité rien en attente.
+  schedulePush();
+  subscribeSync(); startPolling();
+}
+function stopSync(){ if(syncChan){ try{ sb.removeChannel(syncChan); }catch(_){} syncChan=null; } clearTimeout(pushTimer); stopPolling(); lastAppliedStamp=null; initialPullDone=false; }
 
 /* ============================================================
    HELPERS

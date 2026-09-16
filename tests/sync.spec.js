@@ -234,6 +234,79 @@ test.describe('La cagnotte survit à la fusion, comme le reste', () => {
   });
 });
 
+test.describe('Un push ne part jamais avant d\'avoir vérifié le distant', () => {
+  // Incident réel : un téléphone resté ouvert en arrière-plan (moneyDate.nextDate encore à
+  // l'ancienne valeur en mémoire) a écrasé silencieusement la date fixée entre-temps par le
+  // partenaire sur son propre téléphone. Cause : lastPushedSnapshot repart à null à chaque
+  // session, donc rien n'empêchait un push de partir AVANT la première lecture du distant,
+  // avec une valeur qu'on ne pouvait pas savoir périmée. moneyDate n'est pas dans
+  // MERGE_ARRAY_KEYS (ce n'est pas un tableau) : rien ne la protégeait comme les dépenses.
+  test('un push tenté avant toute lecture distante est bloqué', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, { moneyDate: { doneSteps: [], nextDate: '2026-09-17', notes: [], surplusDecisions: {}, checklist: {} } });
+    // On simule l'état d'avant la 1ʳᵉ lecture : comme au tout premier chargement du script.
+    await page.evaluate(() => { initialPullDone = false; window.__mock.calls.upsert = []; });
+
+    await page.evaluate(() => pushState());
+
+    const upserts = await page.evaluate(() => window.__mock.calls.upsert.filter(u => u.table === 'couple_state').length);
+    expect(upserts).toBe(0);
+  });
+
+  test('la date fixée par le partenaire n\'est pas écrasée par une valeur restée en mémoire', async ({ page }) => {
+    await openApp(page);
+    // Ce téléphone a en mémoire une ancienne date (jamais rafraîchie depuis un moment).
+    await loginAs(page, { moneyDate: { doneSteps: [], nextDate: '2026-09-21', notes: [], surplusDecisions: {}, checklist: {} } });
+    // Le partenaire a fixé une date plus proche entre-temps, déjà sur le serveur.
+    await seedRemote(page, {
+      moneyDate: { doneSteps: [], nextDate: '2026-09-17', notes: [], surplusDecisions: {}, checklist: {} },
+    });
+    await page.evaluate(() => { initialPullDone = false; });
+
+    // Un push tenté avant la lecture (ex: une action locale pendant que la 1ʳᵉ synchro tourne
+    // encore) ne doit rien écraser…
+    await page.evaluate(() => pushState());
+    // …puis la lecture a bien lieu et aligne ce téléphone sur la vraie date.
+    await page.evaluate(() => pullState());
+
+    expect(await page.evaluate(() => S.moneyDate.nextDate)).toBe('2026-09-17');
+  });
+
+  test('une fois la 1ʳᵉ lecture faite, les pushs suivants fonctionnent normalement', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, { categories: [{ id: 'courses', emoji: '🛒', name: 'Courses', budget: 300, cls: 'besoin' }] });
+    await page.evaluate(() => pullState()); // la 1ʳᵉ lecture, comme le ferait initSync()
+
+    await page.evaluate(() => { S.categories[0].budget = 500; save(); });
+    await page.evaluate(() => pushState());
+
+    const pushed = await page.evaluate(() => {
+      const ups = window.__mock.calls.upsert.filter(u => u.table === 'couple_state');
+      return ups.length ? ups[ups.length - 1].row.data.categories[0].budget : null;
+    });
+    expect(pushed).toBe(500);
+  });
+
+  test('initSync relance un push resté bloqué pendant la 1ʳᵉ lecture, sans le perdre', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, { categories: [{ id: 'courses', emoji: '🛒', name: 'Courses', budget: 300, cls: 'besoin' }] });
+    // On repart de zéro comme au chargement du script, et on relance le cycle complet.
+    await page.evaluate(() => { initialPullDone = false; lastPushedSnapshot = null; window.__mock.calls.upsert = []; });
+
+    await page.evaluate(async () => {
+      S.categories[0].budget = 777; save(); // déclenche schedulePush(), mais initialPullDone est faux
+      await initSync(); // pullState() d'abord, puis un push est reprogrammé automatiquement
+    });
+    await page.waitForTimeout(900); // laisse passer le debounce de schedulePush (800ms)
+
+    const pushed = await page.evaluate(() => {
+      const ups = window.__mock.calls.upsert.filter(u => u.table === 'couple_state');
+      return ups.length ? ups[ups.length - 1].row.data.categories[0].budget : null;
+    });
+    expect(pushed).toBe(777);
+  });
+});
+
 test.describe('Réception des changements du partenaire', () => {
   test('les données distantes sont appliquées localement', async ({ page }) => {
     await openApp(page);
