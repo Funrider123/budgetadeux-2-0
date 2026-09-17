@@ -111,8 +111,8 @@ function onboardingEmail(c: Candidat) {
   if (c.stage === "j2") {
     const corps = c.manque_partenaire
       ? `<h2 style="margin:0 0 12px;font-size:21px">Votre partenaire vous attend</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours — mais vous y êtes encore seul(e).</p>
-         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux ne sert à rien tout seul : c'est en le partageant que les comptes s'équilibrent et que le rendez-vous mensuel prend son sens.</p>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).</p>
+         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
          <p style="color:#ccc;margin:0 0 10px">${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.</p>
@@ -127,7 +127,7 @@ function onboardingEmail(c: Candidat) {
   // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
   // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
   const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de votre côté&nbsp;?</h2>
-     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter — juste vérifier que rien ne vous a bloqué.</p>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.</p>
      <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">répondez simplement à cet email</b>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
      ${bouton(lien, "Reprendre l'application →")}
      <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
