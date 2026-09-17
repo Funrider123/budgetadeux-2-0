@@ -40,7 +40,13 @@ const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
 // couples testeurs, une réponse à un rappel Money Date vaut de l'or, il serait absurde de la
 // refuser sous prétexte que cet email-là n'en demandait pas. Le bouton « Répondre » d'un
 // client mail suit ce champ, pas le no-reply affiché : la réponse arrive donc bien ici.
-const REPLY_TO = "equipe.budgetadeux@gmail.com";
+//
+// C'est un alias sur budgetadeux.fr (redirigé vers Gmail via ImprovMX), pas directement
+// l'adresse Gmail : un reply-to freemail sur un envoi au nom d'un domaine pro est la signature
+// classique d'une usurpation, et SpamAssassin le sanctionne lourdement (-2,5 points mesurés sur
+// mail-tester avant ce changement). Avec un alias sur le même domaine que le FROM, cette
+// pénalité disparaît — et la réponse atterrit toujours au même endroit.
+const REPLY_TO = "contact@budgetadeux.fr";
 
 // La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
 // un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
