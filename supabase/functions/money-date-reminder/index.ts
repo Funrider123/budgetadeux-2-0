@@ -193,6 +193,34 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY")!;
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
+    // Mode aperçu : POST {"apercu":"adresse@exemple.fr"} envoie les cinq emails du produit à
+    // cette seule adresse, puis s'arrête. Rien n'est lu ni écrit en base, aucun couple n'est
+    // relancé, aucune relance n'est marquée comme envoyée. Un navigateur ment sur le rendu
+    // d'un email (fond sombre, polices, Outlook) : le seul juge est une vraie boîte mail.
+    const corpsRequete = await req.json().catch(() => ({}));
+    const apercu = typeof corpsRequete?.apercu === "string" ? corpsRequete.apercu.trim() : "";
+    if (apercu) {
+      const prenom = typeof corpsRequete?.prenom === "string" ? corpsRequete.prenom : "JB";
+      const faux = (o: Partial<Candidat>): Candidat => ({
+        couple_code: "APERCU", stage: "j2", email: apercu, name: prenom,
+        manque_partenaire: false, manque_moneydate: false, manque_budget: false, ...o,
+      });
+      const envois: Array<[string, () => Promise<void>]> = [
+        ["moneyDate/veille", () => sendEmail(apercu, prenom, "demain", resendKey)],
+        ["moneyDate/jourJ", () => sendEmail(apercu, prenom, "aujourdhui", resendKey)],
+        ["relance/j2-partenaire-manquant", () => envoiRelance(faux({ manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
+        ["relance/j2-partenaire-present", () => envoiRelance(faux({ manque_moneydate: true, manque_budget: true }), resendKey)],
+        ["relance/j7", () => envoiRelance(faux({ stage: "j7", manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
+      ];
+      const envoyes: string[] = [];
+      const echecs: string[] = [];
+      for (const [nom, envoyer] of envois) {
+        try { await envoyer(); envoyes.push(nom); }
+        catch (e) { echecs.push(`${nom}: ${(e as Error).message}`); }
+      }
+      return json({ ok: echecs.length === 0, apercu: true, destinataire: apercu, envoyes, echecs });
+    }
+
     const today = parisDateStr(0);
     const tomorrow = parisDateStr(1);
 
