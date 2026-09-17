@@ -224,10 +224,20 @@ Deno.serve(async (req) => {
       return json({ ok: echecs.length === 0, apercu: true, destinataire: apercu, envoyes, echecs });
     }
 
+    // Les deux usages partagent une exécution, mais on doit pouvoir n'en déclencher qu'un à la
+    // main : relancer les activations un jour où un Money Date tombe renverrait un rappel déjà
+    // reçu le matin même, et un doublon inquiète toujours plus qu'il n'informe.
+    // POST {"seulement":"relances"} ou {"seulement":"moneydate"}. Le cron, lui, ne passe rien.
+    const seulement = typeof corpsRequete?.seulement === "string" ? corpsRequete.seulement : "";
+    const faireMoneyDate = seulement !== "relances";
+    const faireRelances = seulement !== "moneydate";
+
     const today = parisDateStr(0);
     const tomorrow = parisDateStr(1);
 
-    const { data: couples, error: cErr } = await admin.from("couple_state").select("couple_code, data");
+    const { data: couples, error: cErr } = faireMoneyDate
+      ? await admin.from("couple_state").select("couple_code, data")
+      : { data: [], error: null };
     if (cErr) throw cErr;
 
     let sent = 0;
@@ -256,7 +266,7 @@ Deno.serve(async (req) => {
     // démarrage à froid (le coûteux, ~14 s) pour les deux usages.
     let relances = { sent: 0, errors: [] as string[] };
     try {
-      relances = await relancesActivation(admin, resendKey);
+      if (faireRelances) relances = await relancesActivation(admin, resendKey);
     } catch (e) {
       // Un échec ici ne doit pas masquer le résultat des rappels Money Date, qui sont
       // la fonction principale et ont déjà été envoyés à ce stade.
@@ -264,9 +274,9 @@ Deno.serve(async (req) => {
     }
 
     return json({
-      ok: true, today, tomorrow,
-      moneyDate: { sent, errors },
-      relances,
+      ok: true, today, tomorrow, seulement: seulement || null,
+      moneyDate: faireMoneyDate ? { sent, errors } : "ignoré",
+      relances: faireRelances ? relances : "ignoré",
     });
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
