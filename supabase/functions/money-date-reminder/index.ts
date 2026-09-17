@@ -2,8 +2,8 @@
 // Déclenchée une fois par jour par un cron (voir README-cron.md dans ce dossier).
 //
 // Pour chaque couple dont couple_state.data.moneyDate.nextDate tombe demain ou aujourd'hui
-// (heure de Paris), on envoie un email aux deux partenaires via l'API Resend — le même
-// domaine déjà vérifié pour les emails de récupération de mot de passe (no-reply@budgetadeux.fr).
+// (heure de Paris), on envoie un email aux deux partenaires via l'API Resend, sur le domaine
+// budgetadeux.fr déjà vérifié pour les emails de récupération de mot de passe.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
@@ -29,7 +29,16 @@ function parisDateStr(offsetDays: number): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
+// Surtout pas "no-reply@" : le lecteur lit l'adresse avant le texte, et une adresse qui
+// annonce le silence décrédibilise la phrase qui lui demande de répondre. L'adresse doit être
+// sur budgetadeux.fr (c'est le domaine vérifié chez Resend, celui que SPF/DKIM signent) ;
+// l'adresse Gmail, elle, reste la destination des réponses via REPLY_TO, invisible.
+const FROM = "Budget à Deux <bonjour@budgetadeux.fr>";
+
+// Adresse réellement relevée. Tous les emails la portent en reply-to : avec une poignée de
+// couples testeurs, une réponse à un rappel Money Date vaut de l'or, il serait absurde de la
+// refuser sous prétexte que cet email-là n'en demandait pas.
+const REPLY_TO = "equipe.budgetadeux@gmail.com";
 
 // La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
 // un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
@@ -58,7 +67,7 @@ async function sendEmail(to: string, prenom: string, when: "demain" | "aujourdhu
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(prenom, when) }),
+    body: JSON.stringify({ from: FROM, to: [to], subject, reply_to: REPLY_TO, html: emailHtml(prenom, when) }),
   });
   if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
 }
@@ -73,10 +82,6 @@ type Candidat = {
   couple_code: string; stage: "j2" | "j7"; email: string; name: string | null;
   manque_partenaire: boolean; manque_moneydate: boolean; manque_budget: boolean;
 };
-
-// Adresse réellement relevée : la relance de J+7 invite à répondre, il serait absurde
-// d'inviter à écrire à une boîte no-reply.
-const REPLY_TO = "equipe.budgetadeux@gmail.com";
 
 function coquille(corps: string) {
   return `
@@ -120,7 +125,6 @@ function onboardingEmail(c: Candidat) {
     return {
       subject: c.manque_partenaire ? "Vous êtes encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
       html: coquille(corps),
-      replyTo: null as string | null,
     };
   }
 
@@ -131,13 +135,12 @@ function onboardingEmail(c: Candidat) {
      <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">répondez simplement à cet email</b>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
      ${bouton(lien, "Reprendre l'application →")}
      <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
-  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), replyTo: REPLY_TO };
+  return { subject: "Tout va bien de votre côté ?", html: coquille(corps) };
 }
 
 async function envoiRelance(c: Candidat, apiKey: string) {
-  const { subject, html, replyTo } = onboardingEmail(c);
-  const body: Record<string, unknown> = { from: FROM, to: [c.email], subject, html };
-  if (replyTo) body.reply_to = replyTo;
+  const { subject, html } = onboardingEmail(c);
+  const body = { from: FROM, to: [c.email], subject, reply_to: REPLY_TO, html };
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
