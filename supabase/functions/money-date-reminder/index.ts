@@ -144,7 +144,7 @@ function onboardingEmail(c: Candidat) {
     const corps = c.manque_partenaire
       ? `<h2 style="margin:0 0 12px;font-size:21px">Ton/ta partenaire t'attend</h2>
          <p style="color:#ccc;margin:0 0 10px">${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).</p>
-         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
+         <p style="color:#ccc;margin:0 0 24px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
          <p style="color:#ccc;margin:0 0 10px">${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.</p>
