@@ -2,8 +2,8 @@
 // Déclenchée une fois par jour par un cron (voir README-cron.md dans ce dossier).
 //
 // Pour chaque couple dont couple_state.data.moneyDate.nextDate tombe demain ou aujourd'hui
-// (heure de Paris), on envoie un email aux deux partenaires via l'API Resend — le même
-// domaine déjà vérifié pour les emails de récupération de mot de passe (no-reply@budgetadeux.fr).
+// (heure de Paris), on envoie un email aux deux partenaires via l'API Resend, sur le domaine
+// budgetadeux.fr déjà vérifié pour les emails de récupération de mot de passe.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
@@ -29,7 +29,24 @@ function parisDateStr(offsetDays: number): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+// L'adresse d'envoi doit être sur budgetadeux.fr : c'est le domaine vérifié chez Resend,
+// celui que SPF et DKIM signent. Une adresse @gmail.com ici échouerait DMARC et partirait en
+// indésirables. "no-reply@" a l'inconvénient d'annoncer le silence ; c'est pourquoi la relance
+// de J+7 écrit l'adresse de contact noir sur blanc dans son texte, au lieu de compter sur le
+// seul bouton « Répondre ».
 const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
+
+// Adresse réellement relevée. Tous les emails la portent en reply-to : avec une poignée de
+// couples testeurs, une réponse à un rappel Money Date vaut de l'or, il serait absurde de la
+// refuser sous prétexte que cet email-là n'en demandait pas. Le bouton « Répondre » d'un
+// client mail suit ce champ, pas le no-reply affiché : la réponse arrive donc bien ici.
+//
+// C'est un alias sur budgetadeux.fr (redirigé vers Gmail via ImprovMX), pas directement
+// l'adresse Gmail : un reply-to freemail sur un envoi au nom d'un domaine pro est la signature
+// classique d'une usurpation, et SpamAssassin le sanctionne lourdement (-2,5 points mesurés sur
+// mail-tester avant ce changement). Avec un alias sur le même domaine que le FROM, cette
+// pénalité disparaît — et la réponse atterrit toujours au même endroit.
+const REPLY_TO = "contact@budgetadeux.fr";
 
 // La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
 // un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
@@ -53,12 +70,37 @@ function emailHtml(prenom: string, when: "demain" | "aujourdhui") {
   </div>`;
 }
 
+// Version texte, obligatoire. Un email qui n'a qu'une partie HTML est un des profils que les
+// filtres anti-spam sanctionnent le plus, Microsoft en tête — et c'est justement chez Microsoft
+// qu'un rappel est tombé en indésirables. Ce n'est pas une politesse pour les vieux clients
+// mail : c'est la moitié manquante d'un email correctement formé.
+const signature = (corps: string) =>
+  `${corps}\n\n--\nBudget à Deux\n« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »\nPour nous écrire : ${REPLY_TO}`;
+
+function emailTexte(prenom: string, when: "demain" | "aujourdhui") {
+  const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
+  return signature(when === "demain"
+    ? `Votre Money Date, c'est demain.\n\n${bonjour} pensez à garder une demi-heure ensemble demain.`
+    : `C'est aujourd'hui votre Money Date.\n\n${bonjour} une demi-heure à deux, et tout sera dit pour le mois.\n\nCommencer notre Money Date : https://budgetadeux.fr/?ecran=moneydate`);
+}
+
+// Un envoi automatique récurrent sans moyen de s'en défaire est mal vu des filtres, et à juste
+// titre. À cette échelle un mailto suffit et il est honnête : les demandes arrivent sur une
+// boîte réellement relevée. Pas de List-Unsubscribe-Post ici : l'en-tête « un clic » exige une
+// URL HTTPS, l'annoncer avec un simple mailto serait une déclaration fausse.
+const ENTETES = { "List-Unsubscribe": `<mailto:${REPLY_TO}?subject=Desabonnement>` };
+
 async function sendEmail(to: string, prenom: string, when: "demain" | "aujourdhui", apiKey: string) {
-  const subject = when === "demain" ? "Rappel : votre Money Date, c'est demain" : "❤️ C'est aujourd'hui votre Money Date";
+  // Pas d'emoji dans l'objet : le cœur était un signal de mailing publicitaire, pour un gain
+  // d'affection à peu près nul face au coût d'un passage en indésirables.
+  const subject = when === "demain" ? "Rappel : votre Money Date, c'est demain" : "C'est aujourd'hui votre Money Date";
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(prenom, when) }),
+    body: JSON.stringify({
+      from: FROM, to: [to], subject, reply_to: REPLY_TO, headers: ENTETES,
+      html: emailHtml(prenom, when), text: emailTexte(prenom, when),
+    }),
   });
   if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
 }
@@ -73,10 +115,6 @@ type Candidat = {
   couple_code: string; stage: "j2" | "j7"; email: string; name: string | null;
   manque_partenaire: boolean; manque_moneydate: boolean; manque_budget: boolean;
 };
-
-// Adresse réellement relevée : la relance de J+7 invite à répondre, il serait absurde
-// d'inviter à écrire à une boîte no-reply.
-const REPLY_TO = "equipe.budgetadeux@gmail.com";
 
 function coquille(corps: string) {
   return `
@@ -111,33 +149,36 @@ function onboardingEmail(c: Candidat) {
   if (c.stage === "j2") {
     const corps = c.manque_partenaire
       ? `<h2 style="margin:0 0 12px;font-size:21px">Votre partenaire vous attend</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours — mais vous y êtes encore seul(e).</p>
-         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux ne sert à rien tout seul : c'est en le partageant que les comptes s'équilibrent et que le rendez-vous mensuel prend son sens.</p>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).</p>
+         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
          <p style="color:#ccc;margin:0 0 10px">${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.</p>
          ${bouton(lien, "Reprendre là où j'en étais →")}`;
+    const texte = c.manque_partenaire
+      ? `Votre partenaire vous attend.\n\n${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.\n\nInviter mon/ma partenaire : ${lien}`
+      : `Il reste une étape.\n\n${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
     return {
       subject: c.manque_partenaire ? "Vous êtes encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
       html: coquille(corps),
-      replyTo: null as string | null,
+      text: signature(texte),
     };
   }
 
   // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
   // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
   const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de votre côté&nbsp;?</h2>
-     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter — juste vérifier que rien ne vous a bloqué.</p>
-     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">répondez simplement à cet email</b>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.</p>
+     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">vous pouvez répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
      ${bouton(lien, "Reprendre l'application →")}
      <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
-  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), replyTo: REPLY_TO };
+  const texte = `Tout va bien de votre côté ?\n\n${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.\n\nSi quelque chose vous a arrêté, même un détail, vous pouvez répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.`;
+  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), text: signature(texte) };
 }
 
 async function envoiRelance(c: Candidat, apiKey: string) {
-  const { subject, html, replyTo } = onboardingEmail(c);
-  const body: Record<string, unknown> = { from: FROM, to: [c.email], subject, html };
-  if (replyTo) body.reply_to = replyTo;
+  const { subject, html, text } = onboardingEmail(c);
+  const body = { from: FROM, to: [c.email], subject, reply_to: REPLY_TO, headers: ENTETES, html, text };
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -193,10 +234,52 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY")!;
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
+    // Mode aperçu : POST {"apercu":"adresse@exemple.fr"} envoie les cinq emails du produit à
+    // cette seule adresse, puis s'arrête. Rien n'est lu ni écrit en base, aucun couple n'est
+    // relancé, aucune relance n'est marquée comme envoyée. Un navigateur ment sur le rendu
+    // d'un email (fond sombre, polices, Outlook) : le seul juge est une vraie boîte mail.
+    const corpsRequete = await req.json().catch(() => ({}));
+    const apercu = typeof corpsRequete?.apercu === "string" ? corpsRequete.apercu.trim() : "";
+    if (apercu) {
+      const prenom = typeof corpsRequete?.prenom === "string" ? corpsRequete.prenom : "JB";
+      const seul = typeof corpsRequete?.variante === "string" ? corpsRequete.variante : "";
+      const faux = (o: Partial<Candidat>): Candidat => ({
+        couple_code: "APERCU", stage: "j2", email: apercu, name: prenom,
+        manque_partenaire: false, manque_moneydate: false, manque_budget: false, ...o,
+      });
+      const envois: Array<[string, () => Promise<void>]> = [
+        ["moneyDate/veille", () => sendEmail(apercu, prenom, "demain", resendKey)],
+        ["moneyDate/jourJ", () => sendEmail(apercu, prenom, "aujourdhui", resendKey)],
+        ["relance/j2-partenaire-manquant", () => envoiRelance(faux({ manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
+        ["relance/j2-partenaire-present", () => envoiRelance(faux({ manque_moneydate: true, manque_budget: true }), resendKey)],
+        ["relance/j7", () => envoiRelance(faux({ stage: "j7", manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
+      ];
+      const envoyes: string[] = [];
+      const echecs: string[] = [];
+      // Un test de délivrabilité (mail-tester et consorts) note UNE adresse sur UN message :
+      // lui en envoyer cinq fausse le résultat. {"variante":"..."} n'en envoie qu'un.
+      for (const [nom, envoyer] of envois) {
+        if (seul && nom !== seul) continue;
+        try { await envoyer(); envoyes.push(nom); }
+        catch (e) { echecs.push(`${nom}: ${(e as Error).message}`); }
+      }
+      return json({ ok: echecs.length === 0, apercu: true, destinataire: apercu, envoyes, echecs });
+    }
+
+    // Les deux usages partagent une exécution, mais on doit pouvoir n'en déclencher qu'un à la
+    // main : relancer les activations un jour où un Money Date tombe renverrait un rappel déjà
+    // reçu le matin même, et un doublon inquiète toujours plus qu'il n'informe.
+    // POST {"seulement":"relances"} ou {"seulement":"moneydate"}. Le cron, lui, ne passe rien.
+    const seulement = typeof corpsRequete?.seulement === "string" ? corpsRequete.seulement : "";
+    const faireMoneyDate = seulement !== "relances";
+    const faireRelances = seulement !== "moneydate";
+
     const today = parisDateStr(0);
     const tomorrow = parisDateStr(1);
 
-    const { data: couples, error: cErr } = await admin.from("couple_state").select("couple_code, data");
+    const { data: couples, error: cErr } = faireMoneyDate
+      ? await admin.from("couple_state").select("couple_code, data")
+      : { data: [], error: null };
     if (cErr) throw cErr;
 
     let sent = 0;
@@ -225,7 +308,7 @@ Deno.serve(async (req) => {
     // démarrage à froid (le coûteux, ~14 s) pour les deux usages.
     let relances = { sent: 0, errors: [] as string[] };
     try {
-      relances = await relancesActivation(admin, resendKey);
+      if (faireRelances) relances = await relancesActivation(admin, resendKey);
     } catch (e) {
       // Un échec ici ne doit pas masquer le résultat des rappels Money Date, qui sont
       // la fonction principale et ont déjà été envoyés à ce stade.
@@ -233,9 +316,9 @@ Deno.serve(async (req) => {
     }
 
     return json({
-      ok: true, today, tomorrow,
-      moneyDate: { sent, errors },
-      relances,
+      ok: true, today, tomorrow, seulement: seulement || null,
+      moneyDate: faireMoneyDate ? { sent, errors } : "ignoré",
+      relances: faireRelances ? relances : "ignoré",
     });
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
