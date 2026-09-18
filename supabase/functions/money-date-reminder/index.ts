@@ -132,10 +132,10 @@ const bouton = (url: string, texte: string) =>
 // Tant que le partenaire n'est pas là, rien d'autre n'a de sens : on ne liste pas trois
 // tâches à quelqu'un qui n'a pas franchi la première. Une seule action par email.
 function resteAFaire(c: Candidat): string[] {
-  if (c.manque_partenaire) return ["inviter votre partenaire"];
+  if (c.manque_partenaire) return ["inviter ton/ta partenaire"];
   const l: string[] = [];
-  if (c.manque_moneydate) l.push("programmer votre premier Money Date");
-  if (c.manque_budget) l.push("valider votre budget du mois");
+  if (c.manque_moneydate) l.push("programmer ton premier Money Date");
+  if (c.manque_budget) l.push("valider ton budget du mois");
   return l;
 }
 
@@ -148,18 +148,18 @@ function onboardingEmail(c: Candidat) {
 
   if (c.stage === "j2") {
     const corps = c.manque_partenaire
-      ? `<h2 style="margin:0 0 12px;font-size:21px">Votre partenaire vous attend</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).</p>
-         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.</p>
+      ? `<h2 style="margin:0 0 12px;font-size:21px">Ton/ta partenaire t'attend</h2>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).</p>
+         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.</p>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.</p>
          ${bouton(lien, "Reprendre là où j'en étais →")}`;
     const texte = c.manque_partenaire
-      ? `Votre partenaire vous attend.\n\n${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.\n\nInviter mon/ma partenaire : ${lien}`
-      : `Il reste une étape.\n\n${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
+      ? `Ton/ta partenaire t'attend.\n\n${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.\n\nInviter mon/ma partenaire : ${lien}`
+      : `Il reste une étape.\n\n${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
     return {
-      subject: c.manque_partenaire ? "Vous êtes encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
+      subject: c.manque_partenaire ? "Tu es encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
       html: coquille(corps),
       text: signature(texte),
     };
@@ -167,13 +167,13 @@ function onboardingEmail(c: Candidat) {
 
   // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
   // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
-  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de votre côté&nbsp;?</h2>
-     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.</p>
-     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">vous pouvez répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
+  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de ton côté&nbsp;?</h2>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.</p>
+     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose t'a arrêté, même un détail, <b style="color:#ccc">tu peux répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
      ${bouton(lien, "Reprendre l'application →")}
-     <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
-  const texte = `Tout va bien de votre côté ?\n\n${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.\n\nSi quelque chose vous a arrêté, même un détail, vous pouvez répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.`;
-  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), text: signature(texte) };
+     <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.</p>`;
+  const texte = `Tout va bien de ton côté ?\n\n${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.\n\nSi quelque chose t'a arrêté, même un détail, tu peux répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.`;
+  return { subject: "Tout va bien de ton côté ?", html: coquille(corps), text: signature(texte) };
 }
 
 async function envoiRelance(c: Candidat, apiKey: string) {
