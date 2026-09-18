@@ -1,0 +1,33 @@
+<div style="background:#141414;padding:32px 16px;font-family:Georgia,serif;color:#eee">
+  <div style="max-width:480px;margin:0 auto;background:#1c1c1c;border-radius:12px;padding:32px;text-align:center">
+    <h1 style="color:#e07856;margin:0 0 4px;font-size:24px">Budget à Deux</h1>
+    <p style="color:#999;font-style:italic;margin:0 0 24px;font-size:14px">« L'argent n'est qu'un outil pour construire la vie que nous aimons ensemble. »</p>
+
+    <h2 style="margin:0 0 16px;font-size:21px">Plus qu'une étape</h2>
+
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;text-align:left;margin:0 0 24px">
+      <tr>
+        <td style="vertical-align:top;padding:0 10px 14px 0;color:#e07856;font-weight:bold;width:20px">1.</td>
+        <td style="vertical-align:top;padding:0 0 14px;color:#ccc;font-size:14px;line-height:1.5">
+          Si vous lisez ceci depuis vos <b style="color:#eee">indésirables</b>, marquez ce message comme <b style="color:#eee">« Non spam »</b> ; sinon nos prochains emails, comme les rappels de votre Money Date, y atterriront aussi.
+        </td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding:0 10px 0 0;color:#e07856;font-weight:bold;width:20px">2.</td>
+        <td style="vertical-align:top;color:#ccc;font-size:14px;line-height:1.5">
+          Cliquez sur le bouton ci-dessous pour activer votre compte.
+        </td>
+      </tr>
+    </table>
+
+    <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">Activer mon compte →</a>
+
+    <p style="color:#777;margin:24px 0 0;font-size:12px;line-height:1.5">
+      Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+      <a href="{{ .ConfirmationURL }}" style="color:#e07856;word-break:break-all">{{ .ConfirmationURL }}</a>
+    </p>
+    <p style="color:#777;margin:16px 0 0;font-size:12px">
+      Vous n'avez pas créé de compte ? Ignorez ce message, rien ne sera activé.
+    </p>
+  </div>
+</div>
