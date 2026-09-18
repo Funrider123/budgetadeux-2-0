@@ -383,14 +383,24 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 /* modal */
 .modal-back{position:fixed; inset:0; z-index:80; background:rgba(40,20,10,.45); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:.22s;}
 .modal-back.show{opacity:1; pointer-events:auto;}
-.modal{width:100%; max-width:var(--maxw); background:var(--cream); border-radius:28px 28px 0 0; padding:10px 20px calc(24px + env(safe-area-inset-bottom)); max-height:90dvh; overflow-y:auto; transform:translateY(20px); transition:.26s cubic-bezier(.2,.9,.2,1);}
+/* Pas de padding en haut : c'est la barre collante qui fournit cette marge. Sinon le sticky se
+   fige sous le padding et laisse une bande où le texte défile à découvert. */
+.modal{width:100%; max-width:var(--maxw); background:var(--cream); border-radius:28px 28px 0 0; padding:0 20px calc(24px + env(safe-area-inset-bottom)); max-height:90dvh; overflow-y:auto; transform:translateY(20px); transition:.26s cubic-bezier(.2,.9,.2,1);}
 .modal-back.show .modal{transform:translateY(0);}
 .modal::-webkit-scrollbar{width:0;}
 .modal-grip{width:42px;height:5px;border-radius:5px; background:var(--line-2); margin:6px auto 14px;}
+/* Barre du haut : la croix doit rester atteignable même dans une modale longue qu'on a fait
+   défiler (les mentions légales font plusieurs écrans) ; d'où le sticky plutôt qu'un simple
+   absolute, qui disparaîtrait dès le premier défilement. Le fond opaque masque le contenu
+   qui passe dessous. */
+.modal-top{position:sticky; top:0; z-index:5; background:var(--cream); display:flex; align-items:center; justify-content:center; min-height:44px; margin-bottom:6px;}
+.modal-top .modal-grip{margin:0;}
+.modal-close{position:absolute; right:0; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--muted); font-size:15px; line-height:1; display:grid; place-items:center; cursor:pointer;}
+.modal-close:active{background:var(--cream-2); color:var(--ink);}
 .modal h3{font-size:21px; margin-bottom:4px;}
 /* variante centrée (petits formulaires courts) au lieu de la feuille qui glisse du bas */
 .modal-back.centered{align-items:center; padding:20px;}
-.modal-back.centered .modal{border-radius:22px; max-width:380px; padding:22px 22px calc(20px + env(safe-area-inset-bottom)); transform:scale(.96); transition:.2s ease;}
+.modal-back.centered .modal{border-radius:22px; max-width:380px; padding:0 22px calc(20px + env(safe-area-inset-bottom)); transform:scale(.96); transition:.2s ease;}
 .modal-back.centered.show .modal{transform:scale(1);}
 
 /* category grid */
@@ -1140,13 +1150,18 @@ function toast(msg, emoji="✓"){
    MODALS
    ============================================================ */
 let modalCloseTimer=null;
+// La croix est posée ici, pas dans chacune des modales : il y en a une quarantaine, et une
+// seule oubliée suffit à enfermer l'utilisateur. Cliquer à côté fermait déjà, mais rien ne
+// l'indiquait — sur un écran rempli de texte, on ne devine pas qu'il faut viser le vide.
 function openModal(html, centered){
   clearTimeout(modalCloseTimer); // évite qu'une fermeture différée n'efface la modale qu'on vient d'ouvrir
   const root=$('#modalRoot');
-  root.innerHTML=`<div class="modal-back ${centered?'centered':''}" id="mb"><div class="modal">${centered?'':'<div class="modal-grip"></div>'}${html}</div></div>`;
+  const haut=`<div class="modal-top">${centered?'':'<div class="modal-grip"></div>'}<button class="modal-close" id="mClose" type="button" aria-label="Fermer">✕</button></div>`;
+  root.innerHTML=`<div class="modal-back ${centered?'centered':''}" id="mb"><div class="modal">${haut}${html}</div></div>`;
   const mb=$('#mb');
   requestAnimationFrame(()=>mb.classList.add('show'));
   mb.addEventListener('click',ev=>{ if(ev.target===mb) closeModal(); });
+  $('#mClose').onclick=closeModal;
 }
 function closeModal(){ const mb=$('#mb'); if(!mb) return; mb.classList.remove('show'); clearTimeout(modalCloseTimer); modalCloseTimer=setTimeout(()=>$('#modalRoot').innerHTML="",240); }
 
