@@ -29,24 +29,18 @@ function parisDateStr(offsetDays: number): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-// L'adresse d'envoi doit être sur budgetadeux.fr : c'est le domaine vérifié chez Resend,
-// celui que SPF et DKIM signent. Une adresse @gmail.com ici échouerait DMARC et partirait en
-// indésirables. "no-reply@" a l'inconvénient d'annoncer le silence ; c'est pourquoi la relance
-// de J+7 écrit l'adresse de contact noir sur blanc dans son texte, au lieu de compter sur le
-// seul bouton « Répondre ».
-const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
-
-// Adresse réellement relevée. Tous les emails la portent en reply-to : avec une poignée de
-// couples testeurs, une réponse à un rappel Money Date vaut de l'or, il serait absurde de la
-// refuser sous prétexte que cet email-là n'en demandait pas. Le bouton « Répondre » d'un
-// client mail suit ce champ, pas le no-reply affiché : la réponse arrive donc bien ici.
-//
-// C'est un alias sur budgetadeux.fr (redirigé vers Gmail via ImprovMX), pas directement
-// l'adresse Gmail : un reply-to freemail sur un envoi au nom d'un domaine pro est la signature
-// classique d'une usurpation, et SpamAssassin le sanctionne lourdement (-2,5 points mesurés sur
-// mail-tester avant ce changement). Avec un alias sur le même domaine que le FROM, cette
-// pénalité disparaît — et la réponse atterrit toujours au même endroit.
-const REPLY_TO = "contact@budgetadeux.fr";
+// Une seule adresse fait tout : c'est l'expéditeur ET celle où les réponses arrivent
+// réellement. Elle est sur budgetadeux.fr (le domaine vérifié chez Resend, signé SPF/DKIM),
+// donc aucune perte d'authentification par rapport à no-reply@ — c'est un alias (redirigé vers
+// Gmail via ImprovMX), pas un compte gmail.com direct, ce qui évite la pénalité de délivrabilité
+// qu'un reply-to freemail déclenche (signature classique d'une usurpation aux yeux des filtres :
+// domaine pro en expéditeur, boîte gratuite en retour ; -2,5 points mesurés sur mail-tester
+// avant qu'on isole cette cause). Et contrairement à no-reply@, elle n'annonce pas le silence :
+// ce qu'on voit dans le client mail est déjà la vraie adresse de réponse, pas besoin de
+// découvrir un reply-to caché pour le savoir.
+const CONTACT = "contact@budgetadeux.fr";
+const FROM = `Budget à Deux <${CONTACT}>`;
+const REPLY_TO = CONTACT;
 
 // La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
 // un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
