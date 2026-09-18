@@ -1411,11 +1411,15 @@ function authCodeJoin(){
 // et rate ensuite tous les emails suivants (relances, rappels de Money Date) sans comprendre
 // pourquoi.
 function authConfirm(){
+  const etapes = [
+    `S'il est dans tes indésirables, marque-le <b>« Non spam »</b> (sinon nos prochains emails, comme les rappels de Money Date, y atterriront aussi)`,
+    `Clique sur le lien pour activer ton compte, puis reviens te connecter`,
+  ];
   return authShell(`<div class="card fade">
     <h1>Vérifie ta boîte mail 📩</h1>
-    <p class="muted small" style="margin-bottom:12px">On a envoyé un lien de confirmation à <b>${escapeHtml(tmp.email||'')}</b>. Vérifie ta boîte mail et tes spams ; clique sur le lien pour activer ton compte, puis reviens te connecter.</p>
-    <p class="muted small" style="margin-bottom:18px">S'il est dans tes indésirables, marque-le <b>« Non spam »</b> plutôt que de simplement l'ouvrir : c'est ce geste qui débloquera aussi nos prochains emails, comme les rappels de Money Date.</p>
-    <button class="btn btn-primary" id="goLogin">J'ai confirmé, me connecter</button>
+    <p class="muted small" style="margin-bottom:14px">On a envoyé un lien de confirmation à <b>${escapeHtml(tmp.email||'')}</b>.</p>
+    ${etapes.map((s,i)=>`<div class="row" style="gap:10px; align-items:flex-start; margin-bottom:10px"><b class="small" style="color:var(--terra); flex-shrink:0">${i+1}.</b><p class="small muted" style="margin:0">${s}</p></div>`).join('')}
+    <button class="btn btn-primary" id="goLogin" style="margin-top:8px">J'ai confirmé, me connecter</button>
   </div>`);
 }
 function authRecovery(){
