@@ -1404,10 +1404,17 @@ function authCodeJoin(){
     <button class="btn btn-primary" id="doJoin" style="margin-top:8px">Entrer dans notre espace</button>
   </div>`);
 }
+// La 2e phrase n'est pas un détail : Microsoft peut classer un domaine récent en indésirables
+// même avec un email techniquement irréprochable (SPF/DKIM/DMARC valides, score parfait chez
+// les outils de test). C'est le destinataire qui répare ça, pas nous — et il faut le lui dire
+// explicitement, sinon il ouvre l'email depuis ses spams sans jamais le marquer "Non spam",
+// et rate ensuite tous les emails suivants (relances, rappels de Money Date) sans comprendre
+// pourquoi.
 function authConfirm(){
   return authShell(`<div class="card fade">
     <h1>Vérifie ta boîte mail 📩</h1>
-    <p class="muted small" style="margin-bottom:18px">On a envoyé un lien de confirmation à <b>${escapeHtml(tmp.email||'')}</b>. Vérifie ta boîte mail <b>et tes spams</b> — clique sur le lien pour activer ton compte, puis reviens te connecter.</p>
+    <p class="muted small" style="margin-bottom:12px">On a envoyé un lien de confirmation à <b>${escapeHtml(tmp.email||'')}</b>. Vérifie ta boîte mail et tes spams ; clique sur le lien pour activer ton compte, puis reviens te connecter.</p>
+    <p class="muted small" style="margin-bottom:18px">S'il est dans tes indésirables, marque-le <b>« Non spam »</b> plutôt que de simplement l'ouvrir : c'est ce geste qui débloquera aussi nos prochains emails, comme les rappels de Money Date.</p>
     <button class="btn btn-primary" id="goLogin">J'ai confirmé, me connecter</button>
   </div>`);
 }
