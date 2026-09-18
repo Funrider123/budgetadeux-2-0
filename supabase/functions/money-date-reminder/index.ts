@@ -29,24 +29,18 @@ function parisDateStr(offsetDays: number): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-// L'adresse d'envoi doit être sur budgetadeux.fr : c'est le domaine vérifié chez Resend,
-// celui que SPF et DKIM signent. Une adresse @gmail.com ici échouerait DMARC et partirait en
-// indésirables. "no-reply@" a l'inconvénient d'annoncer le silence ; c'est pourquoi la relance
-// de J+7 écrit l'adresse de contact noir sur blanc dans son texte, au lieu de compter sur le
-// seul bouton « Répondre ».
-const FROM = "Budget à Deux <no-reply@budgetadeux.fr>";
-
-// Adresse réellement relevée. Tous les emails la portent en reply-to : avec une poignée de
-// couples testeurs, une réponse à un rappel Money Date vaut de l'or, il serait absurde de la
-// refuser sous prétexte que cet email-là n'en demandait pas. Le bouton « Répondre » d'un
-// client mail suit ce champ, pas le no-reply affiché : la réponse arrive donc bien ici.
-//
-// C'est un alias sur budgetadeux.fr (redirigé vers Gmail via ImprovMX), pas directement
-// l'adresse Gmail : un reply-to freemail sur un envoi au nom d'un domaine pro est la signature
-// classique d'une usurpation, et SpamAssassin le sanctionne lourdement (-2,5 points mesurés sur
-// mail-tester avant ce changement). Avec un alias sur le même domaine que le FROM, cette
-// pénalité disparaît — et la réponse atterrit toujours au même endroit.
-const REPLY_TO = "contact@budgetadeux.fr";
+// Une seule adresse fait tout : c'est l'expéditeur ET celle où les réponses arrivent
+// réellement. Elle est sur budgetadeux.fr (le domaine vérifié chez Resend, signé SPF/DKIM),
+// donc aucune perte d'authentification par rapport à no-reply@ — c'est un alias (redirigé vers
+// Gmail via ImprovMX), pas un compte gmail.com direct, ce qui évite la pénalité de délivrabilité
+// qu'un reply-to freemail déclenche (signature classique d'une usurpation aux yeux des filtres :
+// domaine pro en expéditeur, boîte gratuite en retour ; -2,5 points mesurés sur mail-tester
+// avant qu'on isole cette cause). Et contrairement à no-reply@, elle n'annonce pas le silence :
+// ce qu'on voit dans le client mail est déjà la vraie adresse de réponse, pas besoin de
+// découvrir un reply-to caché pour le savoir.
+const CONTACT = "contact@budgetadeux.fr";
+const FROM = `Budget à Deux <${CONTACT}>`;
+const REPLY_TO = CONTACT;
 
 // La veille : un simple rappel, sans appel à l'action — il n'y a rien à faire ce soir-là, et
 // un gros bouton inviterait à commencer le rendez-vous tout seul, sans l'autre.
@@ -56,9 +50,9 @@ function emailHtml(prenom: string, when: "demain" | "aujourdhui") {
   const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
   const corps = when === "demain"
     ? `<h2 style="margin:0 0 12px;font-size:21px">Votre Money Date, c'est demain</h2>
-       <p style="color:#ccc;margin:0">${bonjour} pensez à garder une demi-heure ensemble demain.</p>`
+       <p style="color:#ccc;margin:0">${bonjour} pensez à vous garder un instant à deux demain pour faire le point sur vos finances.</p>`
     : `<h2 style="margin:0 0 12px;font-size:21px">C'est aujourd'hui votre Money Date</h2>
-       <p style="color:#ccc;margin:0 0 24px">${bonjour} une demi-heure à deux, et tout sera dit pour le mois.</p>
+       <p style="color:#ccc;margin:0 0 24px">${bonjour} pensez à prendre quelques minutes à deux aujourd'hui, et vous repartirez avec un mois de sérénité.</p>
        <a href="https://budgetadeux.fr/?ecran=moneydate" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">Commencer notre Money Date →</a>`;
   return `
   <div style="background:#141414;padding:32px 16px;font-family:Georgia,serif;color:#eee">
@@ -80,8 +74,8 @@ const signature = (corps: string) =>
 function emailTexte(prenom: string, when: "demain" | "aujourdhui") {
   const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
   return signature(when === "demain"
-    ? `Votre Money Date, c'est demain.\n\n${bonjour} pensez à garder une demi-heure ensemble demain.`
-    : `C'est aujourd'hui votre Money Date.\n\n${bonjour} une demi-heure à deux, et tout sera dit pour le mois.\n\nCommencer notre Money Date : https://budgetadeux.fr/?ecran=moneydate`);
+    ? `Votre Money Date, c'est demain.\n\n${bonjour} pensez à vous garder un instant à deux demain pour faire le point sur vos finances.`
+    : `C'est aujourd'hui votre Money Date.\n\n${bonjour} pensez à prendre quelques minutes à deux aujourd'hui, et vous repartirez avec un mois de sérénité.\n\nCommencer notre Money Date : https://budgetadeux.fr/?ecran=moneydate`);
 }
 
 // Un envoi automatique récurrent sans moyen de s'en défaire est mal vu des filtres, et à juste
@@ -132,10 +126,10 @@ const bouton = (url: string, texte: string) =>
 // Tant que le partenaire n'est pas là, rien d'autre n'a de sens : on ne liste pas trois
 // tâches à quelqu'un qui n'a pas franchi la première. Une seule action par email.
 function resteAFaire(c: Candidat): string[] {
-  if (c.manque_partenaire) return ["inviter votre partenaire"];
+  if (c.manque_partenaire) return ["inviter ton/ta partenaire"];
   const l: string[] = [];
-  if (c.manque_moneydate) l.push("programmer votre premier Money Date");
-  if (c.manque_budget) l.push("valider votre budget du mois");
+  if (c.manque_moneydate) l.push("programmer ton premier Money Date");
+  if (c.manque_budget) l.push("valider ton budget du mois");
   return l;
 }
 
@@ -148,18 +142,18 @@ function onboardingEmail(c: Candidat) {
 
   if (c.stage === "j2") {
     const corps = c.manque_partenaire
-      ? `<h2 style="margin:0 0 12px;font-size:21px">Votre partenaire vous attend</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).</p>
-         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.</p>
+      ? `<h2 style="margin:0 0 12px;font-size:21px">Ton/ta partenaire t'attend</h2>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).</p>
+         <p style="color:#999;margin:0 0 24px;font-size:14px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.</p>
+         <p style="color:#ccc;margin:0 0 10px">${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.</p>
          ${bouton(lien, "Reprendre là où j'en étais →")}`;
     const texte = c.manque_partenaire
-      ? `Votre partenaire vous attend.\n\n${bonjour} vous avez créé votre espace il y a quelques jours ; mais vous y êtes encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où vous le partagez avec votre partenaire.\n\nInviter mon/ma partenaire : ${lien}`
-      : `Il reste une étape.\n\n${bonjour} votre espace est presque prêt. Il vous reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
+      ? `Ton/ta partenaire t'attend.\n\n${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.\n\nInviter mon/ma partenaire : ${lien}`
+      : `Il reste une étape.\n\n${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
     return {
-      subject: c.manque_partenaire ? "Vous êtes encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
+      subject: c.manque_partenaire ? "Tu es encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
       html: coquille(corps),
       text: signature(texte),
     };
@@ -167,13 +161,13 @@ function onboardingEmail(c: Candidat) {
 
   // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
   // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
-  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de votre côté&nbsp;?</h2>
-     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.</p>
-     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose vous a arrêté, même un détail, <b style="color:#ccc">vous pouvez répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
+  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de ton côté&nbsp;?</h2>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.</p>
+     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose t'a arrêté, même un détail, <b style="color:#ccc">tu peux répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
      ${bouton(lien, "Reprendre l'application →")}
-     <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.</p>`;
-  const texte = `Tout va bien de votre côté ?\n\n${bonjour} on ne veut pas vous embêter ; juste vérifier que rien ne vous a bloqué.\n\nSi quelque chose vous a arrêté, même un détail, vous pouvez répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour vous, aucun souci : c'est notre dernier message.`;
-  return { subject: "Tout va bien de votre côté ?", html: coquille(corps), text: signature(texte) };
+     <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.</p>`;
+  const texte = `Tout va bien de ton côté ?\n\n${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.\n\nSi quelque chose t'a arrêté, même un détail, tu peux répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.`;
+  return { subject: "Tout va bien de ton côté ?", html: coquille(corps), text: signature(texte) };
 }
 
 async function envoiRelance(c: Candidat, apiKey: string) {
