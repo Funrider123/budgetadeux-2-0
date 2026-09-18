@@ -603,6 +603,19 @@ const DEFAULT = {
 };
 
 function e(){ return 'x'+Math.random().toString(36).slice(2,9); }
+// Identifiant d'une ligne créée AVANT l'existence des ids, donc reconstruit après coup. Il doit
+// être déduit du contenu et non tiré au hasard : les deux téléphones reconstruisent chacun le
+// leur, et deux tirages différents font passer la même ligne pour deux lignes distinctes — que
+// la fusion additionne alors au lieu de les reconnaître. C'est ce qui a multiplié une ligne de
+// cagnotte par trois. Le rang distingue deux lignes réellement identiques (même date, même
+// libellé, même montant) : elles gardent des ids différents, donc aucune n'est avalée par
+// l'autre. Somme de contrôle volontairement simple : il ne s'agit pas de sécurité, seulement
+// d'obtenir la même valeur des deux côtés.
+function idLigneAncienne(cle, rang){
+  let x=0; const s=`${cle}|${rang}`;
+  for(let i=0;i<s.length;i++) x=(x*31+s.charCodeAt(i))|0;
+  return 'cg'+(x>>>0).toString(36);
+}
 function iso(daysAgo){ const d=new Date(); d.setDate(d.getDate()-daysAgo); return d.toISOString().slice(0,10); }
 
 let S = load();
@@ -672,7 +685,14 @@ function migrate(s){
   // divergé (des lignes perdues par le bug corrigé ici), ce compte se corrige tout seul.
   if(s.cagnotte && Array.isArray(s.cagnotte.history)){
     let idAjoute=false;
-    s.cagnotte.history.forEach(h=>{ if(!h.id){ h.id=e(); idAjoute=true; } });
+    const rangs=new Map();
+    s.cagnotte.history.forEach(h=>{
+      if(!h.id){
+        const cle=`${h.date||''}|${h.label||''}|${+h.amount||0}`;
+        const rang=rangs.get(cle)||0; rangs.set(cle,rang+1);
+        h.id=idLigneAncienne(cle,rang); idAjoute=true;
+      }
+    });
     const solde=Math.round(s.cagnotte.history.reduce((sum,h)=>sum+(+h.amount||0),0)*100)/100;
     if(idAjoute || solde!==s.cagnotte.balance) s.cagnotte.balance = solde===0?0:solde;
   }
