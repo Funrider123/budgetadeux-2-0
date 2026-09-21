@@ -232,6 +232,68 @@ test.describe('La cagnotte survit à la fusion, comme le reste', () => {
     expect(r.aUnId).toBe(true);
     expect(r.balance).toBe(720.23); // ici la somme était déjà juste : la migration ne doit rien casser
   });
+
+  // Incident réel : « Reste Août 2026 » s'est retrouvée en trois exemplaires (+720,23 € chacun,
+  // solde faussé de 600,23 € à 2040,69 €) alors qu'elle n'avait été saisie qu'une fois. Cause :
+  // la migration tirait l'id AU HASARD. Chaque appareil reconstruisait donc un id différent pour
+  // la même ligne, et la fusion, qui reconnaît les lignes par leur id, y voyait des lignes
+  // distinctes qu'elle additionnait. Une réparation côté serveur ne suffisait pas : le premier
+  // appareil à se synchroniser repoussait sa copie.
+  test('deux appareils reconstruisent le MÊME id pour une ligne ancienne, sans la dupliquer', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {});
+
+    const ancienne = { date: '2026-08-30', label: 'Reste Août 2026', amount: 720.23 };
+
+    // Deux appareils partis du même état d'origine (la ligne sans id), chacun migrant de son côté.
+    const idsParAppareil = [];
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate((ligne) => {
+        const s = JSON.parse(JSON.stringify(S));
+        s.cagnotte = { balance: 720.23, history: [JSON.parse(JSON.stringify(ligne))] };
+        localStorage.setItem('bad2', JSON.stringify(s));
+      }, ancienne);
+      await page.reload();
+      await page.waitForFunction(() => typeof S === 'object' && S !== null);
+      idsParAppareil.push(await page.evaluate(() => S.cagnotte.history[0].id));
+    }
+    expect(idsParAppareil[0]).toBe(idsParAppareil[1]);
+
+    // Conséquence concrète : la copie distante de l'autre appareil n'ajoute rien.
+    const apresFusion = await page.evaluate((id) => {
+      mergeCagnotteWithRemote({ balance: 720.23, history: [{ ...S.cagnotte.history[0], id }] });
+      return { lignes: S.cagnotte.history.length, solde: S.cagnotte.balance };
+    }, idsParAppareil[0]);
+    expect(apresFusion.lignes).toBe(1);
+    expect(apresFusion.solde).toBe(720.23);
+  });
+
+  // Le garde-fou de l'inverse : deux lignes réellement identiques saisies deux fois doivent
+  // survivre toutes les deux. Les déduire du seul contenu les aurait confondues, donc effacé
+  // de l'argent — un remède pire que le mal.
+  test('deux lignes anciennes réellement identiques gardent des ids distincts', async ({ page }) => {
+    await openApp(page);
+    await loginAs(page, {});
+    await page.evaluate(() => {
+      const s = JSON.parse(JSON.stringify(S));
+      s.cagnotte = { balance: 100, history: [
+        { date: '2026-09-10', label: 'Thérapie couple', amount: -50 },
+        { date: '2026-09-10', label: 'Thérapie couple', amount: -50 },
+      ] };
+      localStorage.setItem('bad2', JSON.stringify(s));
+    });
+    await page.reload();
+    await page.waitForFunction(() => typeof S === 'object' && S !== null);
+
+    const r = await page.evaluate(() => ({
+      ids: S.cagnotte.history.map(h => h.id),
+      lignes: S.cagnotte.history.length,
+      solde: S.cagnotte.balance,
+    }));
+    expect(r.lignes).toBe(2);
+    expect(r.ids[0]).not.toBe(r.ids[1]);
+    expect(r.solde).toBe(-100);
+  });
 });
 
 test.describe('Un push ne part jamais avant d\'avoir vérifié le distant', () => {

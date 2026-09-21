@@ -603,6 +603,19 @@ const DEFAULT = {
 };
 
 function e(){ return 'x'+Math.random().toString(36).slice(2,9); }
+// Identifiant d'une ligne créée AVANT l'existence des ids, donc reconstruit après coup. Il doit
+// être déduit du contenu et non tiré au hasard : les deux téléphones reconstruisent chacun le
+// leur, et deux tirages différents font passer la même ligne pour deux lignes distinctes — que
+// la fusion additionne alors au lieu de les reconnaître. C'est ce qui a multiplié une ligne de
+// cagnotte par trois. Le rang distingue deux lignes réellement identiques (même date, même
+// libellé, même montant) : elles gardent des ids différents, donc aucune n'est avalée par
+// l'autre. Somme de contrôle volontairement simple : il ne s'agit pas de sécurité, seulement
+// d'obtenir la même valeur des deux côtés.
+function idLigneAncienne(cle, rang){
+  let x=0; const s=`${cle}|${rang}`;
+  for(let i=0;i<s.length;i++) x=(x*31+s.charCodeAt(i))|0;
+  return 'cg'+(x>>>0).toString(36);
+}
 function iso(daysAgo){ const d=new Date(); d.setDate(d.getDate()-daysAgo); return d.toISOString().slice(0,10); }
 
 let S = load();
@@ -672,7 +685,14 @@ function migrate(s){
   // divergé (des lignes perdues par le bug corrigé ici), ce compte se corrige tout seul.
   if(s.cagnotte && Array.isArray(s.cagnotte.history)){
     let idAjoute=false;
-    s.cagnotte.history.forEach(h=>{ if(!h.id){ h.id=e(); idAjoute=true; } });
+    const rangs=new Map();
+    s.cagnotte.history.forEach(h=>{
+      if(!h.id){
+        const cle=`${h.date||''}|${h.label||''}|${+h.amount||0}`;
+        const rang=rangs.get(cle)||0; rangs.set(cle,rang+1);
+        h.id=idLigneAncienne(cle,rang); idAjoute=true;
+      }
+    });
     const solde=Math.round(s.cagnotte.history.reduce((sum,h)=>sum+(+h.amount||0),0)*100)/100;
     if(idAjoute || solde!==s.cagnotte.balance) s.cagnotte.balance = solde===0?0:solde;
   }
@@ -795,6 +815,61 @@ function applyTombstones(){
 // l'historique fusionné, pour qu'il ne puisse pas diverger de ce qu'il additionne.
 function recalcCagnotteBalance(){
   S.cagnotte.balance = round2(S.cagnotte.history.reduce((s,h)=>s+(+h.amount||0),0));
+}
+// Versements automatiques des projets : à la date de versement de chaque mois, la mensualité
+// prévue est créditée toute seule. Le couple doit voir son épargne avancer sans avoir à la
+// ressaisir, sinon l'écran affiche éternellement "0 € sur 3 000 €" alors que l'argent est mis
+// de côté pour de vrai.
+//
+// L'identifiant de la ligne est DÉDUIT du projet et du mois, jamais tiré au hasard : c'est ce
+// qui rend la fonction rejouable sans danger. Deux ouvertures de l'app, les deux téléphones du
+// couple, une relecture distante — aucun de ces cas ne peut créditer deux fois le même mois.
+// La cagnotte a déjà payé le prix d'un id aléatoire ici : une ligne s'y était multipliée par
+// trois, faussant le solde de 1 440 €.
+function versementsAutomatiques(){
+  if(demoMode || !Array.isArray(S.projects)) return false;
+  const aujourdhui=new Date(); aujourdhui.setHours(23,59,59,999); // le versement du jour compte
+  const finMois=new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), 1);
+  let change=false, total=0, nbProjets=0;
+  S.projects.forEach(p=>{
+    if(p.status!=='actif') return;
+    const mensuel=round2(+p.mensuel||0);
+    if(mensuel<=0) return;
+    if(!Array.isArray(p.history)) p.history=[];
+    // Point de départ figé au premier passage. Sans lui, on inventerait des versements pour des
+    // mois où le projet n'existait peut-être pas : un projet créé hier se retrouverait crédité
+    // de six mois d'un coup. On ne remonte donc jamais avant la découverte du projet.
+    if(!p.autoFrom){ p.autoFrom=annualMonthKey(0); change=true; }
+    const [an,mois]=String(p.autoFrom).split('-').map(Number);
+    if(!Number.isFinite(an) || !Number.isFinite(mois)) return;
+    let credite=0;
+    for(let d=new Date(an,mois,1); d<=finMois; d.setMonth(d.getMonth()+1)){
+      // Un projet prélevé le 31 ne doit pas sauter les mois qui n'ont pas de 31.
+      const dernierJour=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+      const jour=Math.min(Math.max(1,+p.day||5), dernierJour);
+      const dateVersement=new Date(d.getFullYear(), d.getMonth(), jour);
+      if(dateVersement>aujourdhui) continue;
+      const id=`auto_${p.id}_${d.getFullYear()}-${d.getMonth()}`;
+      if(p.history.some(h=>h && h.id===id) || isDeleted(id)) continue;
+      // Le versement n'est jamais rogné : mieux vaut afficher 3 100 € sur un objectif de
+      // 3 000 € qu'un dernier mois amputé à 2 800 €. En revanche on n'en ouvre plus une fois
+      // l'objectif atteint, sinon un projet terminé continuerait de se créditer sans fin.
+      if(round2(+p.saved||0) >= round2(+p.target||0)) break;
+      p.history.unshift({ id, date:dateVersement.toISOString().slice(0,10), label:'Versement automatique', amount:mensuel });
+      p.saved=round2((+p.saved||0)+mensuel);
+      credite+=mensuel; change=true;
+    }
+    if(credite>0){ total=round2(total+credite); nbProjets++; }
+  });
+  if(total>0) toast(`Épargne projet : +${fmt(total)}${nbProjets>1?` sur ${nbProjets} projets`:''} 🎯`);
+  return change;
+}
+// save() n'entraîne aucun rendu à lui seul : sans ce rafraîchissement, le couple verrait le
+// message d'un versement crédité mais toujours l'ancien montant à l'écran.
+function appliquerVersementsAutomatiques(){
+  if(!versementsAutomatiques()) return;
+  save();
+  if(!$('#main').classList.contains('hidden')) go(current);
 }
 function mergeArraysWithRemote(remoteData){
   if(!remoteData) return false;
@@ -933,6 +1008,9 @@ function bindVisibility(){
 async function initSync(){
   bindVisibility(); if(!syncActive()) return;
   await pullState();
+  // Après la lecture, pas avant : crédité sur un état périmé, le versement serait écrasé par
+  // le distant, puis recalculé au chargement suivant. Le schedulePush ci-dessous l'emporte.
+  appliquerVersementsAutomatiques();
   // Un changement local fait pendant cette première lecture (donc bloqué par initialPullDone,
   // voir pushState) n'a rescheduleé aucun nouvel essai tout seul : on en relance un maintenant,
   // sans effet s'il n'y avait en réalité rien en attente.
@@ -1541,6 +1619,9 @@ function enterApp(){
     go(ecran);
   } else go("vue");
   $('#bugBtn').onclick=()=>openBugModal();
+  // Quelqu'un qui n'a pas encore relié son partenaire ne déclenche aucune lecture distante :
+  // initSync sort immédiatement. Ses versements seraient sinon attendus indéfiniment.
+  if(!syncActive()) appliquerVersementsAutomatiques();
   initSync();
   // Deux pop-ups au premier arrivage, jamais empilés : bienvenue d'abord, puis (au tour
   // suivant — soit tout de suite si on reste sur son compte, soit au retour de la démo)
