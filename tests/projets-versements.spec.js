@@ -109,15 +109,18 @@ test.describe('Versements automatiques des projets', () => {
     expect(r.auto.map(a => a.date).sort()).toEqual(['2026-07-05', '2026-08-05', '2026-09-05']);
   });
 
-  test('le dernier versement est rogné pour ne jamais dépasser l\'objectif', async ({ page }) => {
+  // Choix assumé : un versement amputé (2 800 € au lieu de 3 100 €) donne l'impression de
+  // piétiner au moment précis où le couple touche au but. Le dépassement est préférable.
+  test('le dernier versement n\'est pas rogné : dépasser l\'objectif est permis', async ({ page }) => {
     await ouvrirAvecProjet(page, projet({ target: 3000, saved: 2900 }));
     await page.evaluate(() => versementsAutomatiques());
 
     const r = await lireProjet(page);
-    expect(r.saved).toBe(3000);       // et non 3 200
-    expect(r.auto[0].amount).toBe(100);
+    expect(r.saved).toBe(3200);
+    expect(r.auto[0].amount).toBe(300);
   });
 
+  // La contrepartie : un projet terminé ne doit pas continuer à se créditer tous les mois.
   test('un objectif déjà atteint ne génère plus rien', async ({ page }) => {
     await ouvrirAvecProjet(page, projet({ target: 3000, saved: 3000 }));
     await page.evaluate(() => versementsAutomatiques());

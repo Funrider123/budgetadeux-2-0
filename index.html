@@ -851,13 +851,13 @@ function versementsAutomatiques(){
       if(dateVersement>aujourdhui) continue;
       const id=`auto_${p.id}_${d.getFullYear()}-${d.getMonth()}`;
       if(p.history.some(h=>h && h.id===id) || isDeleted(id)) continue;
-      // On ne dépasse jamais l'objectif : le dernier versement est rogné à ce qu'il reste.
-      const restant=round2((+p.target||0)-(+p.saved||0));
-      if(restant<=0) break;
-      const montant=Math.min(mensuel, restant);
-      p.history.unshift({ id, date:dateVersement.toISOString().slice(0,10), label:'Versement automatique', amount:montant });
-      p.saved=round2((+p.saved||0)+montant);
-      credite+=montant; change=true;
+      // Le versement n'est jamais rogné : mieux vaut afficher 3 100 € sur un objectif de
+      // 3 000 € qu'un dernier mois amputé à 2 800 €. En revanche on n'en ouvre plus une fois
+      // l'objectif atteint, sinon un projet terminé continuerait de se créditer sans fin.
+      if(round2(+p.saved||0) >= round2(+p.target||0)) break;
+      p.history.unshift({ id, date:dateVersement.toISOString().slice(0,10), label:'Versement automatique', amount:mensuel });
+      p.saved=round2((+p.saved||0)+mensuel);
+      credite+=mensuel; change=true;
     }
     if(credite>0){ total=round2(total+credite); nbProjets++; }
   });
