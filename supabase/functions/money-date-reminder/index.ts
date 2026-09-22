@@ -125,35 +125,55 @@ const bouton = (url: string, texte: string) =>
 
 // Tant que le partenaire n'est pas là, rien d'autre n'a de sens : on ne liste pas trois
 // tâches à quelqu'un qui n'a pas franchi la première. Une seule action par email.
+// Le budget passe avant le Money Date : c'est lui qui rend l'app utile tout de suite. L'app dit
+// déjà la même chose, son bandeau de configuration le qualifie de « base sans laquelle rien
+// d'autre n'a de sens ». Caler un rendez-vous avant d'avoir de quoi en parler serait l'inverse.
+//
+// « votre budget » et non « ton budget » : ils appartiennent au couple, pas à la personne qui
+// lit. Et pas « du mois » : la validation tient jusqu'à ce qu'on la modifie, écrire « du mois »
+// ferait craindre une corvée mensuelle qui n'existe pas.
 function resteAFaire(c: Candidat): string[] {
   if (c.manque_partenaire) return ["inviter ton/ta partenaire"];
   const l: string[] = [];
-  if (c.manque_moneydate) l.push("programmer ton premier Money Date");
-  if (c.manque_budget) l.push("valider ton budget du mois");
+  if (c.manque_budget) l.push("valider votre budget");
+  if (c.manque_moneydate) l.push("programmer votre premier Money Date");
   return l;
+}
+// « Pense à X ensemble, puis à Y. » : le « ensemble » se place après la PREMIÈRE tâche, sinon
+// il ne porterait grammaticalement que sur la seconde.
+function phraseAFaire(c: Candidat): string {
+  const taches = resteAFaire(c);
+  if (!taches.length) return "Pense à finir de configurer votre espace ensemble.";
+  return `Pense à ${taches[0]} ensemble${taches[1] ? `, puis à ${taches[1]}` : ""}.`;
 }
 
 function onboardingEmail(c: Candidat) {
   const prenom = c.name ? c.name : "";
   const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
+  // Le bouton suit le même ordre que le texte : tant que le budget manque, il ouvre le Pilotage.
+  // Sinon on enverrait le couple caler un rendez-vous avant d'avoir de quoi en parler.
   const lien = c.manque_partenaire
     ? "https://budgetadeux.fr/?ecran=reglages"
-    : c.manque_moneydate ? "https://budgetadeux.fr/?ecran=moneydate" : "https://budgetadeux.fr/?ecran=pilotage";
+    : c.manque_budget ? "https://budgetadeux.fr/?ecran=pilotage" : "https://budgetadeux.fr/?ecran=moneydate";
 
   if (c.stage === "j2") {
+    // « un pas » / « deux pas » plutôt qu'un nombre d'étapes fixe : le titre annonçait une seule
+    // étape même quand le corps en listait deux.
+    const pas = resteAFaire(c).length > 1 ? "deux" : "un";
+    const ouverture = `${bonjour} ton espace est créé, mais il lui manque encore de quoi fonctionner.`;
     const corps = c.manque_partenaire
       ? `<h2 style="margin:0 0 12px;font-size:21px">Ton/ta partenaire t'attend</h2>
          <p style="color:#ccc;margin:0 0 10px">${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).</p>
          <p style="color:#ccc;margin:0 0 24px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
-      : `<h2 style="margin:0 0 12px;font-size:21px">Il reste une étape</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.</p>
-         ${bouton(lien, "Reprendre là où j'en étais →")}`;
+      : `<h2 style="margin:0 0 12px;font-size:21px">Encore ${pas} pas et vous y êtes</h2>
+         <p style="color:#ccc;margin:0 0 24px">${ouverture} ${phraseAFaire(c)}</p>
+         ${bouton(lien, "Compléter mon espace →")}`;
     const texte = c.manque_partenaire
       ? `Ton/ta partenaire t'attend.\n\n${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.\n\nInviter mon/ma partenaire : ${lien}`
-      : `Il reste une étape.\n\n${bonjour} ton espace est presque prêt. Il te reste à ${resteAFaire(c).join(" et ")}.\n\nReprendre là où j'en étais : ${lien}`;
+      : `Encore ${pas} pas et vous y êtes.\n\n${ouverture} ${phraseAFaire(c)}\n\nCompléter mon espace : ${lien}`;
     return {
-      subject: c.manque_partenaire ? "Tu es encore seul(e) sur Budget à Deux" : "Il reste une étape pour démarrer",
+      subject: c.manque_partenaire ? "Tu es encore seul(e) sur Budget à Deux" : "Ton espace n'est pas encore opérationnel",
       html: coquille(corps),
       text: signature(texte),
     };
