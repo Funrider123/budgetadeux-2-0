@@ -1,4 +1,4 @@
-// Verrouillage et validation du budget (« Simulation et validation budgétaire »).
+// Verrouillage et validation du budget (« Notre budget »).
 // Le couple doit pouvoir simuler sans que ce soit officiel, puis valider ou tout
 // annuler : si « Annuler » ne restaure pas exactement l'état validé, des chiffres
 // deviennent officiels sans que personne ne l'ait décidé.
@@ -91,7 +91,48 @@ test.describe('Détection des changements non validés', () => {
   });
 });
 
-test.describe('Annuler nos changements', () => {
+// Contrepartie du signalement : on vérifie ici que les réglages, eux, tiennent bel et bien
+// sans validation. Chaque champ de l'écran écrit à la frappe ; si l'un d'eux cessait de le
+// faire, la saisie disparaîtrait au premier changement d'écran sans que rien ne l'annonce.
+test.describe('Les réglages tiennent sans validation', () => {
+  test('une charge modifiée survit au changement d\'écran et au rechargement', async ({ page }) => {
+    await openApp(page);
+    await budgetValide(page);
+    await page.click('#unfreezeBudget');
+    await page.click('#chgHdr'); // la section est repliée par défaut
+
+    const champ = page.locator('.pilot-row .pamt-input[data-charge]').first();
+    await champ.fill('1250');
+    await champ.dispatchEvent('input');
+
+    await page.evaluate(() => { go('vue'); go('pilotage'); });
+    expect(await page.evaluate(() => S.charges[0].amount)).toBe(1250);
+
+    await page.reload();
+    await page.waitForFunction(() => typeof S === 'object' && S !== null);
+    expect(await page.evaluate(() => S.charges[0].amount)).toBe(1250);
+  });
+
+  test('une mensualité de projet modifiée survit au changement d\'écran', async ({ page }) => {
+    await openApp(page);
+    await budgetValide(page);
+    await page.click('#unfreezeBudget');
+
+    const champ = page.locator('.pamt-input[data-project]').first();
+    await champ.fill('420');
+    await champ.dispatchEvent('input');
+
+    await page.evaluate(() => { go('projets'); go('pilotage'); });
+    // pilotSim n'est pas persisté : c'est p.mensuel qui fait foi, et il doit suivre.
+    expect(await page.evaluate(() => [S.projects[0].mensuel, pilotSim.p1])).toEqual([420, 420]);
+    await expect(page.locator('.pamt-input[data-project]').first()).toHaveValue('420');
+  });
+});
+
+/** Répond « Confirmer » à la fenêtre de confirmation qui précède toute restauration. */
+const confirmer = page => page.evaluate(() => document.querySelector('#cfYes').click());
+
+test.describe('Abandonner mes changements', () => {
   test('restaure budgets, charges ET mensualités, puis reverrouille', async ({ page }) => {
     await openApp(page);
     await budgetValide(page);
@@ -106,6 +147,7 @@ test.describe('Annuler nos changements', () => {
     });
 
     await page.evaluate(() => cancelBudgetChanges());
+    await confirmer(page);
 
     const apres = await page.evaluate(() => ({
       categorie: S.categories.find(c => c.id === 'courses').budget,
@@ -123,7 +165,7 @@ test.describe('Annuler nos changements', () => {
     });
   });
 
-  test('le bandeau d\'alerte propose « Annuler » dès qu\'un chiffre a bougé', async ({ page }) => {
+  test('le bandeau d\'alerte propose d\'abandonner dès qu\'un chiffre a bougé', async ({ page }) => {
     await openApp(page);
     await budgetValide(page);
     await page.click('#unfreezeBudget');
@@ -134,20 +176,56 @@ test.describe('Annuler nos changements', () => {
 
     const banniere = page.locator('#setupBanner .setup-banner');
     await expect(banniere).toContainText('Budget non validé');
-    await expect(page.locator('#bannerCancelBudget')).toBeVisible();
+    // Le libellé complet, pas un « Annuler » nu : à côté d'un avertissement, celui-ci se lit
+    // comme « annuler ce message » alors qu'il efface les réglages en cours.
+    await expect(page.locator('#bannerCancelBudget')).toHaveText('Abandonner mes changements');
 
     await page.evaluate(() => document.querySelector('#bannerCancelBudget').click());
+    await confirmer(page);
 
     await expect.poll(() => page.evaluate(() => S.projects[0].mensuel)).toBe(300);
     expect(await page.evaluate(() => S.pilotFrozen)).toBe(true);
   });
 
-  test('sans changement, le bandeau ne propose pas « Annuler »', async ({ page }) => {
+  // Le signalement d'origine : « je modifie sans valider, je change de page et ça ne reste
+  // pas ». Les réglages, eux, sont bien enregistrés à chaque frappe ; ce qui les effaçait,
+  // c'était ce bouton du bandeau, cliqué pour faire taire l'avertissement.
+  test('un clic sur le bandeau ne peut plus effacer les réglages sans confirmation', async ({ page }) => {
+    await openApp(page);
+    await budgetValide(page);
+    await page.click('#unfreezeBudget');
+    await page.evaluate(() => { S.charges[0].amount = 1200; save(); go('vue'); });
+
+    await page.evaluate(() => document.querySelector('#bannerCancelBudget').click());
+
+    // Tant qu'on n'a pas confirmé, rien n'a bougé.
+    expect(await page.evaluate(() => S.charges[0].amount)).toBe(1200);
+    await expect(page.locator('#modalRoot .modal')).toContainText('Abandonner mes changements');
+
+    await page.evaluate(() => document.querySelector('#cfNo').click());
+    expect(await page.evaluate(() => ({ charge: S.charges[0].amount, verrou: S.pilotFrozen })))
+      .toEqual({ charge: 1200, verrou: false });
+  });
+
+  test('sans changement, le bandeau ne propose pas d\'abandonner', async ({ page }) => {
     await openApp(page);
     await budgetValide(page);
     await page.evaluate(() => { S.pilotFrozen = false; save(); go('historique'); });
 
     await expect(page.locator('#setupBanner .setup-banner')).toContainText('Budget non validé');
     await expect(page.locator('#bannerCancelBudget')).toHaveCount(0);
+  });
+
+  // Même piège, même remède, pour les mensualités ajustées depuis « Vos projets ».
+  test('le bandeau des mensualités demande aussi confirmation', async ({ page }) => {
+    await openApp(page);
+    await budgetValide(page);
+    await page.evaluate(() => { S.projectsFrozen = false; S.projects[0].mensuel = 800; save(); go('vue'); });
+
+    await page.evaluate(() => document.querySelector('#bannerCancelProjects').click());
+    expect(await page.evaluate(() => S.projects[0].mensuel)).toBe(800);
+
+    await confirmer(page);
+    await expect.poll(() => page.evaluate(() => S.projects[0].mensuel)).toBe(300);
   });
 });

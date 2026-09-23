@@ -1713,11 +1713,17 @@ function renderSetupBanner(){
   }
   // Rappel persistant tant que le couple n'a pas cliqué sur "Valider le budget du mois" :
   // évite de croire que des chiffres ajustés sont déjà officiels alors qu'ils ne le sont pas.
+  //
+  // Le bouton d'abandon porte ici son nom complet : un simple "Annuler", à côté d'un
+  // avertissement, se lit comme "annuler ce message" alors qu'il efface pour de bon tout ce
+  // qui a été ajusté depuis la dernière validation. C'est exactement ce qui a fait croire à
+  // une perte de données : on modifie, on change d'écran, on fait taire le bandeau, tout est
+  // reparti. (La confirmation, elle, est posée dans cancelBudgetChanges.)
   if(!S.pilotFrozen){
     el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Budget non validé — vos ajustements ne sont pas encore officiels</span>
       <div style="display:flex; gap:8px; margin-left:auto">
-        ${pilotHasChanges()?`<span class="cta" id="bannerCancelBudget" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        ${pilotHasChanges()?`<span class="cta" id="bannerCancelBudget" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Abandonner mes changements</span>`:''}
         <span class="cta" id="bannerValidBudget">Valider →</span>
       </div>
     </div>`;
@@ -1732,7 +1738,7 @@ function renderSetupBanner(){
     el.innerHTML=`<div class="setup-banner blink-cta" style="background:var(--warn); flex-wrap:wrap; row-gap:8px">
       <span>⚠️ Mensualités de projets non validées</span>
       <div style="display:flex; gap:8px; margin-left:auto">
-        ${S.projectsSnapshot?`<span class="cta" id="bannerCancelProjects" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Annuler</span>`:''}
+        ${S.projectsSnapshot?`<span class="cta" id="bannerCancelProjects" style="background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6)">Abandonner mes changements</span>`:''}
         <span class="cta" id="bannerValidProjects">Valider →</span>
       </div>
     </div>`;
@@ -2703,7 +2709,7 @@ function annualOverviewHtml(){
 }
 // SUIVI PAR CATÉGORIE : courbe dépensé vs budget d'une catégorie choisie par les puces.
 function annualSuiviHtml(){
-  if(!S.categories.length) return `<div class="card"><p class="small muted" style="text-align:center; padding:20px 0">Ajoutez des catégories dans Simulation et validation budgétaire pour suivre leur évolution ici.</p></div>`;
+  if(!S.categories.length) return `<div class="card"><p class="small muted" style="text-align:center; padding:20px 0">Ajoutez des catégories dans Notre budget pour suivre leur évolution ici.</p></div>`;
   if(!annualSel || !annualSel.startsWith('cat:') || !S.categories.some(c=>'cat:'+c.id===annualSel)) annualSel='cat:'+S.categories[0].id;
   const catChip=(c)=>`<button class="cat-pill ${annualSel==='cat:'+c.id?'on':''}" data-poste="cat:${c.id}" style="flex:0 0 auto">${c.emoji} ${escapeHtml(c.name)}</button>`;
   const chips=`<div class="row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px">${S.categories.map(catChip).join('')}</div>`;
@@ -3065,7 +3071,7 @@ function mdContent(step){
     const decision=mdChecklist(offset).projets_alignes;
     return `<div class="small" style="font-weight:700; margin-bottom:10px">Sommes-nous toujours alignés sur nos rêves ?</div>
     ${decision?`<div class="between" style="padding:2px 0 14px">
-        <span class="small" style="color:var(--ok); font-weight:700">${decision==='ok'?'✓ Tout est ok, on ne change rien':'✏️ On modifie dans Simulation et validation budgétaire'}</span>
+        <span class="small" style="color:var(--ok); font-weight:700">${decision==='ok'?'✓ Tout est ok, on ne change rien':'✏️ On modifie dans Notre budget'}</span>
         <span class="link" id="mdProjUndo" style="font-size:12px">Modifier</span>
       </div>`
     :`<div class="row" style="gap:8px; padding-bottom:14px">
@@ -3193,7 +3199,7 @@ function renderReglages(){
 
   <div class="card" style="margin-top:14px; display:flex; align-items:center; gap:14px; cursor:pointer" id="goPilotage">
     <div class="emoji-badge" style="background:var(--terra); color:#fff; font-size:20px">🎛️</div>
-    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Simulation et validation budgétaire</div></div>
+    <div class="grow"><div class="name" style="font-family:var(--serif); font-size:16px">Notre budget</div></div>
     <span class="chev" style="font-size:20px; color:var(--muted)">→</span>
   </div>
 
@@ -3435,7 +3441,7 @@ function renderPilotage(){
   <div style="padding-top:10px">
     <button class="btn btn-ghost btn-sm" id="backReg">← Retour</button>
   </div>
-  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Simulation et validation budgétaire</h1>
+  <h1 class="hero-title" style="font-size:25px; margin-top:14px">Notre budget</h1>
   <p class="hero-sub">Projetez et ajustez votre équilibre financier, à deux, sur le long terme.</p>
 
   ${S.pilotFrozen?`<div class="panel-terra" style="margin-top:14px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px">
@@ -3558,7 +3564,7 @@ function openMenu(){
     <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
       <button class="menu-row" data-menu="moneydate"><div class="mi" style="background:var(--blush)">❤️</div><div class="grow"><div class="nm">Money Date</div><div class="sub">Votre bilan mensuel à deux</div></div><span class="chev">→</span></button>
       <button class="menu-row" data-menu="reglages"><div class="mi">⚙️</div><div class="grow"><div class="nm">Réglages</div><div class="sub">Préférences, synchro, données</div></div><span class="chev">→</span></button>
-      <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Simulation et validation budgétaire</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
+      <button class="menu-row" data-menu="pilotage"><div class="mi">🎛️</div><div class="grow"><div class="nm">Notre budget</div><div class="sub">Revenus, charges, catégories</div></div><span class="chev">→</span></button>
       <button class="menu-row" id="menuNatureHelp"><div class="mi">❓</div><div class="grow"><div class="nm">Comment classe-t-on une dépense ?</div><div class="sub">Besoin, Envie, Protection, Investissement</div></div><span class="chev">→</span></button>
       ${!demoMode?`<button class="menu-row" id="menuDemo"><div class="mi" style="background:var(--blush)">🎭</div><div class="grow"><div class="nm">Essayer la démonstration</div><div class="sub">Un couple d'exemple avec 12 mois d'historique</div></div><span class="chev">→</span></button>`:''}
     </div>`, true);
@@ -3851,11 +3857,15 @@ function openMoneyDateSchedule(){
 // affiché sur tous les autres écrans, pour ne pas obliger à naviguer d'abord.
 function cancelProjectsChanges(){
   const snap=S.projectsSnapshot; if(!snap) return;
-  Object.keys(snap).forEach(id=>{
-    const p=S.projects.find(x=>x.id===id);
-    if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
-  });
-  S.projectsFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+  openConfirm("Abandonner mes changements ?",
+    "Les mensualités de projets reviendront au dernier état validé. Ce qui a été ajusté depuis sera perdu.",
+    ()=>{
+      Object.keys(snap).forEach(id=>{
+        const p=S.projects.find(x=>x.id===id);
+        if(p){ p.mensuel=snap[id].mensuel; p.months=snap[id].months; pilotSim[id]=p.mensuel; }
+      });
+      S.projectsFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+    });
 }
 function bindProjets(){
   const np=$('#newProj'); if(np) np.onclick=()=>{
@@ -4119,7 +4129,7 @@ function openMdRepartition(){
     <p class="small muted" style="margin-bottom:10px">Mode actuel : <b>${MD_MODE_LABELS[S.settings.mode]}</b></p>
     ${mdRepartitionSummary()}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageRep">Modifier dans Simulation et validation budgétaire →</span>
+      <span class="link" id="mdGoPilotageRep">Modifier dans Notre budget →</span>
     </div>`, true);
   $('#mdGoPilotageRep').onclick=()=>{ closeModal(); go('pilotage'); };
 }
@@ -4128,7 +4138,7 @@ function openMdCharges(){
   openModal(`<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt(chargesCommunes())}</p>
     ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageCharges">Modifier dans Simulation et validation budgétaire →</span>
+      <span class="link" id="mdGoPilotageCharges">Modifier dans Notre budget →</span>
     </div>`, true);
   $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
 }
@@ -4223,7 +4233,7 @@ function mdCategoriesDetailHtml(offset){
     <div class="section-title" style="margin-top:0">Budgets par catégorie</div>
     <div class="card">${catsHtml}</div>
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageCategories">Modifier dans Simulation et validation budgétaire →</span>
+      <span class="link" id="mdGoPilotageCategories">Modifier dans Notre budget →</span>
     </div>`;
 }
 
@@ -4822,17 +4832,25 @@ function openValidateMonthPicker(){
   $('#vbBack').onclick=closeModal;
 }
 // Restaure revenus/charges/catégories/mensualités au dernier budget validé (S.pilotSnapshot
-// + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Simulation budgétaire
+// + S.projectsSnapshot) — appelé depuis "Annuler nos changements" sur Notre budget
 // ET depuis le bandeau d'alerte affiché sur tous les autres écrans.
+//
+// Un clic efface ici plusieurs minutes de réglages, sans rien qui puisse les récupérer :
+// la confirmation est posée dans la fonction, et pas sur un seul des deux boutons, pour
+// qu'aucun point d'entrée ne puisse passer à côté.
 function cancelBudgetChanges(){
   const snap=S.pilotSnapshot; if(!snap) return;
-  S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
-  snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
-  snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
-  const psnap=S.projectsSnapshot;
-  if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
-  S.projectsFrozen=true;
-  S.pilotFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+  openConfirm("Abandonner mes changements ?",
+    "Revenus, charges, catégories et mensualités de projets reviendront au dernier budget validé. Ce qui a été ajusté depuis sera perdu.",
+    ()=>{
+      S.settings.salaries={...snap.salaries}; S.settings.mode=snap.mode; S.settings.custom={...snap.custom}; S.settings.fixed={...snap.fixed};
+      snap.charges.forEach(sc=>{ const c=S.charges.find(x=>x.id===sc.id); if(c) c.amount=sc.amount; });
+      snap.categories.forEach(sc=>{ const cat=S.categories.find(x=>x.id===sc.id); if(cat) cat.budget=sc.budget; });
+      const psnap=S.projectsSnapshot;
+      if(psnap) S.projects.forEach(p=>{ const s=psnap[p.id]; if(s){ p.mensuel=s.mensuel; p.months=s.months; pilotSim[p.id]=s.mensuel; } });
+      S.projectsFrozen=true;
+      S.pilotFrozen=true; save(); go(current); toast("Modifications annulées ↩","✓");
+    });
 }
 function openAddCharge(defaultScope){
   const scope=defaultScope||'commune';
