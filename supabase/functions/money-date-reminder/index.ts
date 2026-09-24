@@ -161,19 +161,25 @@ function onboardingEmail(c: Candidat) {
     // étape même quand le corps en listait deux.
     const pas = resteAFaire(c).length > 1 ? "deux" : "un";
     const ouverture = `${bonjour} ton espace est créé, mais il lui manque encore de quoi fonctionner.`;
+    // « Vous n'êtes pas encore deux » et surtout pas « ton/ta partenaire t'attend » : à ce
+    // stade le/la partenaire ignore que l'app existe, personne n'attend rien. Le dire mettait
+    // une dette sur le dos de la seule personne à qui on écrit, justement parce qu'elle n'a
+    // rien fait. Le constat de solitude est porté par le titre, la phrase ne le répète donc
+    // pas ; ne reste que le repère de temps, qui justifie qu'on écrive maintenant.
     const corps = c.manque_partenaire
-      ? `<h2 style="margin:0 0 12px;font-size:21px">Ton/ta partenaire t'attend</h2>
-         <p style="color:#ccc;margin:0 0 10px">${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).</p>
-         <p style="color:#ccc;margin:0 0 24px">Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
+      ? `<h2 style="margin:0 0 12px;font-size:21px">Vous n'êtes pas encore deux</h2>
+         <p style="color:#ccc;margin:0 0 24px">${bonjour} tu as créé ton espace il y a quelques jours. Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.</p>
          ${bouton(lien, "Inviter mon/ma partenaire →")}`
       : `<h2 style="margin:0 0 12px;font-size:21px">Encore ${pas} pas et vous y êtes</h2>
          <p style="color:#ccc;margin:0 0 24px">${ouverture} ${phraseAFaire(c)}</p>
          ${bouton(lien, "Compléter mon espace →")}`;
     const texte = c.manque_partenaire
-      ? `Ton/ta partenaire t'attend.\n\n${bonjour} tu as créé ton espace il y a quelques jours ; mais tu y es encore seul(e).\n\nBudget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.\n\nInviter mon/ma partenaire : ${lien}`
+      ? `Vous n'êtes pas encore deux.\n\n${bonjour} tu as créé ton espace il y a quelques jours. Budget à Deux prend tout son sens à partir du moment où tu le partages avec ton/ta partenaire.\n\nInviter mon/ma partenaire : ${lien}`
       : `Encore ${pas} pas et vous y êtes.\n\n${ouverture} ${phraseAFaire(c)}\n\nCompléter mon espace : ${lien}`;
     return {
-      subject: c.manque_partenaire ? "Tu es encore seul(e) sur Budget à Deux" : "Ton espace n'est pas encore opérationnel",
+      // L'objet porte l'action, le titre porte le constat : lus coup sur coup, deux fois le
+      // même « tu es encore seul(e) » sonnait insistant.
+      subject: c.manque_partenaire ? "Il ne manque plus que ton/ta partenaire" : "Ton espace n'est pas encore opérationnel",
       html: coquille(corps),
       text: signature(texte),
     };
