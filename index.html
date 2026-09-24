@@ -4129,7 +4129,7 @@ function openMdRepartition(){
     <p class="small muted" style="margin-bottom:10px">Mode actuel : <b>${MD_MODE_LABELS[S.settings.mode]}</b></p>
     ${mdRepartitionSummary()}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageRep">Modifier dans Notre budget →</span>
+      <span class="link" id="mdGoPilotageRep">Modifier le budget →</span>
     </div>`, true);
   $('#mdGoPilotageRep').onclick=()=>{ closeModal(); go('pilotage'); };
 }
@@ -4138,7 +4138,7 @@ function openMdCharges(){
   openModal(`<h3>🧾 Charges fixes communes</h3><p class="small muted" style="margin-bottom:10px">Total : ${fmt(chargesCommunes())}</p>
     ${communes.length?communes.map(c=>`<div class="between" style="padding:9px 0; border-top:1px solid var(--line)"><span class="small">${escapeHtml(c.name)}</span><b class="small">${fmt(c.amount)}</b></div>`).join(''):'<p class="small muted" style="padding:10px 0">Aucune charge fixe commune.</p>'}
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageCharges">Modifier dans Notre budget →</span>
+      <span class="link" id="mdGoPilotageCharges">Modifier le budget →</span>
     </div>`, true);
   $('#mdGoPilotageCharges').onclick=()=>{ closeModal(); go('pilotage'); };
 }
@@ -4233,7 +4233,7 @@ function mdCategoriesDetailHtml(offset){
     <div class="section-title" style="margin-top:0">Budgets par catégorie</div>
     <div class="card">${catsHtml}</div>
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line)">
-      <span class="link" id="mdGoPilotageCategories">Modifier dans Notre budget →</span>
+      <span class="link" id="mdGoPilotageCategories">Modifier le budget →</span>
     </div>`;
 }
 
