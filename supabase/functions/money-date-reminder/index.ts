@@ -52,7 +52,7 @@ function emailHtml(prenom: string, when: "demain" | "aujourdhui") {
     ? `<h2 style="margin:0 0 12px;font-size:21px">Votre Money Date, c'est demain</h2>
        <p style="color:#ccc;margin:0">${bonjour} pensez à vous garder un instant à deux demain pour faire le point sur vos finances.</p>`
     : `<h2 style="margin:0 0 12px;font-size:21px">C'est aujourd'hui votre Money Date</h2>
-       <p style="color:#ccc;margin:0 0 24px">${bonjour} pensez à prendre quelques minutes à deux aujourd'hui, et vous repartirez avec un mois de sérénité.</p>
+       <p style="color:#ccc;margin:0 0 24px">${bonjour} pensez à prendre un instant à deux aujourd'hui pour repartir avec un mois de sérénité.</p>
        <a href="https://budgetadeux.fr/?ecran=moneydate" style="display:inline-block;background:#c1573f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold">Commencer notre Money Date →</a>`;
   return `
   <div style="background:#141414;padding:32px 16px;font-family:Georgia,serif;color:#eee">
@@ -75,7 +75,7 @@ function emailTexte(prenom: string, when: "demain" | "aujourdhui") {
   const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
   return signature(when === "demain"
     ? `Votre Money Date, c'est demain.\n\n${bonjour} pensez à vous garder un instant à deux demain pour faire le point sur vos finances.`
-    : `C'est aujourd'hui votre Money Date.\n\n${bonjour} pensez à prendre quelques minutes à deux aujourd'hui, et vous repartirez avec un mois de sérénité.\n\nCommencer notre Money Date : https://budgetadeux.fr/?ecran=moneydate`);
+    : `C'est aujourd'hui votre Money Date.\n\n${bonjour} pensez à prendre un instant à deux aujourd'hui pour repartir avec un mois de sérénité.\n\nCommencer notre Money Date : https://budgetadeux.fr/?ecran=moneydate`);
 }
 
 // Un envoi automatique récurrent sans moyen de s'en défaire est mal vu des filtres, et à juste
