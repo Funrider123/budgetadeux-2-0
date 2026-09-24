@@ -186,13 +186,22 @@ function onboardingEmail(c: Candidat) {
   }
 
   // J+7 : on ne répète pas la même consigne, on demande ce qui a bloqué. À ce stade, le
-  // retour d'un couple resté à l'arrêt vaut plus qu'une inscription de plus.
+  // retour d'un couple resté à l'arrêt vaut mieux qu'une inscription de plus.
+  //
+  // « on ne cherche pas à te relancer » plutôt que « on ne veut pas t'embêter » : la seconde
+  // s'excusait d'écrire tout en écrivant, ce qui sonnait enfantin. La première assume l'envoi
+  // et distingue la relance de la question — c'est la question qui nous intéresse.
+  //
+  // « vos retours à tous » est le seul vouvoiement du message, et il est délibéré : il désigne
+  // l'ensemble des utilisateurs, pas le lecteur. Sans le « à tous », au milieu de trois « tu »,
+  // il se lirait comme un vouvoiement de la personne, à rebours de la règle (on vouvoie le
+  // couple, on tutoie celui à qui on parle — et ici on n'écrit qu'à une personne).
   const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tout va bien de ton côté&nbsp;?</h2>
-     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.</p>
-     <p style="color:#999;margin:0 0 20px;font-size:14px">Si quelque chose t'a arrêté, même un détail, <b style="color:#ccc">tu peux répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.</p>
+     <p style="color:#ccc;margin:0 0 10px">${bonjour} on ne cherche pas à te relancer ; juste à comprendre ce qui t'a arrêté.</p>
+     <p style="color:#999;margin:0 0 20px;font-size:14px">Même un détail nous intéresse : <b style="color:#ccc">tu peux répondre à cet email</b>, ou nous écrire directement à <a href="mailto:${REPLY_TO}" style="color:#e07856;text-decoration:none">${REPLY_TO}</a>. On est encore au tout début, et ce sont vos retours à tous qui décideront de ce que l'application deviendra. Ça nous sert bien plus qu'une nouvelle inscription.</p>
      ${bouton(lien, "Reprendre l'application →")}
      <p style="color:#777;margin:22px 0 0;font-size:12px">Et si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.</p>`;
-  const texte = `Tout va bien de ton côté ?\n\n${bonjour} on ne veut pas t'embêter ; juste vérifier que rien ne t'a bloqué.\n\nSi quelque chose t'a arrêté, même un détail, tu peux répondre à cet email, ou nous écrire directement à ${REPLY_TO}. C'est le genre de retour qui nous aide le plus en ce moment, bien plus qu'une inscription de plus.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.`;
+  const texte = `Tout va bien de ton côté ?\n\n${bonjour} on ne cherche pas à te relancer ; juste à comprendre ce qui t'a arrêté.\n\nMême un détail nous intéresse : tu peux répondre à cet email, ou nous écrire directement à ${REPLY_TO}. On est encore au tout début, et ce sont vos retours à tous qui décideront de ce que l'application deviendra. Ça nous sert bien plus qu'une nouvelle inscription.\n\nReprendre l'application : ${lien}\n\nEt si ce n'est finalement pas pour toi, aucun souci : c'est notre dernier message.`;
   return { subject: "Tout va bien de ton côté ?", html: coquille(corps), text: signature(texte) };
 }
 
