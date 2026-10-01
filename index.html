@@ -572,11 +572,14 @@ const DEFAULT = {
   },
   // Catégories suggérées comme structure de départ (la plupart des couples en ont besoin),
   // mais à 0€ — on ne devine pas un montant qui serait faux pour ce couple précis.
-  // rollover : report du solde d'un mois sur l'autre (voir catRolloverBalance). Désactivé
-  // par défaut — c'est un mode "enveloppe" que le couple choisit catégorie par catégorie.
+  // rollover : report du solde d'un mois sur l'autre (voir catRolloverBalance). Activé par
+  // défaut, parce que sans lui l'app n'est pas neutre : elle proposait de décider quoi faire
+  // d'un surplus, mais oubliait purement et simplement un dépassement. Un couple qui dépasse
+  // de 80 € en septembre repartait à zéro en octobre, comme si les 80 € n'étaient jamais
+  // sortis. Le report rétablit la symétrie — ce qui reste avance, ce qui manque se rattrape.
   categories:[
-    {id:"courses", emoji:"🛒", name:"Courses", budget:0, cls:"besoin", rollover:false, rolloverStart:0, rolloverFrom:null},
-    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:0, cls:"envie", rollover:false, rolloverStart:0, rolloverFrom:null}
+    {id:"courses", emoji:"🛒", name:"Courses", budget:0, cls:"besoin", rollover:true, rolloverStart:0, rolloverFrom:null, rolloverMigre:true},
+    {id:"loisirs", emoji:"🎉", name:"Loisirs", budget:0, cls:"envie", rollover:true, rolloverStart:0, rolloverFrom:null, rolloverMigre:true}
   ],
   // Squelette de charges fixes : les lignes que presque tout le monde a, a 0 EUR.
   // On ne devine pas les montants (ce serait faux), mais on dit quoi chercher — le vrai
@@ -671,13 +674,25 @@ function migrate(s){
     s.projects.forEach(p=>{ s.projectsSnapshot[p.id] = {mensuel:p.mensuel||0, months:p.months||0}; });
   }
   if(!s.budgetTimeline) s.budgetTimeline = {};
-  // Report du solde d'un mois sur l'autre : strictement opt-in. Les comptes existants
-  // gardent donc exactement le comportement qu'ils connaissent (budget remis à zéro
-  // chaque mois) tant qu'ils n'activent pas le report sur une catégorie.
+  // Report du solde d'un mois sur l'autre. Il était strictement opt-in ; il devient le
+  // comportement par défaut (voir DEFAULT.categories pour le pourquoi).
+  //
+  // La bascule des enveloppes existantes se fait UNE SEULE FOIS, repérée par rolloverMigre.
+  // Sans ce marqueur, une enveloppe que le couple aurait délibérément remise sans report se
+  // verrait réactiver à chaque ouverture de l'app : on leur imposerait un choix au lieu de
+  // leur en proposer un. Le marqueur vit sur la catégorie, donc il se synchronise avec elle
+  // et la bascule ne se rejoue pas sur le second téléphone.
+  //
+  // rolloverFrom est calé sur le mois courant : le cumul ne remonte jamais avant, donc
+  // personne ne découvre au réveil une dette ou une cagnotte héritée d'un passé jamais compté.
   s.categories.forEach(c=>{
     if(c.rollover===undefined) c.rollover=false;
     if(c.rolloverStart===undefined) c.rolloverStart=0;
     if(c.rolloverFrom===undefined) c.rolloverFrom=null;
+    if(!c.rolloverMigre){
+      c.rolloverMigre=true;
+      if(!c.rollover){ c.rollover=true; c.rolloverStart=0; c.rolloverFrom=annualMonthKey(0); }
+    }
   });
   // Lignes de cagnotte créées avant l'ajout d'un id stable (voir mergeCagnotteWithRemote) :
   // sans id, une fusion ne peut ni les reconnaître ni les protéger d'un écrasement distant.
@@ -2602,8 +2617,20 @@ function catRolloverBalance(catId, offset=0){
   // faire boucler des milliers d'itérations au rendu.
   const from=Math.max(start, offset-120);
   let bal=open;
-  for(let o=from; o<=offset; o++) bal += catBudgetAt(catId,o) - spentByCat(catId,o);
+  for(let o=from; o<=offset; o++) bal += catBudgetAt(catId,o) - spentByCat(catId,o) + mdAjustementEnveloppe(catId,o);
   return bal;
+}
+// Ce que les décisions prises au Money Date retirent ou ajoutent à une enveloppe, en plus
+// des dépenses réelles. Indispensable : un transfert de surplus est enregistré en type
+// 'transfert', que realExpenses() ignore volontairement (ce n'est pas une dépense du couple,
+// c'est un mouvement interne). Sans ce correctif, l'argent envoyé à la cagnotte sortirait
+// deux fois — une fois vers la cagnotte, une fois reporté sur le mois suivant.
+function mdAjustementEnveloppe(catId, offset=0){
+  return mdSurplusDecisions(offset, catId).reduce((s,d)=>{
+    if(d.type==='transferred') return s - d.amount; // parti vers la cagnotte ou un projet
+    if(d.type==='couvert') return s + d.amount;     // venu de la cagnotte pour combler un trou
+    return s;                                        // 'kept' : rien ne bouge, le report suffit
+  }, 0);
 }
 // Report entrant sur le mois `offset` = solde à la fin du mois précédent (0 si pas de report).
 function catCarryIn(catId, offset=0){
@@ -3005,19 +3032,43 @@ function mdContent(step){
   if(step===2){
     const rows=mdSurplusRows(offset);
     const rebalanceNote=`<div class="card-soft" style="margin-bottom:14px; text-align:left">
-      <p class="small muted" style="margin:0">Un surplus ne peut être transféré que vers la cagnotte commune ou un projet ; pas directement vers une autre catégorie de dépense. Pour rééquilibrer durablement vos budgets (ex. baisser Courses au profit de Loisirs), rendez-vous dans <span class="link" id="mdGoPilotage">Simulation budgétaire →</span>.</p>
+      <p class="small muted" style="margin:0">Un surplus ne peut être transféré que vers la cagnotte commune ou un projet ; pas directement vers une autre catégorie de dépense. Pour rééquilibrer durablement vos budgets (ex. baisser Courses au profit de Loisirs), rendez-vous dans <span class="link" id="mdGoPilotage">Notre budget →</span>.</p>
     </div>`;
-    // Les enveloppes à report sont affichées pour information : rien à décider, mais on
-    // ne veut pas laisser croire que l'app a oublié leur solde.
-    const rollCats=S.categories.filter(c=>c.rollover);
+    // Les enveloppes à report n'ont rien d'OBLIGATOIRE à décider — leur solde bascule seul sur
+    // le mois suivant, dans les deux sens. Mais le couple peut sortir de ce comportement par
+    // défaut : envoyer une avance vers la cagnotte ou un projet, ou combler un retard depuis
+    // la cagnotte. Un retard ne peut pas être « épongé » : l'argent est sorti pour de vrai, il
+    // doit venir de quelque part. D'où une seule source possible, la cagnotte commune — l'app
+    // interdit par ailleurs les transferts d'enveloppe à enveloppe (voir rebalanceNote).
+    const rollCats=S.categories.filter(c=>c.rollover && (c.budget>0 || Math.abs(catRolloverBalance(c.id,offset)||0)>0.01));
+    const cagDispo=Math.max(0, (S.cagnotte && S.cagnotte.balance) || 0);
     const rollNote = rollCats.length ? `<div class="card-soft" style="margin-bottom:14px; text-align:left">
-      <p class="small" style="margin:0 0 8px; font-weight:800">↩ Reporté automatiquement</p>
-      ${rollCats.map(c=>{ const b=catRolloverBalance(c.id,offset)||0;
-        return `<div class="between" style="padding:3px 0"><span class="small">${c.emoji} ${escapeHtml(c.name)}</span><b class="small" style="color:${b<0?'var(--danger)':'var(--ok)'}">${b>=0?'+':'−'}${fmt(Math.abs(b))}</b></div>`;
+      <p class="small" style="margin:0 0 10px; font-weight:800">↩ Le solde de vos enveloppes</p>
+      ${rollCats.map(c=>{
+        const b=catRolloverBalance(c.id,offset)||0;
+        const manque=Math.max(0,-b);
+        const decisions=mdSurplusDecisions(offset, c.id).map((d,i)=>({d,i})).filter(x=>x.d.type==='transferred'||x.d.type==='couvert');
+        return `<div style="padding:9px 0; border-top:1px solid var(--line)">
+          <div class="between">
+            <span class="small">${c.emoji} ${escapeHtml(c.name)}</span>
+            <b class="small" style="color:${b<0?'var(--danger)':'var(--ok)'}">${b>=0?'+':'−'}${fmt(Math.abs(b))}</b>
+          </div>
+          <div class="small muted" style="margin-top:3px">${b<0?`à rattraper sur ${monthLabel(offset+1)}`:`reporté sur ${monthLabel(offset+1)}`}</div>
+          ${decisions.map(({d,i})=>`<div class="between" style="padding:3px 0">
+            <span class="small" style="color:var(--ok); font-weight:700">${d.type==='couvert'?`✓ Couvert depuis la cagnotte (${fmt(d.amount)})`:`✓ Transféré (${fmt(d.amount)}, mouvement interne)`}</span>
+            <span class="link" data-surplus-undo="${c.id}" data-idx="${i}" style="font-size:12px">Modifier</span>
+          </div>`).join('')}
+          ${b>0.01?`<button class="btn btn-ghost btn-sm" style="width:100%; margin-top:7px" data-surplus-transfer="${c.id}" data-remaining="${b}">Transférer vers la cagnotte ou un projet</button>`:''}
+          ${manque>0.01?(cagDispo>0.01
+            ? `<button class="btn btn-ghost btn-sm" style="width:100%; margin-top:7px" data-deficit-cover="${c.id}" data-deficit="${manque}">Couvrir depuis la cagnotte</button>`
+            : `<p class="small muted" style="margin:7px 0 0">La cagnotte est vide : ce retard se rattrapera sur les mois suivants.</p>`):''}
+        </div>`;
       }).join('')}
-      <p class="small muted" style="margin:8px 0 0">Ces soldes basculent seuls sur ${monthLabel(offset+1)}, en positif comme en négatif. Rien à décider ici.</p>
+      <p class="small muted" style="margin:10px 0 0">Par défaut, ces soldes basculent seuls sur ${monthLabel(offset+1)}, en positif comme en négatif. Vous n'avez rien à faire ici.</p>
     </div>` : '';
-    if(!rows.length) return rollNote + `<p class="empty">Aucun surplus à décider ce mois-ci 💪</p>`;
+    // Le message « rien à décider » n'a de sens que s'il n'y a vraiment rien à l'écran : le
+    // bloc des enveloppes à report, lui, dit déjà tout ce qu'il y a à dire sur le mois.
+    if(!rows.length) return rollNote || `<p class="empty">Aucun surplus à décider ce mois-ci 💪</p>`;
     return rollNote + rebalanceNote + rows.map(({c,surplus})=>{
       const decisions=mdSurplusDecisions(offset, c.id);
       const remaining=mdSurplusRemaining(offset, c.id, surplus);
@@ -4085,8 +4136,35 @@ function openSurplusTransfer(catId, remaining){
     mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'transferred', amount:amt, dest, expId});
     save(); closeModal();
     const left=remaining-amt;
-    if(left>0.01){ openSurplusRemainderChoice(catId, left); }
+    // Sur une enveloppe à report, ce qui n'est pas transféré n'a rien à décider : il bascule
+    // tout seul sur le mois suivant. Poser la question reviendrait à inventer un choix.
+    if(left>0.01 && !c.rollover){ openSurplusRemainderChoice(catId, left); }
     else { go('moneydate'); toast("Surplus transféré 💸 (mouvement interne)","✓"); }
+  };
+}
+// Combler le retard d'une enveloppe depuis la cagnotte commune. On ne propose pas d'« éponger » :
+// l'argent est sorti pour de vrai, faire disparaître le trou d'un clic reviendrait à maquiller
+// le budget. Soit il se rattrape sur les mois suivants, soit il est payé par l'épargne commune.
+function openCoverDeficit(catId, deficit){
+  const c=catById(catId);
+  const dispo=Math.max(0, (S.cagnotte && S.cagnotte.balance) || 0);
+  const max=Math.min(deficit, dispo);
+  openModal(`<h3>👛 Couvrir depuis la cagnotte</h3>
+    <p class="small muted" style="margin-bottom:14px">« ${escapeHtml(c.name)} » est en retard de ${fmt(deficit)}. La cagnotte commune dispose de ${fmt(dispo)}.</p>
+    <div class="field"><label>Montant à prendre sur la cagnotte</label>
+      <input class="input" type="text" inputmode="decimal" id="cdAmt" value="${inputAmt(max)}">
+      <p class="small muted" style="margin:6px 2px 0">Ce qui n'est pas couvert reste à rattraper sur les mois suivants.</p>
+    </div>
+    <button class="btn btn-primary" id="cdSave">Couvrir</button>`, true);
+  $('#cdSave').onclick=()=>{
+    const amt=Math.min(max, Math.max(0, parseAmt($('#cdAmt').value)));
+    if(amt<=0){ toast("Indiquez un montant","💶"); return; }
+    const cagId=e();
+    S.cagnotte.history.unshift({id:cagId, date:iso(0), label:`Couverture ${c.name} — ${monthLabel(S.ui.mdMonth)}`, amount:-amt});
+    recalcCagnotteBalance();
+    mdAddSurplusDecision(S.ui.mdMonth, catId, {type:'couvert', amount:amt, source:'cagnotte', cagId});
+    save(); closeModal(); go('moneydate');
+    toast("Retard couvert par la cagnotte 👛","✓");
   };
 }
 function openSurplusRemainderChoice(catId, remaining){
@@ -4104,6 +4182,13 @@ function undoSurplusDecision(offset, catId, idx){
   const k=mdMonthKey(offset)+'_'+catId;
   const arr=S.moneyDate.surplusDecisions[k]; if(!arr || !arr[idx]) return;
   const decision=arr[idx];
+  if(decision.type==='couvert'){
+    // L'ardoise est indispensable : sans elle, le second téléphone — qui connaît encore la
+    // ligne — la repousserait au prochain envoi, et la cagnotte se retrouverait débitée deux
+    // fois d'une couverture annulée.
+    if(decision.cagId){ markDeleted(decision.cagId); S.cagnotte.history=S.cagnotte.history.filter(h=>h.id!==decision.cagId); }
+    recalcCagnotteBalance();
+  }
   if(decision.type==='transferred'){
     const c=catById(catId);
     if(decision.dest==='cagnotte'){
@@ -4387,6 +4472,9 @@ function bindMoneyDate(){
   document.querySelectorAll('[data-surplus-keep]').forEach(b=>b.addEventListener('click',()=>{
     mdAddSurplusDecision(S.ui.mdMonth, b.dataset.surplusKeep, {type:'kept', amount:+b.dataset.remaining});
     save(); go('moneydate'); toast("Gardé pour le mois prochain ✓");
+  }));
+  document.querySelectorAll('[data-deficit-cover]').forEach(b=>b.addEventListener('click',()=>{
+    openCoverDeficit(b.dataset.deficitCover, +b.dataset.deficit);
   }));
   document.querySelectorAll('[data-surplus-undo]').forEach(b=>b.addEventListener('click',()=>{
     undoSurplusDecision(S.ui.mdMonth, b.dataset.surplusUndo, +b.dataset.idx); go('moneydate');
@@ -4905,7 +4993,9 @@ function openEditCat(id, returnTo){
   let cls=c.cls;
   document.querySelectorAll('.clsPick').forEach(b=>b.addEventListener('click',()=>{cls=b.dataset.cls; document.querySelectorAll('.clsPick').forEach(x=>x.classList.remove('on')); b.classList.add('on');}));
   document.querySelectorAll('[data-natureshelp]').forEach(b=>b.onclick=openNatureHelp);
-  let roll=!!c.rollover;
+  // Une nouvelle enveloppe arrive avec le report activé : c'est le comportement par défaut
+  // de l'app, et le couple peut le retirer ici s'il préfère repartir de zéro chaque mois.
+  let roll = id ? !!c.rollover : true;
   const syncRoll=()=>{ $('#ceRoll').classList.toggle('on',roll); $('#ceRollStartWrap').style.display=roll?'block':'none'; };
   syncRoll();
   $('#ceRoll').onclick=()=>{ roll=!roll; syncRoll(); };
@@ -4923,7 +5013,9 @@ function openEditCat(id, returnTo){
       target=c;
     }
     else {
-      target={id:e(),emoji:'📦',name:n,budget:parseAmt($('#ceB').value),cls:cls,rollover:roll,rolloverStart:rollStart,rolloverFrom:roll?annualMonthKey(0):null};
+      // rolloverMigre dès la création : sans lui, une enveloppe créée volontairement SANS
+      // report serait rebasculée par la migration à la prochaine ouverture de l'app.
+      target={id:e(),emoji:'📦',name:n,budget:parseAmt($('#ceB').value),cls:cls,rollover:roll,rolloverStart:rollStart,rolloverFrom:roll?annualMonthKey(0):null,rolloverMigre:true};
       S.categories.push(target);
     }
     // Sur une catégorie à report, on épingle la dotation du mois courant. Sans ça,
