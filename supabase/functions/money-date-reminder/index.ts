@@ -219,7 +219,10 @@ function onboardingEmail(c: Candidat) {
 function suppressionEmail(prenom: string) {
   const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
   const l1 = "C'est fait. Ton compte et l'ensemble de votre budget commun ont été définitivement supprimés : dépenses, catégories, charges fixes, projets, cagnotte, historique.";
-  const l2 = "Ton adresse email est de nouveau libre. Si un jour tu veux recommencer, tu pourras créer un compte avec cette même adresse ; tu repartiras d'une page blanche.";
+  // Une permission, pas une invitation : « si un jour tu veux recommencer » supposait un essai
+  // raté et glissait vers la relance, ce qu'on s'interdit ici. « Quand tu voudras » met le
+  // moment entièrement de leur côté — la porte reste ouverte sans qu'on la montre du doigt.
+  const l2 = "Ton adresse email est de nouveau libre : plus rien ne la relie à Budget à Deux. Tu pourras t'en resservir ici quand tu voudras.";
   const l3 = "Merci d'avoir essayé Budget à Deux.";
   const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tes données ont été supprimées</h2>
      <p style="color:#ccc;margin:0 0 12px">${bonjour} ${l1}</p>
