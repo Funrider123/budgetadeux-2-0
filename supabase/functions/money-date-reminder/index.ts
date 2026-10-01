@@ -223,7 +223,10 @@ function suppressionEmail(prenom: string) {
   // raté et glissait vers la relance, ce qu'on s'interdit ici. « Quand tu voudras » met le
   // moment entièrement de leur côté — la porte reste ouverte sans qu'on la montre du doigt.
   const l2 = "Ton adresse email est de nouveau libre : plus rien ne la relie à Budget à Deux. Tu pourras t'en resservir ici quand tu voudras.";
-  const l3 = "Merci d'avoir essayé Budget à Deux.";
+  // Pas « merci d'avoir essayé » : le mot range la personne du côté du prospect qui a testé,
+  // et surtout, dans le contexte où ce message part, il s'entend aussi comme « merci d'avoir
+  // essayé, à deux » — involontairement cruel après une séparation.
+  const l3 = "Merci de nous avoir fait confiance.";
   const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tes données ont été supprimées</h2>
      <p style="color:#ccc;margin:0 0 12px">${bonjour} ${l1}</p>
      <p style="color:#ccc;margin:0 0 12px">${l2}</p>
