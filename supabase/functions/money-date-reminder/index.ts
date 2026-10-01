@@ -205,6 +205,43 @@ function onboardingEmail(c: Candidat) {
   return { subject: "Tout va bien de ton côté ?", html: coquille(corps), text: signature(texte) };
 }
 
+/* ============================================================
+   CONFIRMATION DE SUPPRESSION
+   Brouillon : aucun flux ne l'envoie encore. La purge (purge_expired_deletions) est du SQL
+   pur et supprime la ligne de auth.users — l'adresse disparaît donc AVEC le compte. Pour
+   envoyer ce message pour de vrai, il faudra la capturer avant la purge et la passer ici.
+   Accessible en attendant via le mode aperçu, pour juger le texte dans une vraie boîte.
+
+   Aucun bouton, aucun lien de retour : relancer quelqu'un qui vient de tout effacer serait
+   déplacé. Et aucun chiffre — après une séparation, l'inventaire chiffré de ce qu'on vient
+   de perdre n'apporte rien. Les chiffres sont dans l'export, qui doit partir AVANT.
+   ============================================================ */
+function suppressionEmail(prenom: string) {
+  const bonjour = prenom ? `Bonjour ${prenom},` : "Bonjour,";
+  const l1 = "C'est fait. Ton compte et l'ensemble de votre budget commun ont été définitivement supprimés : dépenses, catégories, charges fixes, projets, cagnotte, historique.";
+  const l2 = "Ton adresse email est de nouveau libre. Si un jour tu veux recommencer, tu pourras créer un compte avec cette même adresse ; tu repartiras d'une page blanche.";
+  const l3 = "Merci d'avoir essayé Budget à Deux.";
+  const corps = `<h2 style="margin:0 0 12px;font-size:21px">Tes données ont été supprimées</h2>
+     <p style="color:#ccc;margin:0 0 12px">${bonjour} ${l1}</p>
+     <p style="color:#ccc;margin:0 0 12px">${l2}</p>
+     <p style="color:#999;margin:0;font-size:14px">${l3}</p>`;
+  return {
+    subject: "Tes données ont été supprimées",
+    html: coquille(corps),
+    text: signature(`Tes données ont été supprimées.\n\n${bonjour} ${l1}\n\n${l2}\n\n${l3}`),
+  };
+}
+
+async function envoiSimple(to: string, msg: {subject: string; html: string; text: string}, apiKey: string) {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: FROM, to: [to], subject: msg.subject, reply_to: REPLY_TO,
+                           headers: ENTETES, html: msg.html, text: msg.text }),
+  });
+  if (!res.ok) throw new Error(`resend ${res.status}: ${await res.text()}`);
+}
+
 async function envoiRelance(c: Candidat, apiKey: string) {
   const { subject, html, text } = onboardingEmail(c);
   const body = { from: FROM, to: [c.email], subject, reply_to: REPLY_TO, headers: ENTETES, html, text };
@@ -282,6 +319,7 @@ Deno.serve(async (req) => {
         ["relance/j2-partenaire-manquant", () => envoiRelance(faux({ manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
         ["relance/j2-partenaire-present", () => envoiRelance(faux({ manque_moneydate: true, manque_budget: true }), resendKey)],
         ["relance/j7", () => envoiRelance(faux({ stage: "j7", manque_partenaire: true, manque_moneydate: true, manque_budget: true }), resendKey)],
+        ["suppression/confirmation", () => envoiSimple(apercu, suppressionEmail(prenom), resendKey)],
       ];
       const envoyes: string[] = [];
       const echecs: string[] = [];
