@@ -2227,6 +2227,229 @@ function updateAjouterValidity(){
   const hint=$('#dMissingHint');
   if(hint){ const txt=ajouterHint(); hint.textContent=txt; hint.style.display=txt?'block':'none'; }
 }
+
+/* ============================================================
+   DICTÉE : d'une phrase au formulaire pré-rempli
+   « 19,95 euros chez Carrefour dans les courses » → montant, commerce, catégorie.
+
+   RÈGLE ABSOLUE : cette analyse REMPLIT le formulaire, elle ne valide jamais. Une
+   transcription vocale se trompe — « Carrefour » devient « car refour », 19,95 devient 1995.
+   Si ça écrivait directement dans le budget, une seule erreur passée inaperçue ruinerait la
+   confiance du couple dans TOUS ses chiffres. On propose, le couple voit, le couple confirme.
+
+   Aucune IA ici, et c'est volontaire : la phrase est très régulière, et surtout S.merchants
+   associe déjà chaque commerce à sa catégorie. Reconnaître « Carrefour » suffit donc à déduire
+   « Courses » sans que personne ait eu à la prononcer. Un modèle ne servirait qu'aux tournures
+   que ces règles ratent, et ce serait un second temps.
+   ============================================================ */
+const sansAccents = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+// Nombres en toutes lettres : à l'oral on dit « vingt euros » bien plus souvent qu'on n'écrit 20.
+// Couvre 0 à 999, largement au-delà de ce qu'on prononce pour une dépense courante.
+const MOTS_NOMBRES = {zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,
+  dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,
+  vingt:20,vingts:20,trente:30,quarante:40,cinquante:50,soixante:60,cent:100,cents:100};
+
+// Découpe identique sur la phrase d'origine et sa version normalisée, pour pouvoir récupérer
+// un mot dans sa casse d'origine (un nom de commerce, par exemple) à partir de son rang.
+function motsDictee(phrase){
+  const prep = (phrase||'').replace(/€/g,' euros ').replace(/(\d)[,](\d)/g,'$1.$2').replace(/[,;:!?]/g,' ');
+  const bruts = prep.split(/\s+/).filter(Boolean);
+  return { bruts, mots: bruts.map(sansAccents) };
+}
+
+// Suites de mots-nombres (« quatre-vingt-dix ») et nombres en chiffres, avec leur position.
+function valeursDansMots(mots){
+  const out=[];
+  for(let i=0;i<mots.length;i++){
+    const chiffre = /^\d+(\.\d+)?$/.test(mots[i]) ? parseFloat(mots[i]) : null;
+    if(chiffre!==null){ out.push({v:chiffre, debut:i, fin:i}); continue; }
+    // Un mot-nombre peut être composé, avec ou sans traits d'union selon la transcription.
+    let j=i, total=0, trouve=false, dernier=0;
+    while(j<mots.length){
+      const parts = mots[j].split('-').filter(p=>p && p!=='et');
+      if(!parts.length || parts.some(p=>MOTS_NOMBRES[p]===undefined)) break;
+      parts.forEach(p=>{
+        const v=MOTS_NOMBRES[p];
+        if(v===100) total = (total||1)*100;
+        // « quatre-vingt » : le 4 qui précède 20 multiplie au lieu de s'ajouter. On a déjà
+        // compté 4, il faut donc arriver à 80 — d'où +76, et « quatre-vingt-quinze » fait 95.
+        else if(v===20 && dernier===4) total += 76;
+        else total += v;
+        dernier=v;
+      });
+      trouve=true; j++;
+      if(j<mots.length && mots[j]==='et') j++; // « vingt et un »
+    }
+    if(trouve){ out.push({v:total, debut:i, fin:j-1}); i=j-1; }
+  }
+  return out;
+}
+
+const MARQUEURS_MONNAIE = ['euros','euro','eur','balles','boules'];
+
+// Le montant : on préfère toujours le nombre collé à « euros », jamais le premier venu — sinon
+// « 2 baguettes 3 euros » donnerait 2. Et « dix-neuf euros quatre-vingt-quinze » se dit autant
+// que « dix-neuf virgule quatre-vingt-quinze » : les centimes après le marqueur sont repris.
+function montantDansMots(mots){
+  const vals = valeursDansMots(mots);
+  if(!vals.length) return null;
+  const marqueur = mots.findIndex(m=>MARQUEURS_MONNAIE.includes(m));
+  if(marqueur>-1){
+    const entier = vals.find(v=>v.fin===marqueur-1);
+    if(entier){
+      const centimes = vals.find(v=>v.debut===marqueur+1 && v.v<100 && Number.isInteger(v.v));
+      if(centimes) return round2(entier.v + centimes.v/100);
+      return round2(entier.v);
+    }
+  }
+  return round2(vals[0].v);
+}
+
+const JOURS_SEMAINE = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+
+// Les dates qu'on prononce vraiment : « hier », « avant-hier », « lundi », « il y a trois jours ».
+// Un jour de la semaine désigne toujours le plus récent passé, jamais le prochain : on note une
+// dépense faite, pas une dépense à venir.
+function dateDansMots(mots){
+  const phrase = mots.join(' ');
+  if(/avant.?hier/.test(phrase)) return iso(2);
+  if(mots.includes('hier')) return iso(1);
+  const ilya = phrase.match(/il y a (\d+) jours?/);
+  if(ilya) return iso(Math.min(365, parseInt(ilya[1],10)));
+  const jour = mots.findIndex(m=>JOURS_SEMAINE.includes(m));
+  if(jour>-1){
+    const cible = JOURS_SEMAINE.indexOf(mots[jour]);
+    const ecart = (new Date().getDay() - cible + 7) % 7;
+    return iso(ecart===0 ? 7 : ecart);
+  }
+  return null;
+}
+
+/**
+ * Analyse une phrase dictée (ou tapée) et renvoie ce qu'il y a à pré-remplir.
+ * Ne touche à rien : c'est une fonction pure, testable sans micro ni navigateur.
+ */
+function analyserDictee(phrase){
+  const { bruts, mots } = motsDictee(phrase);
+  const norm = mots.join(' ');
+  const res = { compris: [] };
+  if(!mots.length) return res;
+
+  const montant = montantDansMots(mots);
+  if(montant!==null && montant>0){ res.amount = String(montant).replace('.',','); res.compris.push(fmt(montant)); }
+
+  // La cagnotte prime sur toute catégorie : c'est un autre porte-monnaie, pas une enveloppe.
+  if(/\bcagnotte\b/.test(norm)){ res.cat = '__cagnotte__'; res.compris.push('cagnotte commune'); }
+
+  // Commerce : on cherche le nom n'importe où dans la phrase, sans exiger « chez ». Le plus
+  // long gagne, pour que « Carrefour Market » l'emporte sur « Carrefour ».
+  const commerce = S.merchants
+    .filter(m=>m.name && norm.includes(sansAccents(m.name)))
+    .sort((a,b)=>b.name.length-a.name.length)[0];
+  if(commerce){
+    res.merchant = commerce.id;
+    res.compris.push(commerce.name);
+    // La catégorie du commerce suffit, sauf si la phrase en nomme explicitement une autre.
+    if(!res.cat) res.cat = commerce.cat;
+  }
+
+  // Catégorie dite à voix haute. Un nom peut être composé (« Loisirs/Sorties ») : chacun de ses
+  // mots d'au moins quatre lettres est un indice, et le plus long l'emporte.
+  if(res.cat!=='__cagnotte__'){
+    let meilleure=null, score=0;
+    S.categories.forEach(c=>{
+      sansAccents(c.name).split(/[^a-z0-9]+/).filter(t=>t.length>=4).forEach(t=>{
+        if(new RegExp(`\\b${t}`).test(norm) && t.length>score){ meilleure=c; score=t.length; }
+      });
+    });
+    if(meilleure){ res.cat = meilleure.id; if(!res.compris.includes(meilleure.name)) res.compris.push(meilleure.name); }
+  }
+
+  const d = dateDansMots(mots);
+  if(d){ res.date = d; res.compris.push(d===iso(1) ? 'hier' : 'le '+d.split('-').reverse().join('/')); }
+
+  if(/\bprevision\b|\bprevu\b|\ba prevoir\b/.test(norm)){ res.prevision = true; res.compris.push('prévision'); }
+
+  // Qui a payé : le prénom s'il est prononcé, sinon « moi » ramène à la personne connectée.
+  ['lui','elle'].forEach(w=>{
+    const n = sansAccents(nameOf(w));
+    if(n && n.length>=2 && new RegExp(`\\b${n}\\b`).test(norm)){ res.who = w; res.compris.push(nameOf(w)); }
+  });
+  if(!res.who && /\bmoi\b|\bj ai paye\b/.test(norm)){ res.who = me(); res.compris.push(nameOf(me())); }
+
+  // Description : seulement si aucun commerce connu n'a été reconnu, sinon le formulaire la dit
+  // facultative. On reprend les mots qui suivent « chez » / « au » / « à », dans leur casse
+  // d'origine — c'est très probablement le nom d'un commerce qu'on ne connaît pas encore.
+  if(!res.merchant){
+    const i = mots.findIndex(m=>['chez','au','aux','a'].includes(m));
+    if(i>-1 && i<mots.length-1){
+      const stop = ['dans','en','pour','sur','le','la','les','avec','hier','il'];
+      const suite=[];
+      for(let j=i+1;j<mots.length && suite.length<3;j++){
+        if(stop.includes(mots[j]) || MARQUEURS_MONNAIE.includes(mots[j]) || /^\d/.test(mots[j])) break;
+        suite.push(bruts[j]);
+      }
+      if(suite.length) res.desc = suite.join(' ');
+    }
+  }
+  return res;
+}
+
+/* ---- Le micro ----
+   SpeechRecognition est l'API du navigateur : gratuite, sans serveur, rien qui transite par
+   nous. Elle n'existe pas partout (et reste capricieuse en PWA iOS) : le bouton ne s'affiche
+   donc que là où elle répond, et la saisie à la main reste intacte juste en dessous. */
+let recoDictee = null;
+function dicteeDisponible(){
+  try{ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }catch(_){ return false; }
+}
+// Reporte dans le brouillon ce que la phrase a livré, et SEULEMENT ça : un champ que la phrase
+// ne mentionne pas garde la valeur déjà saisie, on n'efface jamais le travail de quelqu'un.
+function appliquerDictee(texte){
+  const r = analyserDictee(texte);
+  ['amount','cat','merchant','desc','date','who','prevision'].forEach(k=>{
+    if(r[k]!==undefined) draft[k]=r[k];
+  });
+  draft._dictee = { etat: r.compris.length ? 'ok' : 'vide', compris: r.compris, texte: (texte||'').trim() };
+  go('ajouter');
+  return r;
+}
+function demarrerDictee(){
+  if(!dicteeDisponible()) return;
+  if(draft._dictee && draft._dictee.etat==='ecoute'){ try{ recoDictee && recoDictee.stop(); }catch(_){} return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  try{
+    recoDictee = new SR();
+    recoDictee.lang='fr-FR'; recoDictee.interimResults=false; recoDictee.maxAlternatives=1; recoDictee.continuous=false;
+    recoDictee.onresult = ev => appliquerDictee(ev.results[0][0].transcript);
+    // 'no-speech' et 'aborted' arrivent dès qu'on relâche sans rien dire : ce n'est pas une
+    // panne, on efface simplement l'état d'écoute sans alarmer le couple.
+    recoDictee.onerror = ev => {
+      draft._dictee = (ev.error==='no-speech'||ev.error==='aborted') ? null : { etat:'erreur', code:ev.error };
+      go('ajouter');
+    };
+    recoDictee.onend = () => { if(draft._dictee && draft._dictee.etat==='ecoute'){ draft._dictee=null; go('ajouter'); } };
+    draft._dictee = { etat:'ecoute' };
+    go('ajouter');
+    recoDictee.start();
+  }catch(_){ draft._dictee={etat:'erreur'}; go('ajouter'); }
+}
+// Le bandeau de relecture. Il porte à lui seul la garantie de la fonctionnalité : on montre ce
+// qui a été compris ET la phrase entendue, pour qu'une erreur de transcription saute aux yeux
+// avant d'entrer dans le budget.
+function bandeauDictee(){
+  const d = draft._dictee;
+  if(!d) return '';
+  if(d.etat==='ecoute') return `<div class="card-soft" style="margin-bottom:14px; text-align:center"><p class="small" style="margin:0; font-weight:800; color:var(--terra)">🔴 J'écoute…</p><p class="small muted" style="margin:4px 0 0">Par exemple : « 19,95 euros chez Carrefour dans les courses »</p></div>`;
+  if(d.etat==='erreur') return `<div class="card-soft" style="margin-bottom:14px"><p class="small muted" style="margin:0">La dictée n'a pas fonctionné sur cet appareil. Vous pouvez remplir les champs à la main juste en dessous.</p></div>`;
+  if(d.etat==='vide') return `<div class="card-soft" style="margin-bottom:14px"><p class="small" style="margin:0">Entendu : « ${escapeHtml(d.texte)} »</p><p class="small muted" style="margin:4px 0 0">Je n'en ai rien tiré. Réessayez, ou remplissez à la main.</p></div>`;
+  return `<div class="card-soft" style="margin-bottom:14px; background:color-mix(in srgb,var(--ok) 8%,transparent); border-color:color-mix(in srgb,var(--ok) 25%,transparent)">
+    <p class="small" style="margin:0; font-weight:800">${d.compris.map(escapeHtml).join(' · ')}</p>
+    <p class="small muted" style="margin:5px 0 0">Entendu : « ${escapeHtml(d.texte)} ». Vérifiez avant de valider.</p>
+  </div>`;
+}
+
 function renderAjouter(){
   const c = draft.cat && draft.cat!=='__cagnotte__' ? catById(draft.cat) : null;
   const isCagnotte = draft.cat==='__cagnotte__';
@@ -2240,6 +2463,9 @@ function renderAjouter(){
   </div>
 
   <div class="card" style="margin-top:14px">
+    ${dicteeDisponible()?`<button class="btn btn-soft" id="dDictee" style="width:100%; margin-bottom:12px">${draft._dictee&&draft._dictee.etat==='ecoute'?'⏹ Arrêter':'🎤 Dicter la dépense'}</button>`:''}
+    ${bandeauDictee()}
+
     <div class="field" style="margin-bottom:18px">
       <label style="text-align:center">Montant</label>
       <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
@@ -3794,6 +4020,7 @@ function bindScreen(screen){
 }
 
 function bindAjouter(){
+  const dic=$('#dDictee'); if(dic) dic.onclick=demarrerDictee;
   const a=$('#dAmount'); if(a) a.oninput=ev=>{draft.amount=ev.target.value; updateAjouterValidity();};
   const d=$('#dDesc'); if(d) d.oninput=ev=>{
     draft.desc=ev.target.value;
