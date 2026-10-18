@@ -97,3 +97,66 @@ test.describe('Message d\'erreur cohérent avec la vraie règle', () => {
     expect(msg).not.toMatch(/6 caractères/);
   });
 });
+
+// L'œil montrer/masquer. Taper un mot de passe à l'aveugle sur un clavier de téléphone est la
+// première cause d'échec de connexion : on se trompe, on recommence, on abandonne.
+test.describe('Afficher le mot de passe', () => {
+  async function surEcran(page, etape) {
+    await openApp(page);
+    await page.evaluate((e) => {
+      if (e === 'recovery') recovering = true;
+      authStep = e;
+      document.querySelector('#main').classList.add('hidden');
+      document.querySelector('#auth').classList.remove('hidden');
+      renderAuth();
+    }, etape);
+  }
+
+  for (const etape of ['login', 'signup', 'recovery']) {
+    test(`l'œil est présent sur l'écran « ${etape} »`, async ({ page }) => {
+      await surEcran(page, etape);
+      await expect(page.locator('[data-passtoggle="aPass"]')).toHaveCount(1);
+      await expect(page.locator('#aPass')).toHaveAttribute('type', 'password');
+    });
+  }
+
+  test('un clic révèle le mot de passe, un second le remasque', async ({ page }) => {
+    await surEcran(page, 'login');
+    await page.fill('#aPass', 'MotDePasse2026');
+    const oeil = page.locator('[data-passtoggle="aPass"]');
+
+    await oeil.click();
+    await expect(page.locator('#aPass')).toHaveAttribute('type', 'text');
+    await expect(oeil).toHaveAttribute('aria-label', 'Masquer le mot de passe');
+
+    await oeil.click();
+    await expect(page.locator('#aPass')).toHaveAttribute('type', 'password');
+    await expect(oeil).toHaveAttribute('aria-label', 'Afficher le mot de passe');
+  });
+
+  test('la saisie n\'est pas perdue en basculant', async ({ page }) => {
+    await surEcran(page, 'signup');
+    await page.fill('#aPass', 'MotDePasse2026');
+    await page.click('[data-passtoggle="aPass"]');
+    await expect(page.locator('#aPass')).toHaveValue('MotDePasse2026');
+  });
+
+  // Sans ça, on revient au début du champ à chaque coup d'œil et il faut retraverser tout le
+  // mot de passe pour reprendre la saisie.
+  test('le curseur reste là où il était', async ({ page }) => {
+    await surEcran(page, 'signup');
+    await page.fill('#aPass', 'MotDePasse2026');
+    await page.evaluate(() => document.querySelector('#aPass').setSelectionRange(5, 5));
+    await page.click('[data-passtoggle="aPass"]');
+    expect(await page.evaluate(() => document.querySelector('#aPass').selectionStart)).toBe(5);
+  });
+
+  // Le bouton ne doit jamais soumettre le formulaire en passant.
+  test('l\'œil ne déclenche aucune validation', async ({ page }) => {
+    await surEcran(page, 'signup');
+    await page.fill('#aEmail', 'nouveau@test.fr');
+    await page.fill('#aPass', 'abc');
+    await page.click('[data-passtoggle="aPass"]');
+    expect(await page.evaluate(() => authStep)).toBe('signup');
+  });
+});

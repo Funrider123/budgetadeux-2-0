@@ -287,6 +287,16 @@ h1,h2,h3,h4{font-family:var(--serif); font-weight:600; line-height:1.15; letter-
 .input::placeholder{color:var(--muted-2); font-weight:500;}
 .input:focus, .select:focus, textarea.input:focus{border-color:var(--terra-l); background:var(--card);}
 .input.big{font-size:30px; font-weight:800; font-family:var(--serif); text-align:center; padding:18px;}
+/* Champ mot de passe : l'œil se superpose au champ, qui lui réserve la place à droite. */
+.pass-wrap{position:relative;}
+.pass-wrap .input{padding-right:48px;}
+.pass-eye{
+  position:absolute; right:7px; top:50%; transform:translateY(-50%);
+  width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+  border:none; background:none; border-radius:10px; cursor:pointer; padding:0;
+  color:var(--muted); opacity:.75; transition:.15s;
+}
+.pass-eye:hover, .pass-eye:focus-visible{opacity:1; color:var(--terra); background:var(--cream-2);}
 .select{appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23988b7d' d='M6 8 0 0h12z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 15px center;}
 
 /* segmented toggle */
@@ -1424,12 +1434,41 @@ function authShell(inner, activeTab){
       <button class="btn btn-primary" id="tryDemo" style="width:100%">\ud83c\udfad Essayer la d\u00e9monstration \u2192</button>
     </div>`:''}`;
 }
+/* ---- Champ mot de passe, avec son œil ----
+   Taper un mot de passe à l'aveugle sur un clavier de téléphone est la première cause d'échec
+   de connexion : on se trompe, on recommence, on abandonne. L'œil ne révèle rien à personne
+   d'autre — c'est l'écran de la personne qui tape, et c'est elle qui décide de regarder. */
+const OEIL = `<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`;
+const OEIL_BARRE = `<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3.4 2.1 1.9 3.5l18.6 18.6 1.5-1.4z"/></svg>`;
+function champMotDePasse(label, id, placeholder, aide){
+  return `<div class="field"><label>${label}</label>
+    <div class="pass-wrap">
+      <input class="input" id="${id}" type="password" placeholder="${placeholder}">
+      <button type="button" class="pass-eye" data-passtoggle="${id}" aria-label="Afficher le mot de passe">${OEIL}</button>
+    </div>
+    ${aide?`<p class="small muted" style="margin:6px 2px 0">${aide}</p>`:''}
+  </div>`;
+}
+// Bascule montrer/masquer, en gardant la position du curseur : sinon on revient au début du
+// champ à chaque coup d'œil, et il faut retraverser le mot de passe pour reprendre la saisie.
+function bindOeilsMotDePasse(){
+  document.querySelectorAll('[data-passtoggle]').forEach(b=>b.addEventListener('click',()=>{
+    const inp=$('#'+b.dataset.passtoggle); if(!inp) return;
+    const montrer = inp.type==='password';
+    const pos = inp.selectionStart;
+    inp.type = montrer ? 'text' : 'password';
+    b.innerHTML = montrer ? OEIL_BARRE : OEIL;
+    b.setAttribute('aria-label', montrer ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+    inp.focus();
+    if(pos!==null){ try{ inp.setSelectionRange(pos,pos); }catch(_){} }
+  }));
+}
 function authLogin(){
   return authShell(`<div class="card fade">
     <h1>Heureux de vous revoir 🤎</h1>
     <p class="muted small" style="margin-bottom:18px">Reconnectez-vous à votre histoire commune.</p>
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr" value="${escapeHtml(S.auth.email||'')}"></div>
-    <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="••••••••"></div>
+    ${champMotDePasse('Mot de passe','aPass','••••••••')}
     <div style="text-align:right; margin:-4px 2px 16px"><span class="link-text small" id="goForgot">Mot de passe oublié ?</span></div>
     <button class="btn btn-primary" id="doLogin">Se connecter</button>
   </div>`, 'login');
@@ -1439,9 +1478,7 @@ function authSignup(){
     <h1>Créez votre compte 💞</h1>
     <p class="muted small" style="margin-bottom:18px">Un compte chacun — vous relierez vos deux comptes juste après avec un code couple.</p>
     <div class="field"><label>Email</label><input class="input" id="aEmail" type="email" placeholder="vous@exemple.fr"></div>
-    <div class="field"><label>Mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe">
-      <p class="small muted" style="margin:6px 2px 0">${PASSWORD_HINT}</p>
-    </div>
+    ${champMotDePasse('Mot de passe','aPass','Choisissez un mot de passe',PASSWORD_HINT)}
     <button class="btn btn-primary" id="doSignup">Continuer</button>
     <div style="text-align:center; margin-top:14px"><span class="link-text small" id="goLegalSignup">Mentions légales & confidentialité</span></div>
   </div>`, 'signup');
@@ -1534,13 +1571,12 @@ function authRecovery(){
   return authShell(`<div class="card fade">
     <h1>Choisis un nouveau mot de passe 🔑</h1>
     <p class="muted small" style="margin-bottom:18px">Saisis ton nouveau mot de passe pour terminer la réinitialisation.</p>
-    <div class="field"><label>Nouveau mot de passe</label><input class="input" id="aPass" type="password" placeholder="Choisissez un mot de passe">
-      <p class="small muted" style="margin:6px 2px 0">${PASSWORD_HINT}</p>
-    </div>
+    ${champMotDePasse('Nouveau mot de passe','aPass','Choisissez un mot de passe',PASSWORD_HINT)}
     <button class="btn btn-primary" id="doRecovery">Enregistrer</button>
   </div>`);
 }
 function bindAuth(){
+  bindOeilsMotDePasse();
   const on=(id,ev,fn)=>{ const x=$('#'+id); if(x) x.addEventListener(ev,fn); };
   const busy=(id,label,fn)=>on(id,'click',async ()=>{ const b=$('#'+id); if(b){b.disabled=true; b.dataset.t=b.textContent; b.textContent=label;} try{ await fn(); } finally { if(b){b.disabled=false; b.textContent=b.dataset.t;} } });
   on('goLogin','click',()=>{authStep="login"; renderAuth();});
