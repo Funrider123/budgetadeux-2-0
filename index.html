@@ -2481,16 +2481,35 @@ function demarrerDictee(){
 // Le bandeau de relecture. Il porte à lui seul la garantie de la fonctionnalité : on montre ce
 // qui a été compris ET la phrase entendue, pour qu'une erreur de transcription saute aux yeux
 // avant d'entrer dans le budget.
+// Toujours une seule ligne, quel que soit l'état. C'est ce qui permet de lui réserver une
+// hauteur fixe au-dessus des boutons : le bandeau se remplit sans jamais pousser « Valider »,
+// qui reste exactement au même endroit avant et après la dictée. La phrase entendue, elle,
+// part dans une fenêtre qu'on ouvre à la demande — elle ne sert qu'en cas de doute, et
+// l'afficher en permanence faisait grandir le bandeau au gré de sa longueur.
 function bandeauDictee(){
   const d = draft._dictee;
   if(!d) return '';
-  if(d.etat==='ecoute') return `<div class="card-soft" style="margin-bottom:14px; text-align:center"><p class="small" style="margin:0; font-weight:800; color:var(--terra)">🔴 J'écoute…</p><p class="small muted" style="margin:4px 0 0">Par exemple : « 19,95 euros chez Carrefour dans les courses »</p></div>`;
-  if(d.etat==='erreur') return `<div class="card-soft" style="margin-bottom:14px"><p class="small muted" style="margin:0">La dictée n'a pas fonctionné sur cet appareil. Vous pouvez remplir les champs à la main juste en dessous.</p></div>`;
-  if(d.etat==='vide') return `<div class="card-soft" style="margin-bottom:14px"><p class="small" style="margin:0">Entendu : « ${escapeHtml(d.texte)} »</p><p class="small muted" style="margin:4px 0 0">Je n'en ai rien tiré. Réessayez, ou remplissez à la main.</p></div>`;
-  return `<div class="card-soft" style="margin-bottom:14px; background:color-mix(in srgb,var(--ok) 8%,transparent); border-color:color-mix(in srgb,var(--ok) 25%,transparent)">
-    <p class="small" style="margin:0; font-weight:800">${d.compris.map(escapeHtml).join(' · ')}</p>
-    <p class="small muted" style="margin:5px 0 0">Entendu : « ${escapeHtml(d.texte)} ». Vérifiez avant de valider.</p>
-  </div>`;
+  const boite = (contenu, fond) =>
+    `<div class="card-soft" id="${fond?'dDicteeVu':''}" style="flex:1; min-width:0${fond?`; cursor:pointer; background:${fond}; border-color:color-mix(in srgb,var(--ok) 25%,transparent)`:''}">${contenu}</div>`;
+  if(d.etat==='ecoute')
+    return boite(`<p class="small" style="margin:0; font-weight:800; color:var(--terra); text-align:center">🔴 J'écoute…</p>`);
+  if(d.etat==='erreur')
+    return boite(`<p class="small muted" style="margin:0">La dictée n'a pas fonctionné sur cet appareil.</p>`);
+  const resume = d.compris.length ? '✓ ' + d.compris.map(escapeHtml).join(' · ') : "Je n'ai rien compris";
+  return boite(`<div class="between" style="gap:10px">
+      <span class="small" style="font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${resume}</span>
+      <span class="chev" style="flex-shrink:0; color:var(--terra)">›</span>
+    </div>`, d.compris.length ? 'color-mix(in srgb,var(--ok) 8%,transparent)' : 'var(--cream-2)');
+}
+// La phrase brute, à la demande. Si on ouvre cette fenêtre, c'est presque toujours que quelque
+// chose cloche : le geste utile à ce moment-là est de redicter, pas de lire.
+function openDicteePhrase(){
+  const d = draft._dictee; if(!d || !d.texte) return;
+  openModal(`<h3>Ce que j'ai entendu</h3>
+    <p class="small" style="margin:6px 0 14px; font-size:16px; line-height:1.55">« ${escapeHtml(d.texte)} »</p>
+    <p class="small muted" style="margin:0 0 18px; line-height:1.55">Si ce n'est pas ce que vous avez dit, redictez la dépense ou corrigez les champs à la main.</p>
+    <button class="btn btn-soft" id="dReDicte">🎤 Redicter</button>`, true);
+  $('#dReDicte').onclick=()=>{ closeModal(); setTimeout(demarrerDictee, 160); };
 }
 
 function renderAjouter(){
@@ -2536,18 +2555,23 @@ function renderAjouter(){
       <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
     </div>
 
-    <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
-
-    ${bandeauDictee()}
+    <!-- La place du bandeau est réservée en permanence, même vide : il s'y loge sans pousser
+         les boutons, donc « Valider » est au même endroit avant et après la dictée. Un bouton
+         qui se déplace entre deux regards est un bouton qu'on touche par erreur. -->
+    ${dicteeDisponible()?`<div style="height:62px; display:flex; align-items:flex-end">${bandeauDictee()}</div>`:''}
 
     <!-- Les deux chemins côte à côte, au même format : dicter et valider sont deux manières
-         d'en finir avec cette dépense. Le bandeau de relecture est juste au-dessus, donc
-         « J'écoute… » s'affiche là où le pouce vient d'appuyer, et le résumé de ce qui a été
-         compris tombe juste avant le bouton qui enregistre. -->
+         d'en finir avec cette dépense. -->
     <div class="row" style="gap:10px; margin-bottom:6px">
       ${dicteeDisponible()?`<button class="btn btn-primary" id="dDictee" style="flex:1; width:auto">${draft._dictee&&draft._dictee.etat==='ecoute'?'⏹ Arrêter':'🎤 Dicter la dépense'}</button>`:''}
       <button class="btn btn-primary" id="dSave" style="flex:1; width:auto">${isTransfer?'Valider le transfert':draft.prevision?'Valider la prévision':'Valider'}</button>
     </div>
+
+    <!-- Ce qui manque encore, SOUS les boutons : cette ligne apparaît et disparaît au fil de
+         la saisie, et au-dessus elle déplaçait « Valider » de deux lignes. Juste en dessous,
+         elle reste parfaitement lisible — et c'est là qu'on regarde quand on a appuyé sans
+         que rien ne se passe. -->
+    <p class="small" id="dMissingHint" style="color:var(--warn); margin:10px 2px 0; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
 
     <div style="text-align:center; margin-top:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Date, prévision, cagnotte commune, qui a payé, nouveau commerce ▾"}</span></div>
     ${draft._showMore?`
@@ -4069,6 +4093,7 @@ function bindScreen(screen){
 
 function bindAjouter(){
   const dic=$('#dDictee'); if(dic) dic.onclick=demarrerDictee;
+  const dvu=$('#dDicteeVu'); if(dvu) dvu.onclick=openDicteePhrase;
   const a=$('#dAmount'); if(a) a.oninput=ev=>{draft.amount=ev.target.value; updateAjouterValidity();};
   const d=$('#dDesc'); if(d) d.oninput=ev=>{
     draft.desc=ev.target.value;

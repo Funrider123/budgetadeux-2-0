@@ -210,16 +210,62 @@ test.describe('Le formulaire se remplit', () => {
     await expect(page.locator('.cat-pill.on[data-merchpick="m1"]')).toHaveCount(1);
   });
 
-  // La garantie centrale : on propose, le couple relit. La phrase entendue est affichée telle
-  // quelle pour qu'une transcription fautive se voie avant d'entrer dans le budget.
-  test('le bandeau montre ce qui a été compris ET la phrase entendue', async ({ page }) => {
+  // La garantie centrale : on propose, le couple relit. Le bandeau résume en une ligne ; la
+  // phrase brute reste à un geste, pour le jour où la transcription a déraillé.
+  test('le bandeau résume ce qui a été compris', async ({ page }) => {
     await installer(page);
     await page.evaluate(() => { go('ajouter'); appliquerDictee('19,95 euros chez Carrefour'); });
 
-    const bandeau = page.locator('.card-soft').filter({ hasText: 'Entendu' });
+    const bandeau = page.locator('#dDicteeVu');
+    await expect(bandeau).toContainText('19,95');
     await expect(bandeau).toContainText('Carrefour');
-    await expect(bandeau).toContainText('19,95 euros chez Carrefour');
-    await expect(bandeau).toContainText('Vérifiez avant de valider');
+    // La phrase entendue n'est PAS dans le bandeau : c'est ce qui lui garde une hauteur fixe.
+    await expect(bandeau).not.toContainText('euros chez');
+  });
+
+  test('toucher le bandeau ouvre la phrase entendue', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); appliquerDictee('19,95 euros chez Carrefour'); });
+    await page.evaluate(() => document.querySelector('#dDicteeVu').click());
+
+    const fenetre = page.locator('#modalRoot .modal');
+    await expect(fenetre).toContainText("Ce que j'ai entendu");
+    await expect(fenetre).toContainText('19,95 euros chez Carrefour');
+    await expect(fenetre.locator('#dReDicte')).toHaveCount(1);
+  });
+
+  // Le point de la proposition A : la place du bandeau est réservée et la ligne d'aide est
+  // passée sous les boutons, donc « Valider » ne bouge pas d'un pixel pendant une dictée.
+  // La catégorie est posée d'avance : la sélectionner fait apparaître « Reste sur … », et
+  // ce déplacement-là suit un choix du couple, qu'il dicte ou qu'il touche la pastille.
+  test('« Valider » reste exactement au même endroit après une dictée', async ({ page }) => {
+    await installer(page);
+    const haut = () => page.evaluate(() => {
+      const carte = document.querySelector('#screen .card');
+      return Math.round(document.querySelector('#dSave').getBoundingClientRect().top
+                        - carte.getBoundingClientRect().top);
+    });
+
+    await page.evaluate(() => { go('ajouter'); draft.cat = 'courses'; go('ajouter'); });
+    const avant = await haut();
+    await page.evaluate(() => appliquerDictee('19,95 euros chez Carrefour'));
+    expect(await haut()).toBe(avant);
+  });
+
+  // Et il ne bouge pas non plus quand la ligne d'aide apparaît ou disparaît.
+  test('« Valider » ne bouge pas quand l\'aide apparaît', async ({ page }) => {
+    await installer(page);
+    const haut = () => page.evaluate(() => {
+      const carte = document.querySelector('#screen .card');
+      return Math.round(document.querySelector('#dSave').getBoundingClientRect().top
+                        - carte.getBoundingClientRect().top);
+    });
+
+    await page.evaluate(() => { go('ajouter'); draft.cat = 'courses'; draft.amount = '20'; draft.desc = 'Pain'; go('ajouter'); });
+    const complet = await haut();
+    await page.evaluate(() => { draft.amount = ''; go('ajouter'); });
+    await expect(page.locator('#dMissingHint')).toBeVisible();
+    expect(await haut()).toBe(complet);
   });
 
   // Une dictée qui ne parle que du montant ne doit pas effacer la catégorie déjà choisie.
@@ -239,8 +285,17 @@ test.describe('Le formulaire se remplit', () => {
     await installer(page);
     await page.evaluate(() => { go('ajouter'); draft.cat='courses'; appliquerDictee('bonjour comment ça va'); });
 
-    await expect(page.locator('.card-soft').filter({ hasText: "Je n'en ai rien tiré" })).toHaveCount(1);
+    await expect(page.locator('#dDicteeVu')).toContainText("Je n'ai rien compris");
     expect(await page.evaluate(() => draft.cat)).toBe('courses');
+  });
+
+  // C'est justement quand rien n'a été compris qu'on veut savoir ce qui a été entendu.
+  test('même sans rien comprendre, la phrase reste consultable', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); appliquerDictee('bonjour comment ça va'); });
+    await page.evaluate(() => document.querySelector('#dDicteeVu').click());
+
+    await expect(page.locator('#modalRoot .modal')).toContainText('bonjour comment ça va');
   });
 
   // Rien ne doit partir tout seul dans le budget : la dictée remplit, elle ne valide jamais.
