@@ -2260,9 +2260,17 @@ function ajouterCagnotteExceeded(){
   const amt=parseFloat((draft.amount+"").replace(',','.'))||0;
   return draft.cat==='__cagnotte__' && amt>S.cagnotte.balance;
 }
+// Un formulaire auquel on n'a pas encore touché n'a rien à reprocher à personne.
+function ajouterVierge(){
+  return !String(draft.amount).trim() && !draft.cat && !draft.merchant && !draft.desc.trim();
+}
 function ajouterHint(){
   const amtErr=amtError(draft.amount); if(amtErr) return amtErr;
   if(ajouterCagnotteExceeded()) return "Le montant dépasse le solde de la cagnotte commune";
+  // Sur un écran encore vierge, énumérer tout ce qui manque n'apprend rien et prend deux lignes
+  // qui repoussent le reste sous la barre de navigation. « Valider » dit de toute façon
+  // précisément ce qui bloque, le moment venu.
+  if(ajouterVierge()) return '';
   const missing=ajouterMissing();
   return missing.length ? `Ajoutez ${missing.join(', ')}` : '';
 }
@@ -2519,11 +2527,13 @@ function renderAjouter(){
   const whoSel = draft.who||me();
   const catMerchants = c ? S.merchants.filter(m=>m.cat===c.id) : S.merchants;
   return `
-  <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
-    <h1 class="hero-title">Ajouter une dépense</h1>
+  <!-- Titre compact, sans pastille : l'écran entier doit tenir sous la barre de navigation,
+       et c'est le formulaire qu'on vient voir, pas son en-tête. -->
+  <div style="padding-top:2px">
+    <h1 class="hero-title" style="font-size:23px; margin:0">Ajouter une dépense</h1>
   </div>
 
-  <div class="card" style="margin-top:14px">
+  <div class="card" style="margin-top:10px">
     <div class="field" style="margin-bottom:18px">
       <label style="text-align:center">Montant</label>
       <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
@@ -2551,14 +2561,9 @@ function renderAjouter(){
       </div>
     </div>`:''}
 
-    <div class="field"><label>Description <span class="muted" style="font-weight:600">(facultatif si un commerce est sélectionné)</span></label>
+    <div class="field"><label>Description <span class="muted" style="font-weight:600">(facultative avec un commerce)</span></label>
       <input class="input" id="dDesc" placeholder="Ex : Sèche-cheveux" value="${escapeHtml(draft.desc)}">
     </div>
-
-    <!-- La place du bandeau est réservée en permanence, même vide : il s'y loge sans pousser
-         les boutons, donc « Valider » est au même endroit avant et après la dictée. Un bouton
-         qui se déplace entre deux regards est un bouton qu'on touche par erreur. -->
-    ${dicteeDisponible()?`<div style="height:62px; display:flex; align-items:flex-end">${bandeauDictee()}</div>`:''}
 
     <!-- Les deux chemins côte à côte, au même format : dicter et valider sont deux manières
          d'en finir avec cette dépense. -->
@@ -2567,10 +2572,11 @@ function renderAjouter(){
       <button class="btn btn-primary" id="dSave" style="flex:1; width:auto">${isTransfer?'Valider le transfert':draft.prevision?'Valider la prévision':'Valider'}</button>
     </div>
 
-    <!-- Ce qui manque encore, SOUS les boutons : cette ligne apparaît et disparaît au fil de
-         la saisie, et au-dessus elle déplaçait « Valider » de deux lignes. Juste en dessous,
-         elle reste parfaitement lisible — et c'est là qu'on regarde quand on a appuyé sans
-         que rien ne se passe. -->
+    <!-- Tout ce qui apparaît en cours de route — le retour de la dictée, puis ce qui manque
+         encore — se place SOUS les boutons. Rien ne s'insère au-dessus d'eux, donc « Valider »
+         ne se dérobe jamais sous le doigt ; et l'écran n'a pas à garder un creux vide en
+         permanence, ce qui laisse la ligne des options au-dessus de la barre du bas. -->
+    ${dicteeDisponible()&&bandeauDictee()?`<div style="margin-top:12px">${bandeauDictee()}</div>`:''}
     <p class="small" id="dMissingHint" style="color:var(--warn); margin:10px 2px 0; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
 
     <div style="text-align:center; margin-top:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Date, prévision, cagnotte commune, qui a payé, nouveau commerce ▾"}</span></div>

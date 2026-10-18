@@ -350,4 +350,36 @@ test.describe('La mise en page de la saisie', () => {
     await page.evaluate(() => { go('ajouter'); draft.prevision = true; go('ajouter'); });
     await expect(page.locator('#dSave')).toHaveText('Valider la prévision');
   });
+
+  // L'écran entier doit tenir au-dessus de la barre de navigation. Une ligne repliée qu'on ne
+  // voit pas est une fonction qui n'existe pas : les options avaient fini cachées derrière la
+  // barre, et personne ne pouvait plus atteindre la date ni la cagnotte commune.
+  test('tout l\'écran est visible sans défiler', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => {
+      go('ajouter');
+      // Les deux bandeaux du haut sont des états de passage, pas des morceaux de cet écran :
+      // on les met de côté pour mesurer la saisie telle qu'elle se présente une fois le budget
+      // en place et le raccourci installé.
+      ['setupBanner', 'installBanner'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = 'none'; });
+    });
+
+    const { options, barre } = await page.evaluate(() => ({
+      options: Math.round(document.getElementById('dMoreToggle').getBoundingClientRect().bottom),
+      barre: Math.round(document.querySelector('.tabbar').getBoundingClientRect().top),
+    }));
+    expect(options).toBeLessThan(barre);
+  });
+
+  // Sur un formulaire auquel on n'a pas touché, lister ce qui manque ne dit rien d'utile et
+  // prend deux lignes de haut.
+  test('aucun reproche tant qu\'on n\'a rien saisi', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('ajouter'));
+    await expect(page.locator('#dMissingHint')).toBeHidden();
+
+    await page.fill('#dAmount', '19,95');
+    await expect(page.locator('#dMissingHint')).toBeVisible();
+    await expect(page.locator('#dMissingHint')).toContainText('catégorie');
+  });
 });
