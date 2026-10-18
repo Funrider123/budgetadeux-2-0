@@ -250,3 +250,49 @@ test.describe('Le formulaire se remplit', () => {
     expect(await page.evaluate(() => S.expenses.length)).toBe(0);
   });
 });
+
+// La mise en page de l'écran : dicter et valider sont deux façons d'en finir avec la dépense,
+// donc deux boutons de même format côte à côte. Tout le reste est replié par défaut — c'est ce
+// qui rend l'écran lisible, et c'est la première chose qu'une refonte ferait sauter sans le voir.
+test.describe('La mise en page de la saisie', () => {
+  test('les deux actions sont côte à côte, au même format', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('ajouter'));
+
+    const ligne = page.locator('#screen .row').filter({ has: page.locator('#dSave') });
+    await expect(ligne.locator('#dDictee')).toHaveCount(1);
+    await expect(page.locator('#dSave')).toHaveText('Valider');
+    // Même classe, donc même couleur et même format : aucun des deux n'est relégué.
+    await expect(page.locator('#dDictee')).toHaveClass(/btn-primary/);
+    await expect(page.locator('#dSave')).toHaveClass(/btn-primary/);
+  });
+
+  test('les options sont repliées au départ', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('ajouter'));
+
+    await expect(page.locator('#dDate')).toHaveCount(0);
+    await expect(page.locator('#dPrev')).toHaveCount(0);
+    await expect(page.locator('#dCagnotteToggle')).toHaveCount(0);
+    await expect(page.locator('[data-whopick]')).toHaveCount(0);
+    await expect(page.locator('#dMoreToggle')).toContainText('cagnotte commune');
+  });
+
+  // Les cinq réglages doivent tous être là une fois dépliés, aucun perdu en route.
+  test('les déplier les fait tous apparaître', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); draft._showMore = true; go('ajouter'); });
+
+    await expect(page.locator('#dDate')).toHaveCount(1);
+    await expect(page.locator('#dPrev')).toHaveCount(1);
+    await expect(page.locator('#dCagnotteToggle')).toHaveCount(1);
+    await expect(page.locator('[data-whopick]')).toHaveCount(2);
+    await expect(page.locator('#addMerch2')).toHaveCount(1);
+  });
+
+  test('le bouton dit ce qu\'on s\'apprête à valider', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); draft.prevision = true; go('ajouter'); });
+    await expect(page.locator('#dSave')).toHaveText('Valider la prévision');
+  });
+});

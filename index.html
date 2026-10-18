@@ -2502,13 +2502,9 @@ function renderAjouter(){
   return `
   <div style="padding-top:6px"><span class="pill">Nouvelle saisie</span>
     <h1 class="hero-title">Ajouter une dépense</h1>
-    <p class="hero-sub">Chaque euro noté, c'est un peu plus de sérénité à deux.</p>
   </div>
 
   <div class="card" style="margin-top:14px">
-    ${dicteeDisponible()?`<button class="btn btn-soft" id="dDictee" style="width:100%; margin-bottom:12px">${draft._dictee&&draft._dictee.etat==='ecoute'?'⏹ Arrêter':'🎤 Dicter la dépense'}</button>`:''}
-    ${bandeauDictee()}
-
     <div class="field" style="margin-bottom:18px">
       <label style="text-align:center">Montant</label>
       <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
@@ -2542,7 +2538,18 @@ function renderAjouter(){
 
     <p class="small" id="dMissingHint" style="color:var(--warn); margin:-6px 2px 14px; display:${ajouterHint()?'block':'none'}">${ajouterHint()}</p>
 
-    <div style="text-align:center; margin-bottom:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Plus d'options (nouveau commerce, date, prévision, qui a payé) ▾"}</span></div>
+    ${bandeauDictee()}
+
+    <!-- Les deux chemins côte à côte, au même format : dicter et valider sont deux manières
+         d'en finir avec cette dépense. Le bandeau de relecture est juste au-dessus, donc
+         « J'écoute… » s'affiche là où le pouce vient d'appuyer, et le résumé de ce qui a été
+         compris tombe juste avant le bouton qui enregistre. -->
+    <div class="row" style="gap:10px; margin-bottom:6px">
+      ${dicteeDisponible()?`<button class="btn btn-primary" id="dDictee" style="flex:1; width:auto">${draft._dictee&&draft._dictee.etat==='ecoute'?'⏹ Arrêter':'🎤 Dicter la dépense'}</button>`:''}
+      <button class="btn btn-primary" id="dSave" style="flex:1; width:auto">${isTransfer?'Valider le transfert':draft.prevision?'Valider la prévision':'Valider'}</button>
+    </div>
+
+    <div style="text-align:center; margin-top:14px"><span class="small link" id="dMoreToggle">${draft._showMore?"Moins d'options ▴":"Date, prévision, cagnotte commune, qui a payé, nouveau commerce ▾"}</span></div>
     ${draft._showMore?`
     ${S.merchants.length<8?`<div class="field"><label>Nouveau commerce</label>
       <button class="cat-pill" id="addMerch2" style="border-style:dashed; color:var(--terra)">+ Ajouter un commerce</button>
@@ -2562,8 +2569,6 @@ function renderAjouter(){
         <button class="cat-pill ${whoSel==='elle'?'on':''}" data-whopick="elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
       </div>
     </div>`:''}
-
-    <button class="btn btn-primary" id="dSave">${isTransfer?'Enregistrer le transfert':draft.prevision?'Ajouter la prévision 🔮':'Ajouter la dépense'}</button>
   </div>
   `;
 }
