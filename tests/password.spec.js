@@ -160,3 +160,39 @@ test.describe('Afficher le mot de passe', () => {
     expect(await page.evaluate(() => authStep)).toBe('signup');
   });
 });
+
+// Ce que le trousseau du téléphone a besoin de savoir. Sans ces attributs il voit des champs
+// anonymes : il ne propose ni d'enregistrer à l'inscription, ni de remplir à la connexion. Or
+// ce mot de passe n'est tapé que deux fois dans une vie — à l'inscription, et le jour où la
+// session saute. Ce jour-là, sans rien dans le trousseau, il ne reste que « mot de passe oublié ».
+test.describe('Reconnu par les gestionnaires de mots de passe', () => {
+  async function surEcran(page, etape) {
+    await openApp(page);
+    await page.evaluate((e) => {
+      if (e === 'recovery') recovering = true;
+      authStep = e;
+      document.querySelector('#main').classList.add('hidden');
+      document.querySelector('#auth').classList.remove('hidden');
+      renderAuth();
+    }, etape);
+  }
+
+  test('connexion : identifiant et mot de passe existant', async ({ page }) => {
+    await surEcran(page, 'login');
+    await expect(page.locator('#aEmail')).toHaveAttribute('autocomplete', 'username');
+    await expect(page.locator('#aPass')).toHaveAttribute('autocomplete', 'current-password');
+  });
+
+  // 'new-password' est ce qui déclenche la proposition d'un mot de passe fort, enregistré
+  // d'office : c'est tout l'intérêt, et 'current-password' ici ferait proposer l'ancien.
+  test('inscription : nouveau mot de passe', async ({ page }) => {
+    await surEcran(page, 'signup');
+    await expect(page.locator('#aEmail')).toHaveAttribute('autocomplete', 'username');
+    await expect(page.locator('#aPass')).toHaveAttribute('autocomplete', 'new-password');
+  });
+
+  test('réinitialisation : nouveau mot de passe aussi', async ({ page }) => {
+    await surEcran(page, 'recovery');
+    await expect(page.locator('#aPass')).toHaveAttribute('autocomplete', 'new-password');
+  });
+});
