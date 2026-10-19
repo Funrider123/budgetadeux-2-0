@@ -365,8 +365,19 @@ Deno.serve(async (req) => {
       if (!when) continue;
 
       const { data: members } = await admin
-        .from("profiles").select("email, name").eq("couple_code", row.couple_code);
-      for (const m of members ?? []) {
+        .from("profiles").select("email, name, gender").eq("couple_code", row.couple_code);
+
+      // Certains couples ont décidé qu'une seule personne tient le point mensuel ; l'autre
+      // fait confiance. On ne convoque alors que celle qui s'en occupe : inutile de donner
+      // rendez-vous à quelqu'un qui a dit ne pas vouloir venir. Sans pilote identifié, le
+      // réglage ne veut rien dire et tout le monde reçoit le rappel, comme avant.
+      const pilote: string | null = row.data?.moneyDate?.mode === "solo"
+        ? (row.data?.moneyDate?.pilote ?? null) : null;
+      const destinataires = pilote
+        ? (members ?? []).filter((m: { gender?: string }) => m.gender === pilote)
+        : (members ?? []);
+
+      for (const m of destinataires) {
         if (!m.email) continue;
         try {
           await sendEmail(m.email, m.name || "", when, resendKey);

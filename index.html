@@ -606,7 +606,10 @@ const DEFAULT = {
   // Aucun projet fictif préempli — voir le commentaire sur "settings" plus haut. Le couple
   // ajoute ses vrais projets depuis "Vos projets".
   projects:[],
-  moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{} },
+  // mode/pilote : qui tient le Money Date. Contrairement au mode d'affichage, qui est
+  // personnel et local, celui-ci engage le couple — il décide à qui partent les rappels —
+  // donc il vit dans un bloc synchronisé, et se décide à deux.
+  moneyDate:{ doneSteps:[], nextDate:"", notes:[], surplusDecisions:{}, checklist:{}, mode:"ensemble", pilote:null, choixFait:false },
   budgetHistory:[],
   budgetTimeline:{}, // instantané du budget de chaque catégorie par mois (clé "YYYY-M"), pour la vue annuelle
   deleted:{}, // ids supprimés (id -> date ISO), synchronisés pour qu'une suppression tienne des deux côtés
@@ -668,6 +671,13 @@ function migrate(s){
   s.moneyDate.notes.forEach(n=>{ if(!n.id) n.id=e(); });
   if(!s.moneyDate.surplusDecisions) s.moneyDate.surplusDecisions = {};
   if(!s.moneyDate.checklist) s.moneyDate.checklist = {};
+  // Par défaut on reste à deux : c'est la promesse de l'app, et personne ne doit se
+  // retrouver écarté des rappels sans que le couple l'ait décidé. Un mode « solo » sans
+  // pilote identifié ne veut rien dire — on ne saurait pas à qui écrire — donc il retombe
+  // sur « ensemble » plutôt que de priver tout le monde de rappel.
+  if(!["lui","elle"].includes(s.moneyDate.pilote)) s.moneyDate.pilote = null;
+  if(s.moneyDate.mode!=="solo" || !s.moneyDate.pilote){ s.moneyDate.mode = "ensemble"; s.moneyDate.pilote = null; }
+  s.moneyDate.choixFait = !!s.moneyDate.choixFait;
   if(s.ui.mdMonth===undefined) s.ui.mdMonth = 0;
   // Personne ne se retrouve en vue essentielle sans l'avoir demandé : on n'allège l'écran
   // de quelqu'un que s'il a choisi de l'alléger.
@@ -3604,6 +3614,10 @@ function renderReglages(){
     <div class="between" style="padding:14px 0; border-bottom:1px solid var(--line)">
       <div class="row"><img class="avatar sm" src="${avatarOf(partnerOf(me()))}"><div><div class="small" style="font-weight:800">${S.partner.name}</div><div class="small muted">Relié·e à votre couple</div></div></div>
       <span class="tag envie">Partenaire</span>
+    </div>
+    <div class="between" style="padding:14px 0; border-bottom:1px solid var(--line)">
+      <div><div class="small" style="font-weight:800">Money Date</div><div class="small muted">${escapeHtml(mdArrangementLabel())}</div></div>
+      <button class="btn btn-soft btn-sm" id="mdArrangement" style="width:auto; flex-shrink:0">Modifier</button>
     </div>`:''}
     <div style="padding-top:14px">
       <div class="small muted" style="font-weight:700; margin-bottom:8px">Code couple</div>
@@ -4290,6 +4304,42 @@ function openExpenseSheet(id){
   };
 }
 
+/* ============================================================
+   QUI TIENT LE MONEY DATE
+   Une fois la trame posée, le point mensuel peut très bien être tenu par une seule personne,
+   l'autre faisant confiance. Contrairement au mode d'affichage, qui est personnel et local,
+   celui-ci engage le couple : il décide à qui partent les rappels. Il est donc synchronisé,
+   et on le demande à la fin du premier Money Date — quand les deux sont là et savent de quoi
+   il s'agit. Jamais à l'inscription : le second n'y existe pas encore.
+   ============================================================ */
+const mdSolo = () => S.moneyDate.mode === 'solo' && !!S.moneyDate.pilote;
+function mdArrangementLabel(){
+  return mdSolo() ? `${nameOf(S.moneyDate.pilote)} s'en occupe` : 'Vous le faites ensemble';
+}
+function openMdArrangement(){
+  const ligne = (val, titre, sous, actif) => `<button class="menu-row" data-mdarr="${val}">
+      <div class="mi"${actif?' style="background:var(--terra); color:#fff"':''}>${val==='ensemble'?'❤️':'👤'}</div>
+      <div class="grow"><div class="nm">${escapeHtml(titre)}</div><div class="sub">${escapeHtml(sous)}</div></div>
+      <span class="chev">${actif?'✓':'→'}</span>
+    </button>`;
+  const moi = me(), autre = partnerOf(moi);
+  openModal(`<h3>Vos prochains Money Dates</h3>
+    <p class="small muted" style="margin:6px 0 16px; line-height:1.55">Maintenant que la trame est posée, le point mensuel peut très bien être tenu par une seule personne. C'est un choix à faire à deux : il décide à qui partent les rappels.</p>
+    <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
+      ${ligne('ensemble','Ensemble, tous les mois','Vous recevez les rappels tous les deux', !mdSolo())}
+      ${ligne(moi, `${nameOf(moi)} s'en occupe`, `Les rappels ne partent qu'à ${nameOf(moi)}`, mdSolo() && S.moneyDate.pilote===moi)}
+      ${ligne(autre, `${nameOf(autre)} s'en occupe`, `Les rappels ne partent qu'à ${nameOf(autre)}`, mdSolo() && S.moneyDate.pilote===autre)}
+    </div>
+    <p class="small muted" style="text-align:center; margin-top:14px">Modifiable à tout moment dans les Réglages.</p>`, true);
+  document.querySelectorAll('[data-mdarr]').forEach(b=>b.addEventListener('click',()=>{
+    const v=b.dataset.mdarr;
+    S.moneyDate.mode = v==='ensemble' ? 'ensemble' : 'solo';
+    S.moneyDate.pilote = v==='ensemble' ? null : v;
+    S.moneyDate.choixFait = true;
+    save(); closeModal(); go(current);
+    toast(mdSolo()?`C'est ${nameOf(S.moneyDate.pilote)} qui recevra les rappels 💌`:"Vous recevrez les rappels tous les deux 💌","❤️");
+  }));
+}
 function openMoneyDateSchedule(){
   const cur=S.moneyDate.nextDate;
   const d = cur ? new Date(cur) : addMonths(new Date(), 1);
@@ -4826,7 +4876,13 @@ function bindMoneyDate(){
   const ex=$('#mdExit'); if(ex) ex.onclick=()=>go('vue');
   const bk=$('#mdBack'); if(bk) bk.onclick=()=>{mdStep--; go('moneydate');};
   const nx=$('#mdNext'); if(nx) nx.onclick=()=>{ if(!S.moneyDate.doneSteps.includes(mdStep)) S.moneyDate.doneSteps.push(mdStep); if(mdStep===MD_STEPS.length-1){const dt=$('#mdDate'); if(dt) S.moneyDate.nextDate=dt.value;} mdStep++; save(); go('moneydate'); };
-  const hm=$('#mdHome'); if(hm) hm.onclick=()=>{ S.moneyDate.doneSteps=MD_STEPS.map((_,i)=>i); S.ui.mdMonth=0; save(); go('vue'); toast("Money Date terminé — bravo à vous deux ! 🤎","❤️"); };
+  const hm=$('#mdHome'); if(hm) hm.onclick=()=>{
+    S.moneyDate.doneSteps=MD_STEPS.map((_,i)=>i); S.ui.mdMonth=0; save(); go('vue');
+    toast("Money Date terminé — bravo à vous deux ! 🤎","❤️");
+    // La question n'a de sens qu'une fois le premier rendez-vous fait, et qu'à deux : seule
+    // une personne reliée peut être désignée pour tenir les suivants.
+    if(S.auth.partnerLinked && !S.moneyDate.choixFait) setTimeout(openMdArrangement, 900);
+  };
   const sh=$('#mdShare'); if(sh) sh.onclick=async()=>{
     const text=sh.dataset.summary;
     if(navigator.share){ try{ await navigator.share({text}); }catch(e){} }
@@ -4958,6 +5014,7 @@ function dateBeforeStart(dateStr, offset){
 function bindReglages(){
   const bs=$('#editBudgetStart'); if(bs) bs.onclick=()=>openBudgetStartEditor();
   const cp=$('#copyC2'); if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(S.auth.coupleCode); toast("Code couple copié 📋");};
+  const ma=$('#mdArrangement'); if(ma) ma.onclick=openMdArrangement;
   const wa=$('#invWA'); if(wa) wa.onclick=()=>{ window.open(`https://wa.me/?text=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`,'_blank'); toast("WhatsApp ouvert 💬"); };
   const sm=$('#invSMS'); if(sm) sm.onclick=()=>{ window.open(`sms:?&body=${encodeURIComponent(inviteMessage(S.auth.coupleCode))}`); toast("SMS prêt ✉️"); };
   const gp=$('#goPilotage'); if(gp) gp.onclick=()=>go('pilotage');
