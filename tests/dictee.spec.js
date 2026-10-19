@@ -205,9 +205,45 @@ test.describe('Le formulaire se remplit', () => {
     await installer(page);
     await page.evaluate(() => { go('ajouter'); appliquerDictee('19,95 euros chez Carrefour'); });
 
-    await expect(page.locator('#dAmount')).toHaveValue('19,95');
+    // Affiché en euros, pour qu'on sache de quoi parle ce nombre…
+    await expect(page.locator('#dAmount')).toHaveValue('19,95 €');
+    // …mais stocké nu, parce que c'est lui qui entrera dans le budget.
+    expect(await page.evaluate(() => draft.amount)).toBe('19,95');
     await expect(page.locator('.cat-pill.on[data-catpick="courses"]')).toHaveCount(1);
     await expect(page.locator('.cat-pill.on[data-merchpick="m1"]')).toHaveCount(1);
+  });
+
+  // Le symbole ne doit jamais gêner la frappe ni se retrouver dans les calculs.
+  test('le symbole s\'efface pour taper et revient ensuite', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => go('ajouter'));
+
+    await page.fill('#dAmount', '12,50');
+    await expect(page.locator('#dAmount')).toHaveValue('12,50');
+
+    await page.locator('#dDesc').focus();
+    await expect(page.locator('#dAmount')).toHaveValue('12,50 €');
+    expect(await page.evaluate(() => draft.amount)).toBe('12,50');
+
+    await page.locator('#dAmount').focus();
+    await expect(page.locator('#dAmount')).toHaveValue('12,50');
+  });
+
+  // La catégorie est le seul champ que personne n'a prononcé : le bandeau doit dire qu'elle a
+  // été déduite du commerce, sinon elle a l'air d'être tombée du ciel.
+  test('la catégorie déduite du commerce est annoncée comme telle', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); appliquerDictee('42 euros chez Carrefour'); });
+
+    await expect(page.locator('#dDicteeVu')).toContainText('→ Courses');
+  });
+
+  // Dite à voix haute, elle n'est plus une déduction : pas de flèche.
+  test('une catégorie prononcée n\'est pas présentée comme déduite', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => { go('ajouter'); appliquerDictee('42 euros chez Carrefour dans les courses'); });
+
+    await expect(page.locator('#dDicteeVu')).not.toContainText('→');
   });
 
   // La garantie centrale : on propose, le couple relit. Le bandeau résume en une ligne ; la

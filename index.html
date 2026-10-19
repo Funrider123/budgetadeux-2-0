@@ -1096,6 +1096,11 @@ function amtError(v){
   if((s.match(/[.,]/g)||[]).length > 1) return AMT_SEP_MSG;
   return "";
 }
+// Le montant saisi reste un nombre nu dans le brouillon ; le symbole n'est qu'un habillage,
+// ajouté pour la lecture et retiré dès qu'on tape. Sans lui, un montant dicté s'affiche « 42 »
+// et on ne sait plus si ce sont des euros, des centimes ou autre chose.
+const montantNu = v => String(v==null?'':v).replace(/[€\s ]+$/,'');
+const montantAffiche = v => { const s = montantNu(v).trim(); return s ? s+' €' : ''; };
 const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const catById = id => id==='__cagnotte__' ? {emoji:"👛",name:"Cagnotte commune",cls:"cagnotte",budget:0} : (S.categories.find(c=>c.id===id) || {emoji:"📦",name:"Autre",cls:"besoin",budget:0});
 const me = ()=> S.auth.profile, partnerOf = w => w==="lui"?"elle":"lui";
@@ -2402,7 +2407,9 @@ function analyserDictee(phrase){
     res.merchant = commerce.id;
     res.compris.push(commerce.name);
     // La catégorie du commerce suffit, sauf si la phrase en nomme explicitement une autre.
-    if(!res.cat) res.cat = commerce.cat;
+    // On retient qu'elle a été DÉDUITE et non entendue : c'est le seul élément du formulaire
+    // que personne n'a prononcé, donc le seul qu'il faut montrer comme une conclusion.
+    if(!res.cat){ res.cat = commerce.cat; res.deduit = catById(commerce.cat).name; }
   }
 
   // Catégorie dite à voix haute. Un nom peut être composé (« Loisirs/Sorties ») : chacun de ses
@@ -2414,7 +2421,8 @@ function analyserDictee(phrase){
         if(new RegExp(`\\b${t}`).test(norm) && t.length>score){ meilleure=c; score=t.length; }
       });
     });
-    if(meilleure){ res.cat = meilleure.id; if(!res.compris.includes(meilleure.name)) res.compris.push(meilleure.name); }
+    // Une catégorie dite à voix haute n'est plus une déduction : elle rejoint ce qui a été entendu.
+    if(meilleure){ res.cat = meilleure.id; res.deduit = null; if(!res.compris.includes(meilleure.name)) res.compris.push(meilleure.name); }
   }
 
   const d = dateDansMots(mots);
@@ -2462,7 +2470,7 @@ function appliquerDictee(texte){
   ['amount','cat','merchant','desc','date','who','prevision'].forEach(k=>{
     if(r[k]!==undefined) draft[k]=r[k];
   });
-  draft._dictee = { etat: r.compris.length ? 'ok' : 'vide', compris: r.compris, texte: (texte||'').trim() };
+  draft._dictee = { etat: r.compris.length ? 'ok' : 'vide', compris: r.compris, deduit: r.deduit||null, texte: (texte||'').trim() };
   go('ajouter');
   return r;
 }
@@ -2503,7 +2511,13 @@ function bandeauDictee(){
     return boite(`<p class="small" style="margin:0; font-weight:800; color:var(--terra); text-align:center">🔴 J'écoute…</p>`);
   if(d.etat==='erreur')
     return boite(`<p class="small muted" style="margin:0">La dictée n'a pas fonctionné sur cet appareil.</p>`);
-  const resume = d.compris.length ? '✓ ' + d.compris.map(escapeHtml).join(' · ') : "Je n'ai rien compris";
+  // Ce qui a été entendu, puis — après une flèche — ce qui en a été déduit. La flèche dit
+  // exactement ce qui s'est passé : personne n'a prononcé « Courses », c'est Carrefour qui l'a
+  // amenée. On ne la découvre plus en relisant le formulaire.
+  const entendu = d.compris.map(t=>escapeHtml(t)).join(' · ');
+  const resume = d.compris.length
+    ? `✓ ${entendu}${d.deduit?` <span style="color:var(--terra)">→ ${escapeHtml(d.deduit)}</span>`:''}`
+    : "Je n'ai rien compris";
   return boite(`<div class="between" style="gap:10px">
       <span class="small" style="font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${resume}</span>
       <span class="chev" style="flex-shrink:0; color:var(--terra)">›</span>
@@ -2536,7 +2550,7 @@ function renderAjouter(){
   <div class="card" style="margin-top:10px">
     <div class="field" style="margin-bottom:18px">
       <label style="text-align:center">Montant</label>
-      <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${draft.amount}">
+      <input class="input big" id="dAmount" inputmode="decimal" placeholder="0,00 €" value="${escapeHtml(montantAffiche(draft.amount))}">
     </div>
 
     ${isTransfer?`<div class="card-soft" style="display:flex; gap:10px; align-items:center; margin-bottom:14px; background:color-mix(in srgb,var(--invest) 8%,transparent); border-color:color-mix(in srgb,var(--invest) 25%,transparent)">
@@ -4100,7 +4114,13 @@ function bindScreen(screen){
 function bindAjouter(){
   const dic=$('#dDictee'); if(dic) dic.onclick=demarrerDictee;
   const dvu=$('#dDicteeVu'); if(dvu) dvu.onclick=openDicteePhrase;
-  const a=$('#dAmount'); if(a) a.oninput=ev=>{draft.amount=ev.target.value; updateAjouterValidity();};
+  const a=$('#dAmount');
+  if(a){
+    a.oninput=ev=>{draft.amount=montantNu(ev.target.value); updateAjouterValidity();};
+    // On tape sur un nombre nu, on relit un montant en euros.
+    a.onfocus=()=>{ a.value = montantNu(draft.amount); };
+    a.onblur =()=>{ draft.amount = montantNu(a.value); a.value = montantAffiche(draft.amount); updateAjouterValidity(); };
+  }
   const d=$('#dDesc'); if(d) d.oninput=ev=>{
     draft.desc=ev.target.value;
     const wasTransfer=/transfert|virement/i.test(draft._last||'');
