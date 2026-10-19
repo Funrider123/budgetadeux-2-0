@@ -138,6 +138,100 @@ test.describe('Ce que la vue essentielle garde', () => {
   });
 });
 
+// Les projets se consultent : où on en est, l'objectif, la mensualité. Arbitrer les
+// mensualités et verser fait partie des corvées dont cette vue dispense.
+test.describe('Les projets, en lecture', () => {
+  async function surLesProjets(page, mode) {
+    await installer(page);
+    await page.evaluate(() => {
+      S.projects = [{ id: 'p1', name: 'Voyage', cls: 'envie', status: 'actif',
+                      target: 3000, saved: 1200, mensuel: 150, months: 12, history: [] }];
+      S.projectsFrozen = false;
+    });
+    await basculer(page, mode);
+    await page.click('.tabbar [data-go="projets"]');
+    await page.click('[data-projadj="p1"]');
+  }
+
+  test('on voit où on en est, l\'objectif et la mensualité', async ({ page }) => {
+    await surLesProjets(page, 'essentielle');
+
+    const carte = page.locator('[data-proj="p1"]');
+    await expect(carte).toContainText('Voyage');
+    await expect(carte).toContainText('1 200');   // déjà mis de côté
+    await expect(carte).toContainText('3 000');   // objectif
+    await expect(carte).toContainText('150');     // par mois
+  });
+
+  test('rien ne permet de modifier le budget des projets', async ({ page }) => {
+    await surLesProjets(page, 'essentielle');
+
+    await expect(page.locator('[data-projectmens="p1"]')).toHaveCount(0); // curseur de mensualité
+    await expect(page.locator('[data-projadd="p1"]')).toHaveCount(0);     // + Versement
+    await expect(page.locator('[data-projmenu="p1"]')).toHaveCount(0);    // réglages du projet
+    await expect(page.locator('#newProj')).toHaveCount(0);
+    await expect(page.locator('#validProjects')).toHaveCount(0);
+    await expect(page.locator('#cagAddToggle')).toHaveCount(0);
+    // L'historique des versements, lui, reste consultable.
+    await expect(page.locator('[data-projhist="p1"]')).toHaveCount(1);
+  });
+
+  // Le même écran en vue détaillée garde tous ses outils : on n'a rien retiré à personne.
+  test('la vue détaillée garde tout', async ({ page }) => {
+    await surLesProjets(page, 'detaillee');
+
+    await expect(page.locator('[data-projectmens="p1"]').first()).toBeVisible();
+    await expect(page.locator('[data-projadd="p1"]')).toHaveCount(1);
+    await expect(page.locator('#newProj')).toHaveCount(1);
+    await expect(page.locator('#cagAddToggle')).toHaveCount(1);
+  });
+});
+
+// La question est posée au premier lancement, pendant que la personne peut encore répondre
+// pour elle-même. Plus tard, le risque est qu'un conjoint choisisse à sa place.
+test.describe('La question du premier lancement', () => {
+  test('elle est posée avant le reste, et ne force rien', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => openWelcomeModal());
+
+    await expect(page.locator('#modalRoot')).toContainText('Comment veux-tu suivre votre budget');
+    await expect(page.locator('[data-choixvue="essentielle"]')).toHaveCount(1);
+    await expect(page.locator('[data-choixvue="detaillee"]')).toHaveCount(1);
+    // Rien n'est décidé tant qu'on n'a pas répondu.
+    expect(await page.evaluate(() => S.ui.vue)).toBe('detaillee');
+  });
+
+  test('répondre « L\'essentiel » allège l\'app tout de suite', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => openWelcomeModal());
+    await page.click('[data-choixvue="essentielle"]');
+
+    expect(await page.evaluate(() => S.ui.vue)).toBe('essentielle');
+    await expect(page.locator('.tabbar [data-go="analyse"]')).toHaveCount(0);
+  });
+
+  test('le message de bienvenue vient après la réponse, jamais empilé', async ({ page }) => {
+    await installer(page);
+    await page.evaluate(() => openWelcomeModal());
+    await page.click('[data-choixvue="detaillee"]');
+
+    await expect(page.locator('#modalRoot')).toContainText('Bienvenue sur Budget à Deux', { timeout: 2000 });
+    await expect(page.locator('#modalRoot')).not.toContainText('Comment veux-tu suivre');
+  });
+
+  // Un compte déjà en service ne doit pas se voir poser la question un beau matin.
+  test('les comptes existants ne la voient pas', async ({ page }) => {
+    await installer(page);
+    const vu = await page.evaluate(() => {
+      const s = JSON.parse(JSON.stringify(S));
+      delete s.ui.welcomeSeen;
+      migrate(s);
+      return s.ui.welcomeSeen;
+    });
+    expect(vu).toBe(true);
+  });
+});
+
 // Le bouton le plus utilisé de l'app ne doit pas changer de place selon le mode : on le vise
 // au pouce sans regarder. C'est ce qui a écarté l'idée d'un onglet « Détail » dans la barre,
 // qui aurait fait quatre entrées et décalé le + de 48 px.

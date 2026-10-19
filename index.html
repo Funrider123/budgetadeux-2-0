@@ -1719,10 +1719,28 @@ function enterApp(){
     else if(!S.ui.natureHelpSeen){ S.ui.natureHelpSeen=true; save(); openNatureHelp(true); }
   }
 }
+// Premier arrivage : on demande d'abord comment cette personne veut voir le budget.
+// C'est le moment où elle peut répondre pour elle-même ; plus tard, le risque est qu'un
+// conjoint choisisse à sa place. On ne demande rien ici sur « qui gère » : à l'inscription le
+// second n'existe pas encore, et ce serait faire répondre quelqu'un pour une personne absente.
+// Les deux réponses sont présentées au même format, aucune n'est le bon élève.
+function openWelcomeModal(){
+  openModal(`<h3>Comment veux-tu suivre votre budget ?</h3>
+    <p class="small muted" style="margin:6px 0 16px; line-height:1.55">Dans beaucoup de couples, une seule personne tient les comptes. Ici, les deux ajoutent leurs dépenses ; c'est l'affichage qui change, et seulement pour toi.</p>
+    <div class="card" style="padding:6px 16px; box-shadow:none; border:1px solid var(--line)">
+      <button class="menu-row" data-choixvue="essentielle"><div class="mi">🪶</div><div class="grow"><div class="nm">L'essentiel</div><div class="sub">Où vous en êtes ce mois-ci, et rien de plus</div></div><span class="chev">→</span></button>
+      <button class="menu-row" data-choixvue="detaillee"><div class="mi">📊</div><div class="grow"><div class="nm">Tout le détail</div><div class="sub">Budgets, historique, analyses et réglages</div></div><span class="chev">→</span></button>
+    </div>
+    <p class="small muted" style="text-align:center; margin-top:14px">Tu pourras changer d'avis quand tu veux, en bas de la Vue.</p>`, true);
+  document.querySelectorAll('[data-choixvue]').forEach(b=>b.addEventListener('click',()=>{
+    S.ui.vue=b.dataset.choixvue; save(); renderTab(); go('vue'); closeModal();
+    setTimeout(openWelcomeDemo, 260);
+  }));
+}
 // Message de bienvenue, affiché une seule fois au tout premier arrivage sur un compte neuf
 // (voir DEFAULT.ui.welcomeSeen + le reset dans ensureProfile). Propose la démo sans favoriser
 // l'un ou l'autre choix : les deux boutons ont strictement le même style.
-function openWelcomeModal(){
+function openWelcomeDemo(){
   openModal(`
     <div style="margin:-22px -22px 0; padding:28px 22px 22px; border-radius:22px 22px 0 0; background:linear-gradient(135deg,var(--terra),var(--peach)); position:relative; overflow:hidden; text-align:center">
       <div style="position:absolute; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.16); top:-60px; right:-30px"></div>
@@ -2775,7 +2793,7 @@ function renderProjets(){
         <span class="small" style="font-weight:800">Historique des entrées / sorties</span><span class="chev">▼</span>
       </div>
       ${cagUI.histOpen?cagnotteHistoryHtml(S.cagnotte.history):''}
-      <div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>
+      ${vueEssentielle()?'':`<div style="margin-top:12px"><span class="link small" id="cagAddToggle">+ Ajouter une ligne</span></div>`}
     </div>
   </div>
 
@@ -2785,7 +2803,7 @@ function renderProjets(){
         🎯 Vos projets <span id="vpUtilPct" style="opacity:.85; font-weight:700">(utilisation ${pctUse}%)</span>
         ${S.projectsFrozen?`<span style="font-size:11px; font-weight:800; letter-spacing:0; text-transform:none; background:rgba(255,255,255,.18); padding:3px 9px; border-radius:999px; white-space:nowrap">🔒 Verrouillé</span>`:''}
       </div>
-      ${S.projectsFrozen?`<span class="link" id="unfreezeProjects" style="color:#fff; text-decoration:underline; font-weight:700; font-size:12px; letter-spacing:0; text-transform:none; white-space:nowrap; flex-shrink:0">Modifier</span>`:''}
+      ${S.projectsFrozen && !vueEssentielle()?`<span class="link" id="unfreezeProjects" style="color:#fff; text-decoration:underline; font-weight:700; font-size:12px; letter-spacing:0; text-transform:none; white-space:nowrap; flex-shrink:0">Modifier</span>`:''}
     </div>
     <div style="padding:20px; background:color-mix(in srgb,var(--blush) 35%,var(--card))">
       <div>
@@ -2801,9 +2819,9 @@ function renderProjets(){
         const rankMap={}; active.forEach((x,i)=>rankMap[x.p.id]=i+1);
         return [...active.map(x=>x.p), ...others].map(p=>projectCard(p, rankMap[p.id])).join('');
       })()}
-      <div style="margin-top:14px"><span class="link small" id="newProj">+ Nouveau projet</span></div>
+      ${vueEssentielle()?'':`<div style="margin-top:14px"><span class="link small" id="newProj">+ Nouveau projet</span></div>`}
       </div>
-      ${!S.projectsFrozen?`<div class="row" style="gap:10px; margin-top:16px">
+      ${!S.projectsFrozen && !vueEssentielle()?`<div class="row" style="gap:10px; margin-top:16px">
         <button class="btn btn-soft" id="validProjects" style="flex:1; width:auto">Valider les mensualités ✓</button>
         ${S.projectsSnapshot?`<button class="btn btn-soft" id="cancelProjects" style="flex:1; width:auto">Annuler mes changements</button>`:''}
       </div>`:''}
@@ -2822,6 +2840,9 @@ function projectCard(p, rank){
   const mens=p.mensuel||0;
   const paused=p.status==="pause", aband=p.status==="abandonne";
   const locked=S.projectsFrozen && !paused && !aband; // mensualité figée : pastille en coin, cf. le ruban "EN PAUSE"
+  // En vue essentielle, un projet se consulte : où on en est, l'objectif, la mensualité.
+  // Arbitrer les mensualités fait partie des corvées dont cette vue dispense.
+  const lecture=vueEssentielle();
   const ui=projUIState(p.id);
   return `<div class="card" style="margin-top:14px; box-shadow:none; background:var(--card); border:1px solid var(--line); position:relative; overflow:hidden; ${locked?'padding-top:16px':''}" data-proj="${p.id}">
     ${paused?`<div style="position:absolute; top:16px; right:-38px; transform:rotate(35deg); background:var(--muted); color:#fff; font-size:11px; font-weight:800; letter-spacing:.5px; padding:3px 42px; z-index:2; pointer-events:none">EN PAUSE</div>`:''}
@@ -2838,12 +2859,13 @@ function projectCard(p, rank){
       <b class="small" style="color:var(--terra-d)">${pct}%</b>
     </div>
     <div class="pilot-collapse-hdr ${ui.adjOpen?'open':''}" data-projadj="${p.id}" style="margin-top:12px; background:var(--cream-2); border-radius:12px; padding:10px 14px">
-      <span class="small" style="font-weight:800">${ui.adjOpen?'Replier':(S.projectsFrozen?'Voir le détail':'Ajuster ce projet')}</span><span class="chev">▾</span>
+      <span class="small" style="font-weight:800">${ui.adjOpen?'Replier':(S.projectsFrozen||lecture?'Voir le détail':'Ajuster ce projet')}</span><span class="chev">▾</span>
     </div>
     ${ui.adjOpen?`<div style="padding-top:12px">
-      ${(!paused && !aband)?(S.projectsFrozen?`
+      ${(!paused && !aband)?(S.projectsFrozen||lecture?`
       <div class="between" style="background:var(--cream-2); border-radius:12px; padding:10px 13px">
-        <span class="small" style="font-weight:800; color:var(--ink-2)">🔒 Mensualité validée</span>
+        <span class="small" style="font-weight:800; color:var(--ink-2)">${S.projectsFrozen?'🔒 Mensualité validée':'Mensualité'}</span>
+        ${S.projectsFrozen?'':`<b class="small" style="color:var(--terra)">${fmt(mens)} / mois</b>`}
       </div>
       <p class="small muted" style="margin:8px 0 0">${reste>0?`Objectif atteint en ${projectEtaLabel(p)}`:''}</p>`:`
       <div class="small muted" style="font-weight:800; text-transform:uppercase; letter-spacing:.08em; font-size:11px; margin-bottom:4px">Mensualité</div>
@@ -2854,10 +2876,10 @@ function projectCard(p, rank){
       <p class="small muted" data-etalabel="${p.id}" style="margin:0 0 4px">${reste>0?`Objectif atteint en ${projectEtaLabel(p)}`:''}</p>`):''}
       <div class="row" style="gap:7px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line)">
         <button class="btn btn-soft btn-sm" data-projhist="${p.id}" style="flex:1; width:auto">Historique ${ui.histOpen?'▴':'▾'}</button>
-        ${!aband?`<button class="btn btn-soft btn-sm" data-projadd="${p.id}" style="flex:1; width:auto">+ Versement</button>`:''}
-        ${(!aband && !S.projectsFrozen)?`<button class="icon-btn" data-projmenu="${p.id}" style="width:36px; height:36px; flex-shrink:0; border:1px solid var(--line); border-radius:10px">⚙️</button>`:''}
+        ${(!aband && !lecture)?`<button class="btn btn-soft btn-sm" data-projadd="${p.id}" style="flex:1; width:auto">+ Versement</button>`:''}
+        ${(!aband && !S.projectsFrozen && !lecture)?`<button class="icon-btn" data-projmenu="${p.id}" style="width:36px; height:36px; flex-shrink:0; border:1px solid var(--line); border-radius:10px">⚙️</button>`:''}
       </div>
-      ${ui.addOpen&&!aband?`<div class="card-soft" style="margin-top:10px">
+      ${ui.addOpen&&!aband&&!lecture?`<div class="card-soft" style="margin-top:10px">
         <div class="row" style="gap:8px; margin-bottom:8px">
           <button class="cat-pill ${ui.who==='lui'?'on':''}" data-projwho="${p.id}:lui" style="flex:1; justify-content:center">${escapeHtml(nameOf('lui'))}</button>
           <button class="cat-pill ${ui.who==='elle'?'on':''}" data-projwho="${p.id}:elle" style="flex:1; justify-content:center">${escapeHtml(nameOf('elle'))}</button>
