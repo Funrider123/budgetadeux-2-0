@@ -2,6 +2,10 @@
 
 Notes de conception, pas encore un chantier. Rien de ce qui suit n'est implémenté.
 
+Première session le 24/09/2026 ; reprise et arbitrages le 19/10/2026 (contenu de la vue
+essentielle, les deux axes, les trois configurations, la bascule). Les maquettes citées ont
+été fabriquées à partir de l'app réelle, pas dessinées à côté.
+
 **Le point de départ**, remonté plusieurs fois par des testeurs : dans beaucoup de couples,
 une seule personne gère l'argent. L'autre lui fait confiance, et c'est plus simple comme ça.
 C'est un défi direct pour une app qui s'appelle Budget à Deux, dont le rituel central est un
@@ -51,7 +55,7 @@ qu'il n'en a l'air. Ce qu'il reste à corriger, c'est que l'app présente comme 
 
 ## Les trois directions
 
-### 1. Vue simplifiée, par personne
+### 1. La vue essentielle (arrêté le 19/10/2026)
 
 Un réglage dans son propre compte pour ne garder que l'essentiel.
 
@@ -63,16 +67,59 @@ parce que les rôles bougent (projet immobilier, enfant, perte d'emploi).
 `SYNC_KEYS` : y mettre la préférence d'affichage la déclencherait aussi chez le partenaire.
 `S.ui` est local à l'appareil, comme le thème sombre.
 
-La difficulté n'est pas le bouton, c'est de définir « essentiel ». Si ça revient à masquer
-deux cartes, personne ne l'activera. Ce que veut le passager tient probablement en trois
-choses : où on en est ce mois-ci, est-ce qu'on est dans les clous, où en sont les projets.
-Pas le détail charge par charge, pas les modes de répartition, pas l'historique.
+#### Ce n'est pas une lecture seule
 
-Le nom compte : « vue simplifiée » ou « l'essentiel ». Jamais « mode limité » ni « mode
-débutant » — c'est pour l'autre qu'on l'active dans sa tête, et ça deviendrait vexant.
+La personne qui ne gère pas dépense quand même, et déclarer sa dépense est la seule chose
+que l'autre ne peut pas faire à sa place. **Les deux saisissent, dans les deux modes.** Ce
+qu'on retire n'est pas un droit, c'est le travail de configuration. La dictée est d'ailleurs
+l'outil taillé pour cette personne : dire « 42 euros chez Carrefour » et avoir fini.
 
-Garde-fou : la vue simplifiée ne doit **jamais** masquer une demande adressée à la personne.
-Si un brouillon attend sa validation, ça doit se voir même dans la vue la plus dépouillée.
+#### Ce qui reste
+
+Barre du bas : **Vue, +, Projets**. Historique et Analyse disparaissent ; qui veut chercher
+une vieille dépense repasse en vue détaillée.
+
+Écran Vue :
+
+- **Restant pour ce mois**, le grand chiffre avec « en avance / en retard » ;
+- **Budgets par catégorie**, inchangé — il affiche déjà « 79 € / 170 € » et « reste 91 €
+  (report inclus) ». Les chiffres sont indispensables, les jauges seules ne suffisent pas ;
+- **Derniers mouvements** ;
+- la carte Money Date, selon la configuration du couple (voir plus bas).
+
+Retirés : le **Rythme du mois** (progression semaine par semaine), le sélecteur
+**Mois / Semaine**, le bouton **Ajuster notre budget**, les liens **Détail →**.
+
+Projets : en lecture. Où on en est, combien il y a, l'objectif, la mensualité. La **cagnotte
+commune** reste visible.
+
+Menu : **Notre budget** retiré ; Réglages, Money Date, l'aide et le partage gardés.
+
+#### La bascule
+
+Un bloc **« Mode d'affichage »** en bas de la Vue, juste avant la photo : un interrupteur à
+deux états, `Vue essentielle | Vue détaillée`, l'état actif en blanc. C'est le sélecteur
+`.seg` déjà utilisé pour Mois / Semaine, donc un geste déjà connu. Il montre les deux modes
+en même temps : on sait où on est sans avoir à le déduire. Le même bloc, au même endroit,
+dans les deux modes.
+
+**Pourquoi pas dans la barre du bas**, qui était l'envie de départ : mesuré dans le
+navigateur, le **+** est centré avec 3 ou 5 entrées, mais part **48 px à gauche** avec 4
+(onglet « Détail » en mode essentiel) et 27 px avec 6. Le bouton le plus utilisé de l'app
+changerait donc de place selon le mode — exactement ce qu'on a refusé pour « Valider » sur
+l'écran de saisie, et ici sur un bouton qu'on vise au pouce sans regarder.
+
+#### Le nom
+
+« Vue essentielle », pas « vue simplifiée » : le premier dit ce qu'on garde, le second
+laisse entendre qu'on a retiré quelque chose à quelqu'un. Jamais « mode limité » ni « mode
+débutant » — c'est souvent pour l'autre qu'on l'active dans sa tête, et l'étiquette
+deviendrait vexante.
+
+#### Garde-fou
+
+La vue essentielle ne doit **jamais** masquer une demande adressée à la personne. Si un
+brouillon attend sa validation, ça doit se voir même dans la vue la plus dépouillée.
 
 ### 2. Le partenaire reste requis à l'inscription
 
@@ -116,6 +163,48 @@ Trois pièges, par ordre de gravité :
 
 ---
 
+## Deux axes, pas un seul (19/10/2026)
+
+Le réglage d'affichage ne suffit pas : **le Money Date aussi peut être délégué**. Une fois
+la trame posée, le rendez-vous mensuel peut très bien être tenu par celui qui gère, sans
+que l'autre ait à s'y mettre. Ce sont donc deux réglages indépendants :
+
+| Situation | La vue | Le Money Date |
+|---|---|---|
+| « Mon conjoint gère, je veux juste voir » | essentielle | tenu par lui |
+| « On décide à deux, 50-50 » | détaillée des deux côtés | à deux |
+| « Je gère tout, mais on garde nos Money Dates » | détaillée | à deux |
+
+Conséquence technique, à ne pas confondre : **la vue est personnelle et locale** (`S.ui`),
+**le réglage du Money Date est un réglage de couple et doit être synchronisé**
+(`S.settings`), puisqu'il décide à qui partent les mails.
+
+### Quand pose-t-on la question
+
+**À l'inscription, seulement celle de la vue.** Chacun répond pour soi, au moment où il crée
+son compte ; le second y répondra en rejoignant avec le code.
+
+**Pas celle du Money Date.** À l'inscription, le premier crée le couple et le second n'existe
+pas encore : lui demander qui gère reviendrait à faire répondre quelqu'un à la place de son
+conjoint, et à coller une étiquette à une personne absente.
+
+**Le premier Money Date se fait ensemble, quelle que soit la suite.** C'est à la fin de ce
+premier rendez-vous qu'on demande au couple comment il veut procéder pour les suivants —
+quand les deux savent de quoi il s'agit.
+
+### Ce que ça change aux mails
+
+Configuration « à deux » : rien ne change, c'est ce que font les relances aujourd'hui.
+
+Configuration « l'un gère » :
+
+- les rappels de la veille et du jour J ne partent qu'au gestionnaire ; inutile de convoquer
+  quelqu'un à un rendez-vous auquel il a dit ne pas vouloir venir ;
+- l'autre reçoit, une fois le Money Date terminé, un message court : où vous en êtes ce
+  mois-ci, ce qui a été décidé. C'est la vue essentielle, par mail.
+
+---
+
 ## La relance J+2
 
 Conséquence de tout ce qui précède : arrêter de vendre le partenaire comme une étape à
@@ -129,11 +218,18 @@ Mais ça n'a de sens qu'une fois la vue simplifiée en place : sinon la promesse
 
 ## Ce qui reste à vérifier avant de construire
 
-Tout ce qui précède repose sur une hypothèse non vérifiée : que le passager veut savoir sans
-faire. Elle est plausible, pas démontrée. Le retour d'origine recouvre quatre situations très
-différentes, qui n'appellent pas du tout les mêmes réponses :
+Tout ce qui précède reposait sur une hypothèse : que le passager veut savoir sans faire.
 
-1. « Je ne veux pas des corvées » → rôles asymétriques, le second reçoit plus qu'il ne saisit.
+**Elle a reçu un premier appui le 19/10/2026**, de la bouche des couples concernés : « mon
+mari gère le budget et je lui fais confiance ; à la rigueur si j'ai une vue simplifiée, ça
+me va très bien ». C'est la situation 1 ci-dessous, et c'est la seule des quatre qui
+justifie encore deux comptes. Ce n'est pas une enquête, mais ce n'est plus une supposition.
+
+Le retour d'origine recouvre quatre situations très différentes, qui n'appellent pas du tout
+les mêmes réponses :
+
+1. « Je ne veux pas des corvées » → rôles asymétriques, le second reçoit plus qu'il ne
+   saisit. **C'est celle qu'on a entendue ; c'est elle qu'on traite.**
 2. « Je n'ai pas besoin de regarder » → le second compte est effectivement inutile, et il
    faudrait assumer un mode où l'un pilote et l'autre est simplement tenu au courant.
 3. « Je ne veux pas voir, ou ne pas être vu » → rien ne le corrige. L'argent dans un couple
