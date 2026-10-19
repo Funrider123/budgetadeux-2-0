@@ -6,6 +6,16 @@ Première session le 24/09/2026 ; reprise et arbitrages le 19/10/2026 (contenu d
 essentielle, les deux axes, les trois configurations, la bascule). Les maquettes citées ont
 été fabriquées à partir de l'app réelle, pas dessinées à côté.
 
+**Construit le 19/10/2026** — ce n'est donc plus seulement une note :
+
+- `e30cfa7` le mode d'affichage et la bascule ;
+- `251c89a` les projets en lecture et la question du premier lancement ;
+- `4b32466` qui tient le Money Date, et le filtrage des destinataires dans la fonction de
+  rappel (déployée en v22, `verify_jwt:false` vérifié).
+
+Reste l'état « en attente » décrit plus bas. Le résumé par mail, lui, est abandonné : voir
+pourquoi à la fin de la section sur les mails.
+
 **Le point de départ**, remonté plusieurs fois par des testeurs : dans beaucoup de couples,
 une seule personne gère l'argent. L'autre lui fait confiance, et c'est plus simple comme ça.
 C'est un défi direct pour une app qui s'appelle Budget à Deux, dont le rituel central est un
@@ -196,12 +206,44 @@ quand les deux savent de quoi il s'agit.
 
 Configuration « à deux » : rien ne change, c'est ce que font les relances aujourd'hui.
 
-Configuration « l'un gère » :
+Configuration « l'un gère » : les rappels de la veille et du jour J ne partent qu'au
+gestionnaire. Inutile de convoquer quelqu'un à un rendez-vous auquel il a dit ne pas vouloir
+venir. Fait, et déployé.
 
-- les rappels de la veille et du jour J ne partent qu'au gestionnaire ; inutile de convoquer
-  quelqu'un à un rendez-vous auquel il a dit ne pas vouloir venir ;
-- l'autre reçoit, une fois le Money Date terminé, un message court : où vous en êtes ce
-  mois-ci, ce qui a été décidé. C'est la vue essentielle, par mail.
+### Le résumé par mail : abandonné (19/10/2026)
+
+L'idée tenait en une phrase : celui qui ne tient pas le rendez-vous reçoit après coup un
+court message, « voilà où vous en êtes ». C'était présenté ici comme la contrepartie du
+marché — renoncer à la corvée, pas au fait de savoir.
+
+Abandonné après cette objection, qui est décisive : **ou bien la personne veut savoir, et la
+vue essentielle le lui dit à la demande ; ou bien elle fait confiance à 100 %, et elle ne
+lira pas le mail.** Dans les deux cas il n'apporte rien. Il ferait en plus sortir les
+chiffres du couple vers une boîte mail, ce qu'aucun autre envoi de l'app ne fait, et il
+ajouterait un motif de désabonnement sur une base de sept personnes.
+
+Ce qui en reste, c'est le vrai manque qu'il masquait : l'état « en attente ».
+
+---
+
+## L'état « en attente » (à faire)
+
+**Le trou, vérifié dans le code.** Les deux rappels partent la veille et le jour J. Si
+personne ne fait le rendez-vous, il ne se passe plus rien : `nextDate` reste figée dans le
+passé indéfiniment, et la carte de la Vue continue d'afficher « C'est l'heure de votre Money
+Date » sans dire depuis combien de temps.
+
+**Ce qu'on en fait.** La carte annonce l'attente et propose la sortie : « Votre point du mois
+est en attente depuis 6 jours », avec deux actions, *Le faire maintenant* et *Reprogrammer*.
+
+**Dans l'app, pas par mail.** C'est visible des deux côtés, ça ne coûte aucun envoi, et
+surtout c'est neutre : une carte s'adresse à qui la regarde. Un mail, lui, s'adresse à
+quelqu'un — et « le Money Date n'a pas été fait » désigne un coupable là où « votre point du
+mois est en attente » décrit un état.
+
+**Écartée pour l'instant** : l'action « demander à l'autre de le faire ». C'est le bouton
+« tu n'as qu'à t'en occuper » déguisé, et on retombe sur le piège du reproche déjà identifié
+pour le mode brouillon. À reprendre seulement si des couples disent que ça manque.
 
 ---
 

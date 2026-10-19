@@ -115,6 +115,62 @@ test.describe('La question de fin de Money Date', () => {
   });
 });
 
+// Les deux rappels partent la veille et le jour J ; si personne ne fait le rendez-vous, il ne
+// se passait plus rien et la carte répétait « C'est l'heure de votre Money Date » sans jamais
+// dire depuis quand. La date restait figée dans le passé indéfiniment.
+test.describe('Le point du mois en attente', () => {
+  const dansNJours = (n) => {
+    const d = new Date(); d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  async function avecDate(page, jours) {
+    await installer(page);
+    await page.evaluate((d) => { S.moneyDate.nextDate = d; S.moneyDate.doneSteps = []; go('vue'); }, dansNJours(jours));
+  }
+
+  test('la carte dit depuis combien de temps', async ({ page }) => {
+    await avecDate(page, -6);
+    await expect(page.locator('#mdCard')).toContainText('en attente');
+    await expect(page.locator('#mdCard')).toContainText('6 jours');
+  });
+
+  test('la veille se dit « hier », pas « 1 jours »', async ({ page }) => {
+    await avecDate(page, -1);
+    await expect(page.locator('#mdCard')).toContainText('prévu hier');
+  });
+
+  // Deux sorties : faire le rendez-vous maintenant (la carte entière), ou le reprogrammer.
+  test('on peut le faire maintenant ou le reprogrammer', async ({ page }) => {
+    await avecDate(page, -3);
+    await expect(page.locator('#mdEditDate')).toContainText('Reprogrammer');
+
+    await page.click('#mdCard');
+    expect(await page.evaluate(() => current)).toBe('moneydate');
+  });
+
+  // On ne parle d'attente que lorsqu'il y en a une : un rendez-vous à venir reste une
+  // promesse, pas un retard.
+  test('rien de tel tant que la date n\'est pas passée', async ({ page }) => {
+    await avecDate(page, 3);
+    await expect(page.locator('#mdCard')).not.toContainText('en attente');
+    await expect(page.locator('#mdEditDate')).toContainText('Modifier la date');
+  });
+
+  test('ni le jour même', async ({ page }) => {
+    await avecDate(page, 0);
+    await expect(page.locator('#mdCard')).not.toContainText('en attente');
+  });
+
+  // Un rendez-vous commencé est en cours, pas en attente.
+  test('un Money Date entamé reste « en cours »', async ({ page }) => {
+    await installer(page);
+    await page.evaluate((d) => { S.moneyDate.nextDate = d; S.moneyDate.doneSteps = [0, 1]; go('vue'); }, dansNJours(-5));
+    await expect(page.locator('#mdCard')).not.toContainText('en attente');
+    await expect(page.locator('#mdCard')).toContainText('2/6');
+  });
+});
+
 test.describe('Dans les réglages', () => {
   test('l\'arrangement courant est affiché et modifiable', async ({ page }) => {
     await installer(page);
